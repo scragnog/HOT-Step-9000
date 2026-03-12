@@ -82,12 +82,6 @@ from acestep.api.http.release_task_param_parser import (
     _to_float as _request_to_float,
     _to_int as _request_to_int,
 )
-from acestep.api.runtime_helpers import (
-    append_jsonl as _runtime_append_jsonl,
-    atomic_write_json as _runtime_atomic_write_json,
-    start_tensorboard as _runtime_start_tensorboard,
-    stop_tensorboard as _runtime_stop_tensorboard,
-)
 from acestep.api.model_download import (
     ensure_model_downloaded as _ensure_model_downloaded,
 )
@@ -350,10 +344,6 @@ def create_app() -> FastAPI:
         result_key_prefix=RESULT_KEY_PREFIX,
         task_timeout_seconds=TASK_TIMEOUT_SECONDS,
         log_buffer=log_buffer,
-        runtime_start_tensorboard=_runtime_start_tensorboard,
-        runtime_stop_tensorboard=_runtime_stop_tensorboard,
-        runtime_atomic_write_json=_runtime_atomic_write_json,
-        runtime_append_jsonl=_runtime_append_jsonl,
     )
 
     # ─── Lyrics Library (folder scanner) ──────────────────────────────
