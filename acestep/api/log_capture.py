@@ -6,24 +6,46 @@ from typing import Any
 
 
 class LogBuffer:
-    """Minimal write buffer storing the latest non-empty log line."""
+    """Thread-safe ring buffer storing recent log lines with cursor-based polling."""
+
+    MAX_LINES = 500
 
     def __init__(self):
-        """Initialize buffer with default waiting status."""
-
-        self.last_message = "Waiting"
+        """Initialize buffer."""
+        import threading
+        self._lines: list[tuple[int, str]] = []  # (seq_id, text)
+        self._next_id: int = 0
+        self._lock = threading.Lock()
 
     def write(self, message: str) -> None:
-        """Capture latest non-empty stripped message."""
-
+        """Capture non-empty log lines."""
         msg = message.strip()
-        if msg:
-            self.last_message = msg
+        if not msg:
+            return
+        with self._lock:
+            self._lines.append((self._next_id, msg))
+            self._next_id += 1
+            # Keep ring buffer bounded
+            if len(self._lines) > self.MAX_LINES:
+                self._lines = self._lines[-self.MAX_LINES:]
 
     def flush(self) -> None:
         """No-op flush to satisfy file-like API expectations."""
-
         return None
+
+    def get_lines_after(self, after: int) -> tuple[list[tuple[int, str]], int]:
+        """Return all lines with seq_id > after, and the new cursor.
+
+        Args:
+            after: Last seq_id the caller has seen. Pass -1 to get all lines.
+
+        Returns:
+            Tuple of (lines, new_cursor) where lines is a list of (seq_id, text).
+        """
+        with self._lock:
+            result = [(seq_id, text) for seq_id, text in self._lines if seq_id > after]
+            new_cursor = self._next_id - 1 if self._lines else after
+        return result, new_cursor
 
 
 class StderrLogger:
