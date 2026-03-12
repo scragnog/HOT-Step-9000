@@ -48,6 +48,11 @@ dependencies = [
     "nano-vllm; sys_platform != 'darwin' or platform_machine != 'arm64'",
     "modelscope",
     "mutagen",
+    "pedalboard",
+    "pyloudnorm",
+    "psutil>=5.9.0",
+    "huggingface_hub[hf_xet]",
+    "xxhash",
     "typer-slim>=0.21.1",
     "loguru",
 ]
