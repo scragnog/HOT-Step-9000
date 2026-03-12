@@ -56,3 +56,4 @@ mutagen
 pedalboard
 pyloudnorm
 audio-separator
+onnxruntime

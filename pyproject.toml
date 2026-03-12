@@ -51,6 +51,7 @@ dependencies = [
     "pedalboard",
     "pyloudnorm",
     "audio-separator",
+    "onnxruntime",
     "psutil>=5.9.0",
     "huggingface_hub[hf_xet]",
     "xxhash",
