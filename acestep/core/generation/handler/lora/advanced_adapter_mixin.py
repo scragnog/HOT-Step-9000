@@ -123,33 +123,12 @@ def _extract_adapter_delta(self, lora_path: str) -> dict:
     elif lokr_weights_path is not None:
         from safetensors import safe_open
 
-        from acestep.training.configs import LoKRConfig
-        from acestep.training.lokr_utils import (
-            check_lycoris_available,
-            inject_lokr_into_dit,
-        )
+        from acestep.core.generation.handler.lora.lokr_config import LoKRConfig
 
-        if not check_lycoris_available():
+        try:
+            from lycoris import LycorisNetwork
+        except ImportError:
             raise ImportError("LyCORIS library not installed")
-
-        with safe_open(lokr_weights_path, framework="pt", device="cpu") as f:
-            meta = f.metadata() or {}
-
-        lokr_cfg_dict = None
-        if "lokr_config" in meta:
-            lokr_cfg_dict = json.loads(meta["lokr_config"])
-        if not isinstance(lokr_cfg_dict, dict):
-            cfg_json_path = os.path.join(os.path.dirname(lokr_weights_path), "lokr_config.json")
-            if os.path.exists(cfg_json_path):
-                with open(cfg_json_path, "r") as f:
-                    lokr_cfg_dict = json.load(f)
-        if not isinstance(lokr_cfg_dict, dict):
-            raise ValueError("LoKr weights missing lokr_config metadata")
-
-        lokr_cfg = LoKRConfig()
-        for k, v in lokr_cfg_dict.items():
-            if hasattr(lokr_cfg, k):
-                setattr(lokr_cfg, k, v)
 
         # Snapshot all hook IDs on every decoder sub-module BEFORE injection
         # so we can remove only the NEW hooks that LyCORIS adds.
@@ -160,16 +139,14 @@ def _extract_adapter_delta(self, lora_path: str) -> dict:
             if fwd or pre:
                 pre_hooks[name] = (fwd, pre)
 
-        # Move model to CPU for lycoris injection — nano-vllm's CUDAGraph
-        # capture leaves the CUDA runtime in a state that blocks tensor.uniform_()
-        # calls during LokrModule parameter initialization.
+        # Move model to CPU for lycoris injection
         original_device = self.device
-        self.model = self.model.cpu()
-        self.model, lycoris_net, _ = inject_lokr_into_dit(self.model, lokr_cfg)
-        # Load weights directly (bypasses safe_path which restricts to cwd)
-        lycoris_net.load_weights(lokr_weights_path)
-        self.model = self.model.to(original_device)
-        self.model.decoder = self.model.decoder.to(self.dtype)
+        self.model.decoder = self.model.decoder.cpu()
+
+        from acestep.core.generation.handler.lora.lifecycle import _load_lokr_adapter
+        lycoris_net = _load_lokr_adapter(self.model.decoder, lokr_weights_path)
+
+        self.model.decoder = self.model.decoder.to(original_device).to(self.dtype)
         self.model.decoder.eval()
 
         # LyCORIS uses forward hooks — merge_to() bakes effect into weights

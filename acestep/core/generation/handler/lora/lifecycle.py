@@ -8,7 +8,7 @@ from loguru import logger
 
 from acestep.constants import DEBUG_MODEL_LOADING
 from acestep.debug_utils import debug_log
-from acestep.training.configs import LoKRConfig
+from acestep.core.generation.handler.lora.lokr_config import LoKRConfig
 
 LOKR_WEIGHTS_FILENAME = "lokr_weights.safetensors"
 
