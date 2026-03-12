@@ -50,6 +50,7 @@ dependencies = [
     "mutagen",
     "pedalboard",
     "pyloudnorm",
+    "audio-separator",
     "psutil>=5.9.0",
     "huggingface_hub[hf_xet]",
     "xxhash",

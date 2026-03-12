@@ -55,3 +55,4 @@ xxhash
 mutagen
 pedalboard
 pyloudnorm
+audio-separator
