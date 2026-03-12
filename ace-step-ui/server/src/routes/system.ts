@@ -1,7 +1,34 @@
 import { Router, Response, Request } from 'express';
 import { config } from '../config/index.js';
+import fs from 'fs';
+import path from 'path';
 
 const router = Router();
+
+// Signal launch.bat to boot the Python API
+router.post('/boot', async (_req: Request, res: Response) => {
+    try {
+        fs.writeFileSync(path.join(process.cwd(), '../../boot.lock'), '');
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: String(error) });
+    }
+});
+
+// Signal launch.bat to update, then self-destruct UI to allow git pull
+router.post('/update', async (_req: Request, res: Response) => {
+    try {
+        fs.writeFileSync(path.join(process.cwd(), '../../update.lock'), '');
+        res.json({ success: true });
+        
+        // Trigger self-shutdown shortly after responding
+        setTimeout(() => {
+            fetch(`http://localhost:${process.env.PORT || 3001}/api/shutdown`, { method: 'POST' }).catch(() => {});
+        }, 500);
+    } catch (error) {
+        res.status(500).json({ error: String(error) });
+    }
+});
 
 // Proxy system metrics from Python API
 router.get('/metrics', async (_req: Request, res: Response) => {

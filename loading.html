@@ -141,16 +141,49 @@
             color: #e0e0e8;
         }
 
-        .auto-continue {
-            font-size: .7rem;
-            color: #666;
-            margin-top: .5rem;
-            text-align: center;
-            transition: opacity .3s;
+        .actions {
+            display: flex;
+            gap: 1rem;
+            margin-top: 1.5rem;
+            justify-content: flex-end;
         }
 
-        .auto-continue.paused {
-            color: #a78bfa;
+        .btn {
+            padding: .6rem 1.2rem;
+            border: none;
+            border-radius: 6px;
+            font-family: 'Inter', sans-serif;
+            font-size: .85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            outline: none;
+        }
+        
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #a78bfa, #60a5fa);
+            color: #fff;
+            box-shadow: 0 4px 15px rgba(167, 139, 250, .4);
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(167, 139, 250, .6);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, .05);
+            color: #e0e0e8;
+            border: 1px solid rgba(255, 255, 255, .1);
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background: rgba(255, 255, 255, .1);
         }
 
         .env-updated {
@@ -303,7 +336,7 @@
 
 <body>
     <div class="container">
-        <h1>ACE-Step</h1>
+        <h1>HOT-Step 9000</h1>
         <p class="subtitle">AI Music Generation Studio</p>
 
         <!-- Model Selection -->
@@ -317,8 +350,11 @@
                 <label>Language Model (5Hz LM)</label>
                 <select id="lmModelSelect"></select>
             </div>
-            <div class="auto-continue" id="autoContinue">Auto-continuing in 5s…</div>
-            <div class="env-updated" id="envUpdated">✓ .env updated — will load on startup</div>
+            <div class="env-updated" id="envUpdated">✓ Models saved to .env</div>
+            <div class="actions">
+                <button type="button" class="btn btn-secondary" id="btnUpdate">Update from GitHub</button>
+                <button type="button" class="btn btn-primary" id="btnLaunch">Start summoning bangers</button>
+            </div>
         </div>
 
         <div class="spinner-wrap" id="spinnerWrap">
@@ -391,47 +427,14 @@
         populateSelect(modelSelect, AVAILABLE_MODELS, CURRENT_MODEL);
         populateSelect(lmModelSelect, AVAILABLE_LM_MODELS, CURRENT_LM_MODEL);
 
-        // ---- Auto-continue timer ----
-        const AUTO_CONTINUE_SECONDS = 5;
-        let autoContinueRemaining = AUTO_CONTINUE_SECONDS;
-        let autoContinuePaused = false;
-        let autoContinueDone = false;
-        const autoContinueEl = document.getElementById('autoContinue');
+        // ---- Buttons & Events ----
+        const btnLaunch = document.getElementById('btnLaunch');
+        const btnUpdate = document.getElementById('btnUpdate');
         const envUpdatedEl = document.getElementById('envUpdated');
 
-        function updateAutoContinueDisplay() {
-            if (autoContinueDone) {
-                autoContinueEl.style.display = 'none';
-                return;
-            }
-            if (autoContinuePaused) {
-                autoContinueEl.textContent = 'Timer paused — saving selection…';
-                autoContinueEl.className = 'auto-continue paused';
-            } else {
-                autoContinueEl.textContent = `Auto-continuing in ${autoContinueRemaining}s…`;
-                autoContinueEl.className = 'auto-continue';
-            }
-        }
-
-        const autoContinueInterval = setInterval(() => {
-            if (autoContinuePaused || autoContinueDone) return;
-            autoContinueRemaining--;
-            if (autoContinueRemaining <= 0) {
-                autoContinueDone = true;
-                clearInterval(autoContinueInterval);
-                document.getElementById('modelSelection').style.display = 'none';
-            }
-            updateAutoContinueDisplay();
-        }, 1000);
-
-        // ---- When user changes a dropdown, update .env via Express ----
-        let pendingUpdate = null; // track in-flight update promise
-        let updateSucceeded = false;
-
-        async function updateEnvViaExpress(configPath, lmModelPath, retries = 10) {
+        async function updateEnvViaExpress(configPath, lmModelPath, retries = 5) {
             for (let attempt = 1; attempt <= retries; attempt++) {
                 try {
-                    autoContinueEl.textContent = `Saving to .env (attempt ${attempt}/${retries})…`;
                     const resp = await fetch('http://localhost:3001/api/models/update-env', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
@@ -440,44 +443,66 @@
                             ACESTEP_LM_MODEL_PATH: lmModelPath,
                         }),
                     });
-                    if (resp.ok) {
-                        updateSucceeded = true;
-                        envUpdatedEl.classList.add('show');
-                        setTimeout(() => envUpdatedEl.classList.remove('show'), 4000);
-                        return true;
-                    }
-                } catch (e) {
-                    console.warn(`[Loading] .env update attempt ${attempt}/${retries} failed:`, e.message);
-                }
-                // Wait 1 s between retries
-                if (attempt < retries) {
-                    await new Promise(r => setTimeout(r, 1000));
-                }
+                    if (resp.ok) return true;
+                } catch (e) { }
+                if (attempt < retries) await new Promise(r => setTimeout(r, 1000));
             }
-            // All retries exhausted
-            autoContinueEl.textContent = '⚠ Could not update .env — Express not ready';
-            autoContinueEl.className = 'auto-continue paused';
             return false;
         }
 
-        function handleDropdownChange() {
-            // Pause auto-continue while we save
-            autoContinuePaused = true;
-            updateSucceeded = false;
-            updateAutoContinueDisplay();
+        btnLaunch.addEventListener('click', async () => {
+            btnLaunch.disabled = true;
+            btnUpdate.disabled = true;
+            btnLaunch.textContent = "Saving...";
+            
+            // 1. Save .env choice first
+            await updateEnvViaExpress(modelSelect.value, lmModelSelect.value);
+            envUpdatedEl.classList.add('show');
+            setTimeout(() => envUpdatedEl.classList.remove('show'), 3000);
+            
+            // 2. Trigger python boot
+            btnLaunch.textContent = "Booting Python API...";
+            try {
+                await fetch('http://localhost:3001/api/system/boot', { method: 'POST' });
+                // We leave it disabled so the user waits for the API to boot.
+                // The `poll()` loop will pick up the startup state.
+            } catch (e) {
+                btnLaunch.textContent = "Error: Couldn't reach backend";
+            }
+        });
 
-            // Start the update (with retries)
-            pendingUpdate = updateEnvViaExpress(modelSelect.value, lmModelSelect.value).then(ok => {
-                pendingUpdate = null;
-                // Resume auto-continue timer regardless of outcome
-                autoContinuePaused = false;
-                autoContinueRemaining = AUTO_CONTINUE_SECONDS;
-                updateAutoContinueDisplay();
-            });
+        // Setup polling loop for update feature
+        async function pollRestart() {
+            try {
+                // If it succeeds, the Express backend has restarted!
+                const r = await probeNoCors('http://localhost:3001/health', 1500);
+                if (r) {
+                    window.location.reload();
+                    return;
+                }
+            } catch(e) {}
+            setTimeout(pollRestart, 2000);
         }
 
-        modelSelect.addEventListener('change', handleDropdownChange);
-        lmModelSelect.addEventListener('change', handleDropdownChange);
+        btnUpdate.addEventListener('click', async () => {
+            btnLaunch.disabled = true;
+            btnUpdate.disabled = true;
+            btnUpdate.textContent = "Updating... Please wait";
+            
+            document.getElementById('s-api').style.display = 'none';
+            document.getElementById('s-backend').style.display = 'none';
+            document.getElementById('s-frontend').style.display = 'none';
+            document.getElementById('d-api').style.display = 'none';
+            document.getElementById('elapsed').textContent = "Pulling latest code from GitHub. The server will restart shortly...";
+            
+            // Signal update and suicide
+            try {
+                await fetch('http://localhost:3001/api/system/update', { method: 'POST' });
+            } catch (e) { }
+            
+            // Wait 5 seconds to guarantee windows die, then start polling for resurrection
+            setTimeout(pollRestart, 5000);
+        });
 
         // ---- Service polling ----
         function elapsed() {
@@ -553,23 +578,13 @@
                 if (result.up && !result.ready) {
                     state.apiUp = true;
                     setDetail('d-api', 'Server is up — loading models into VRAM…');
-                    // Hide model selection once Python is loading (too late to change)
-                    if (!autoContinueDone) {
-                        autoContinueDone = true;
-                        clearInterval(autoContinueInterval);
-                        document.getElementById('modelSelection').style.display = 'none';
-                    }
+                    document.getElementById('modelSelection').style.display = 'none';
                 } else if (result.ready) {
                     state.apiUp = true;
                     state.apiReady = true;
                     const modelInfo = result.model + (result.lmModel ? ` | LM: ${result.lmModel}` : '');
                     setDetail('d-api', `Model loaded: ${modelInfo}`);
-                    // Hide model selection
-                    if (!autoContinueDone) {
-                        autoContinueDone = true;
-                        clearInterval(autoContinueInterval);
-                        document.getElementById('modelSelection').style.display = 'none';
-                    }
+                    document.getElementById('modelSelection').style.display = 'none';
                 } else {
                     setDetail('d-api', 'Waiting for server to start…');
                 }
