@@ -54,3 +54,4 @@ xxhash
 # nano-vllm
 mutagen
 pedalboard
+pyloudnorm

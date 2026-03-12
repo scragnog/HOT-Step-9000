@@ -33,6 +33,12 @@ class LogBuffer:
         """No-op flush to satisfy file-like API expectations."""
         return None
 
+    @property
+    def last_message(self) -> str:
+        """Return the most recent log line (backward compat for query_result_route)."""
+        with self._lock:
+            return self._lines[-1][1] if self._lines else "Waiting"
+
     def get_lines_after(self, after: int) -> tuple[list[tuple[int, str]], int]:
         """Return all lines with seq_id > after, and the new cursor.
 
