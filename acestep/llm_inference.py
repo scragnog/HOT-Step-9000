@@ -211,9 +211,17 @@ class LLMHandler:
             self._lm_lora_path = adapter_path
             self._lm_lora_scale = 1.0
 
-            # Count adapter params
-            adapter_params = sum(p.numel() for p in self.llm.parameters() if p.requires_grad)
-            logger.info(f"[LM LoRA] Adapter loaded: {adapter_params:,} trainable params")
+            # Adapter weight diagnostic
+            lora_params = 0
+            lora_nonzero = 0
+            for name, param in self.llm.named_parameters():
+                if "lora_" in name:
+                    lora_params += param.numel()
+                    lora_nonzero += (param != 0).sum().item()
+            logger.info(
+                f"[LM LoRA] Adapter loaded: {lora_params:,} LoRA params, "
+                f"{lora_nonzero:,} non-zero ({100*lora_nonzero/max(lora_params,1):.1f}%)"
+            )
             return f"\u2705 LM LoRA loaded from {os.path.basename(adapter_path)}"
 
         except Exception as exc:
