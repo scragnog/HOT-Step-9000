@@ -189,7 +189,7 @@ class LLMHandler:
                 params = dict(self.last_init_params)
                 params["backend"] = "pt"
                 self.unload()
-                self.initialize_llm(**params)
+                self.initialize(**params)
             else:
                 return "\u274c Cannot auto-switch backend: no previous init params available"
 
@@ -246,7 +246,7 @@ class LLMHandler:
                 params = dict(self.last_init_params)
                 params["backend"] = "vllm"
                 self.unload()
-                self.initialize_llm(**params)
+                self.initialize(**params)
                 self._lm_lora_prev_backend = None
 
             return "\u2705 LM LoRA unloaded"
