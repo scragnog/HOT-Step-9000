@@ -2708,6 +2708,7 @@ class LLMHandler:
         # Build logits processor for non-CFG operations (repetition penalty, top_k, top_p)
         logits_processor = self._build_logits_processor(repetition_penalty)
 
+        outputs = None  # May not be set when using split-pass for LM LoRA
         with torch.inference_mode():
             for step in tqdm(range(max_new_tokens), desc="LLM CFG Generation", unit="token", disable=self.disable_tqdm):
                 # ── LM LoRA: split forward pass for proper CFG interaction ──
@@ -2807,7 +2808,7 @@ class LLMHandler:
                 model_kwargs['attention_mask'] = attention_mask
 
                 # Update past_key_values for next iteration
-                if use_cache and hasattr(outputs, 'past_key_values'):
+                if use_cache and outputs is not None and hasattr(outputs, 'past_key_values'):
                     past_key_values = outputs.past_key_values
 
                 # Update streamer
