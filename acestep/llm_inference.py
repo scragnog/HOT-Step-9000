@@ -2710,11 +2710,40 @@ class LLMHandler:
 
         with torch.inference_mode():
             for step in tqdm(range(max_new_tokens), desc="LLM CFG Generation", unit="token", disable=self.disable_tqdm):
-                # Forward pass for the entire batch (conditional + unconditional)
-                outputs = self._forward_pass(model, generated_ids, model_kwargs, past_key_values, use_cache)
+                # ── LM LoRA: split forward pass for proper CFG interaction ──
+                # When a PEFT adapter is loaded, we must run the conditional
+                # pass WITH the adapter and the unconditional pass WITHOUT it.
+                # Otherwise CFG's (cond - uncond) subtraction cancels the
+                # adapter's effect since it appears equally in both.
+                if self._lm_lora_loaded:
+                    try:
+                        from peft import PeftModel as _PM
+                        if isinstance(model, _PM):
+                            # Conditional pass (WITH adapter)
+                            cond_ids = generated_ids[cond_start_idx:cond_start_idx+batch_size]
+                            cond_kwargs = {k: v[cond_start_idx:cond_start_idx+batch_size] for k, v in model_kwargs.items()}
+                            cond_out = self._forward_pass(model, cond_ids, cond_kwargs, None, False)
+                            cond_logits_raw = cond_out.logits[:, -1, :]
 
-                # Get logits for the last position
-                next_token_logits = outputs.logits[:, -1, :]  # [batch_size*2, vocab_size]
+                            # Unconditional pass (WITHOUT adapter)
+                            uncond_ids = generated_ids[uncond_start_idx:uncond_start_idx+batch_size]
+                            uncond_kwargs = {k: v[uncond_start_idx:uncond_start_idx+batch_size] for k, v in model_kwargs.items()}
+                            with model.disable_adapter():
+                                uncond_out = self._forward_pass(model, uncond_ids, uncond_kwargs, None, False)
+                            uncond_logits_raw = uncond_out.logits[:, -1, :]
+
+                            # Recombine into the expected [cond, uncond] batch format
+                            next_token_logits = torch.cat([cond_logits_raw, uncond_logits_raw], dim=0)
+                        else:
+                            outputs = self._forward_pass(model, generated_ids, model_kwargs, past_key_values, use_cache)
+                            next_token_logits = outputs.logits[:, -1, :]
+                    except Exception:
+                        outputs = self._forward_pass(model, generated_ids, model_kwargs, past_key_values, use_cache)
+                        next_token_logits = outputs.logits[:, -1, :]
+                else:
+                    # Standard batch forward pass (no adapter)
+                    outputs = self._forward_pass(model, generated_ids, model_kwargs, past_key_values, use_cache)
+                    next_token_logits = outputs.logits[:, -1, :]  # [batch_size*2, vocab_size]
 
                 # ── LM LoRA A/B logit diagnostic (first step only) ──
                 if step == 0 and self._lm_lora_loaded:
