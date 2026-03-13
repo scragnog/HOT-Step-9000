@@ -545,17 +545,14 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     }
   }, [showModelMenu]);
 
-  // Auto-unload LoRA when model changes
+  // Track model changes (fall back to text2music for base-only tasks on non-base models)
   useEffect(() => {
-    if (previousModelRef.current !== selectedModel && loraLoaded) {
-      void handleLoraUnload();
-    }
-    // Fall back to text2music if switching to a non-base model while on a base-only task
+    // Note: LoRA is NOT unloaded here — handleSwitchModel handles re-application
     if (previousModelRef.current !== selectedModel && !isBaseModel(selectedModel) && isBaseOnlyTask(taskType)) {
       setTaskType('text2music');
     }
     previousModelRef.current = selectedModel;
-  }, [selectedModel, loraLoaded]);
+  }, [selectedModel]);
 
   // Auto-disable advanced guidance modes when basic LoRA is loaded (PEFT hook limitation).
   // Advanced multi-adapter mode uses weight-space merging — no hook restriction — so we skip this there.
@@ -658,43 +655,24 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       const nextSlot = adapterSlots.length > 0
         ? Math.max(...adapterSlots.map(s => s.slot)) + 1
         : 0;
-      await generateApi.loadLora({ lora_path: filePath, slot: nextSlot }, token);
+      await generateApi.loadLora({
+        lora_path: filePath,
+        slot: nextSlot,
+        // Atomically apply saved scales in the same request
+        ...(savedOverallScales[filePath.split('/').pop()?.replace(/\.[^/.]+$/, '') || ''] != null &&
+          savedOverallScales[filePath.split('/').pop()?.replace(/\.[^/.]+$/, '') || ''] !== 1.0
+          ? { scale: savedOverallScales[filePath.split('/').pop()?.replace(/\.[^/.]+$/, '') || ''] }
+          : {}),
+        ...(savedGroupScales[filePath.split('/').pop()?.replace(/\.[^/.]+$/, '') || ''] != null
+          ? { group_scales: savedGroupScales[filePath.split('/').pop()?.replace(/\.[^/.]+$/, '') || ''] }
+          : {}),
+      }, token);
       // Refresh status to get actual slot info
       const status = await generateApi.getLoraStatus(token);
       if (status?.advanced?.slots) {
         setAdapterSlots(status.advanced.slots);
         setLoraLoaded(true);
         setAdapterTriggerWord((status as any).trigger_word || '');
-
-        // Restore saved per-adapter scales for newly loaded slot
-        for (const slot of status.advanced.slots) {
-          const adapterKey = slot.name;
-          const savedScale = savedOverallScales[adapterKey];
-          const savedGroups = savedGroupScales[adapterKey];
-          const needsScaleRestore = savedScale !== undefined && savedScale !== 1.0;
-          const needsGroupRestore = savedGroups !== undefined;
-
-          if (needsScaleRestore || needsGroupRestore) {
-            setAdapterLoadingMessage(`Restoring saved scales for ${adapterKey}...`);
-          }
-
-          if (needsScaleRestore) {
-            try {
-              await generateApi.setLoraScale({ scale: savedScale, slot: slot.slot }, token);
-              setAdapterSlots(prev => prev.map(s => s.slot === slot.slot ? { ...s, scale: savedScale } : s));
-            } catch (err) {
-              console.error(`Failed to restore scale for ${adapterKey}:`, err);
-            }
-          }
-          if (needsGroupRestore) {
-            try {
-              await generateApi.setSlotGroupScales({ slot: slot.slot, ...savedGroups }, token);
-              setAdapterSlots(prev => prev.map(s => s.slot === slot.slot ? { ...s, group_scales: savedGroups } : s));
-            } catch (err) {
-              console.error(`Failed to restore group scales for ${adapterKey}:`, err);
-            }
-          }
-        }
       }
     } catch (err) {
       setLoraError(err instanceof Error ? err.message : 'Failed to load adapter');
@@ -1209,18 +1187,61 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const handleSwitchModel = useCallback(async (targetModel: string) => {
     if (!token || isSwitching) return;
     setIsSwitching(true);
+
+    // Save current adapter state before switch (backend will unload them)
+    const prevSlots = [...adapterSlots];
+    const hadAdapters = prevSlots.length > 0 && loraLoaded;
+
     try {
       const result = await generateApi.switchModel(targetModel, token);
       if (result.switched) {
         setActiveBackendModel(result.active_model);
         void refreshModels(false);
+
+        // Re-apply adapters to the new model if any were loaded
+        if (hadAdapters) {
+          setIsLoraLoading(true);
+          setAdapterLoadingMessage('Re-applying adapters to new model...');
+          setAdapterSlots([]);
+          setLoraLoaded(false);
+
+          for (const slot of prevSlots) {
+            try {
+              setAdapterLoadingMessage(`Loading ${slot.name}...`);
+              const savedScale = savedOverallScales[slot.name];
+              const savedGroups = savedGroupScales[slot.name];
+              await generateApi.loadLora({
+                lora_path: slot.path,
+                slot: slot.slot,
+                ...(savedScale != null && savedScale !== 1.0 ? { scale: savedScale } : {}),
+                ...(savedGroups != null ? { group_scales: savedGroups } : {}),
+              }, token);
+            } catch (err) {
+              console.error(`Failed to re-apply adapter ${slot.name}:`, err);
+            }
+          }
+
+          // Refresh status after all adapters loaded
+          try {
+            const status = await generateApi.getLoraStatus(token);
+            if (status?.advanced?.slots && status.advanced.slots.length > 0) {
+              setAdapterSlots(status.advanced.slots);
+              setLoraLoaded(true);
+              setAdapterTriggerWord((status as any).trigger_word || '');
+            }
+          } catch {
+            // ignore status refresh failure
+          }
+          setIsLoraLoading(false);
+          setAdapterLoadingMessage('');
+        }
       }
     } catch (err: any) {
       console.error('Model switch failed:', err.message);
     } finally {
       setIsSwitching(false);
     }
-  }, [token, isSwitching, refreshModels]);
+  }, [token, isSwitching, refreshModels, adapterSlots, loraLoaded, savedOverallScales, savedGroupScales]);
 
   useEffect(() => {
     isMountedRef.current = true;

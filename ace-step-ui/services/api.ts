@@ -1,4 +1,4 @@
-﻿// Use relative URLs so Vite proxy handles them (enables LAN access)
+// Use relative URLs so Vite proxy handles them (enables LAN access)
 const API_BASE = '';
 
 // Resolve audio URL based on storage type
@@ -452,6 +452,8 @@ export const generateApi = {
   loadLora: (params: {
     lora_path: string;
     slot?: number;
+    scale?: number;
+    group_scales?: { self_attn: number; cross_attn: number; mlp: number };
   }, token: string): Promise<{
     message: string;
     lora_path: string;

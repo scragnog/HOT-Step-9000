@@ -10,6 +10,7 @@ import os
 from typing import Any, Callable, Dict, List, Optional
 
 from fastapi import Depends, FastAPI, HTTPException, Request
+from loguru import logger
 from pydantic import BaseModel, Field
 
 from acestep.handler import AceStepHandler
@@ -24,6 +25,8 @@ class LoadLoRARequest(BaseModel):
     lora_path: str = Field(..., description="Path to LoRA adapter directory or LoKr/LyCORIS safetensors file")
     adapter_name: Optional[str] = Field(default=None, description="Optional adapter name (uses path-derived name if omitted)")
     slot: Optional[int] = Field(default=None, description="Slot number for advanced multi-adapter mode (0-3)")
+    scale: Optional[float] = Field(default=None, ge=0.0, le=2.0, description="Optional scale to apply immediately after load")
+    group_scales: Optional[Dict[str, float]] = Field(default=None, description="Optional group scales {self_attn, cross_attn, mlp} to apply immediately after load")
 
 
 class SetLoRAScaleRequest(BaseModel):
@@ -114,6 +117,22 @@ def register_lora_routes(
             if request.slot is not None:
                 result = handler.load_lora_slot(request.lora_path, slot=request.slot)
                 if _is_success_message(result):
+                    # Atomically apply scale + group_scales if provided
+                    if request.scale is not None:
+                        try:
+                            handler.set_lora_slot_scale(request.scale, request.slot)
+                        except Exception as exc:
+                            logger.warning(f"Failed to apply initial scale for slot {request.slot}: {exc}")
+                    if request.group_scales is not None:
+                        try:
+                            handler.set_slot_group_scales(
+                                slot=request.slot,
+                                self_attn_scale=request.group_scales.get("self_attn", 1.0),
+                                cross_attn_scale=request.group_scales.get("cross_attn", 1.0),
+                                mlp_scale=request.group_scales.get("mlp", 1.0),
+                            )
+                        except Exception as exc:
+                            logger.warning(f"Failed to apply initial group scales for slot {request.slot}: {exc}")
                     return wrap_response({"message": result, "lora_path": request.lora_path, "slot": request.slot})
                 else:
                     raise HTTPException(status_code=400, detail=result)
@@ -126,6 +145,15 @@ def register_lora_routes(
                 result = handler.load_lora(request.lora_path)
 
             if _is_success_message(result):
+                # Atomically apply scale if provided
+                if request.scale is not None:
+                    try:
+                        if adapter_name:
+                            handler.set_lora_scale(adapter_name, request.scale)
+                        else:
+                            handler.set_lora_scale(request.scale)
+                    except Exception as exc:
+                        logger.warning(f"Failed to apply initial scale: {exc}")
                 response_data: Dict[str, Any] = {"message": result, "lora_path": request.lora_path}
                 if adapter_name:
                     response_data["adapter_name"] = adapter_name
