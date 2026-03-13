@@ -2708,6 +2708,10 @@ class LLMHandler:
         # Build logits processor for non-CFG operations (repetition penalty, top_k, top_p)
         logits_processor = self._build_logits_processor(repetition_penalty)
 
+        # Separate KV caches for split-pass mode (LM LoRA + CFG)
+        past_kv_cond = None
+        past_kv_uncond = None
+
         outputs = None  # May not be set when using split-pass for LM LoRA
         with torch.inference_mode():
             for step in tqdm(range(max_new_tokens), desc="LLM CFG Generation", unit="token", disable=self.disable_tqdm):
@@ -2723,15 +2727,19 @@ class LLMHandler:
                             # Conditional pass (WITH adapter)
                             cond_ids = generated_ids[cond_start_idx:cond_start_idx+batch_size]
                             cond_kwargs = {k: v[cond_start_idx:cond_start_idx+batch_size] for k, v in model_kwargs.items()}
-                            cond_out = self._forward_pass(model, cond_ids, cond_kwargs, None, False)
+                            cond_out = self._forward_pass(model, cond_ids, cond_kwargs, past_kv_cond, use_cache)
                             cond_logits_raw = cond_out.logits[:, -1, :]
+                            if use_cache and hasattr(cond_out, 'past_key_values'):
+                                past_kv_cond = cond_out.past_key_values
 
                             # Unconditional pass (WITHOUT adapter)
                             uncond_ids = generated_ids[uncond_start_idx:uncond_start_idx+batch_size]
                             uncond_kwargs = {k: v[uncond_start_idx:uncond_start_idx+batch_size] for k, v in model_kwargs.items()}
                             with model.disable_adapter():
-                                uncond_out = self._forward_pass(model, uncond_ids, uncond_kwargs, None, False)
+                                uncond_out = self._forward_pass(model, uncond_ids, uncond_kwargs, past_kv_uncond, use_cache)
                             uncond_logits_raw = uncond_out.logits[:, -1, :]
+                            if use_cache and hasattr(uncond_out, 'past_key_values'):
+                                past_kv_uncond = uncond_out.past_key_values
 
                             # Recombine into the expected [cond, uncond] batch format
                             next_token_logits = torch.cat([cond_logits_raw, uncond_logits_raw], dim=0)
