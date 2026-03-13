@@ -276,6 +276,14 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [adapterTriggerWord, setAdapterTriggerWord] = useState('');
   const [isLoraLoading, setIsLoraLoading] = useState(false);
 
+  // LM LoRA Parameters (PEFT adapter on the 5Hz language model)
+  const [lmLoraPath, setLmLoraPath] = usePersistedState('ace-lmLoraPath', '');
+  const [lmLoraLoaded, setLmLoraLoaded] = useState(false);
+  const [lmLoraScale, setLmLoraScale] = usePersistedState('ace-lmLoraScale', 1.0);
+  const [lmLoraError, setLmLoraError] = useState<string | null>(null);
+  const [isLmLoraLoading, setIsLmLoraLoading] = useState(false);
+  const [lmLoraAutoSwitched, setLmLoraAutoSwitched] = useState(false);
+
 
   // Advanced adapter state
   const [advancedAdapters, setAdvancedAdapters] = usePersistedState('ace-advancedAdapters', false);
@@ -627,6 +635,56 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       await generateApi.setLoraScale({ scale: newScale }, token);
     } catch (err) {
       console.error('Failed to set LoRA scale:', err);
+    }
+  };
+
+
+  // LM LoRA API handlers
+  const handleLmLoraToggle = async () => {
+    if (!token) {
+      setLmLoraError('Please sign in to use LM LoRA');
+      return;
+    }
+    if (!lmLoraLoaded && !lmLoraPath.trim()) {
+      setLmLoraError('Please enter an LM adapter path');
+      return;
+    }
+
+    setIsLmLoraLoading(true);
+    setLmLoraError(null);
+
+    try {
+      if (lmLoraLoaded) {
+        const result = await generateApi.unloadLmLora(token);
+        setLmLoraLoaded(false);
+        setLmLoraAutoSwitched(false);
+        console.log('LM LoRA unloaded:', result?.message);
+      } else {
+        const result = await generateApi.loadLmLora({ lm_lora_path: lmLoraPath }, token);
+        setLmLoraLoaded(true);
+        console.log('LM LoRA loaded:', result?.message);
+        // Check if backend auto-switched from vLLM
+        try {
+          const status = await generateApi.getLmLoraStatus(token);
+          setLmLoraAutoSwitched(status?.auto_switched ?? false);
+        } catch { /* ignore status check failure */ }
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'LM LoRA operation failed';
+      setLmLoraError(message);
+      console.error('LM LoRA error:', err);
+    } finally {
+      setIsLmLoraLoading(false);
+    }
+  };
+
+  const handleLmLoraScaleChange = async (newScale: number) => {
+    setLmLoraScale(newScale);
+    if (!token || !lmLoraLoaded) return;
+    try {
+      await generateApi.setLmLoraScale(newScale, token);
+    } catch (err) {
+      console.error('Failed to set LM LoRA scale:', err);
     }
   };
 
@@ -2650,6 +2708,83 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           temporalScheduleActive={temporalScheduleActive}
           onTemporalSchedulePreset={handleTemporalSchedulePreset}
         />
+
+        {/* LM ADAPTER (visible only when CoT/Thinking is enabled) */}
+        {thinking && (
+          <div className="accordion-section lm-lora-section">
+            <button
+              className="accordion-header"
+              onClick={() => {}}
+              style={{ cursor: 'default' }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Brain size={16} />
+                <span>LM Adapter</span>
+                {lmLoraLoaded && (
+                  <span style={{
+                    fontSize: '10px', padding: '1px 6px', borderRadius: '4px',
+                    background: 'var(--accent-primary)', color: 'var(--bg-primary)',
+                    fontWeight: 600,
+                  }}>ACTIVE</span>
+                )}
+                {lmLoraAutoSwitched && (
+                  <span style={{
+                    fontSize: '10px', padding: '1px 6px', borderRadius: '4px',
+                    background: 'var(--warning, #f59e0b)', color: '#000',
+                    fontWeight: 600,
+                  }}>PT mode</span>
+                )}
+              </div>
+            </button>
+            <div className="accordion-content" style={{ padding: '8px 12px' }}>
+              {/* Adapter path input + load button */}
+              <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
+                <input
+                  type="text"
+                  value={lmLoraPath}
+                  onChange={(e) => setLmLoraPath(e.target.value)}
+                  placeholder="Path to PEFT adapter directory..."
+                  className="text-input"
+                  style={{ flex: 1, fontSize: '12px' }}
+                  disabled={isLmLoraLoading}
+                />
+                <button
+                  className={`btn btn-sm ${lmLoraLoaded ? 'btn-danger' : 'btn-primary'}`}
+                  onClick={handleLmLoraToggle}
+                  disabled={isLmLoraLoading}
+                  style={{ fontSize: '11px', padding: '4px 10px', whiteSpace: 'nowrap' }}
+                >
+                  {isLmLoraLoading ? (
+                    <Loader2 size={12} className="spin" />
+                  ) : lmLoraLoaded ? 'Unload' : 'Load'}
+                </button>
+              </div>
+
+              {/* Scale slider (only when loaded) */}
+              {lmLoraLoaded && (
+                <div style={{ marginBottom: '6px' }}>
+                  <EditableSlider
+                    label="Scale"
+                    value={lmLoraScale}
+                    onChange={handleLmLoraScaleChange}
+                    min={0}
+                    max={2}
+                    step={0.05}
+                  />
+                </div>
+              )}
+
+              {/* Error message */}
+              {lmLoraError && (
+                <div style={{
+                  fontSize: '11px', color: 'var(--error, #ef4444)',
+                  padding: '4px 8px', borderRadius: '4px',
+                  background: 'rgba(239,68,68,0.1)',
+                }}>{lmLoraError}</div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* LAYER ABLATION LAB (Developer Mode) */}
         <LayerAblationPanel

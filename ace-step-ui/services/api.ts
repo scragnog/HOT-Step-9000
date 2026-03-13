@@ -516,6 +516,8 @@ export const generateApi = {
     loaded: boolean;
     lm_lora_path: string;
     scale: number;
+    backend: string;
+    auto_switched: boolean;
     message: string;
   }> => api('/api/lora/lm-status', { token }),
 

@@ -167,5 +167,42 @@ router.post('/audio-diff', authMiddleware, async (req: AuthenticatedRequest, res
   }
 });
 
+// ── LM LoRA (PEFT adapter on the 5Hz LLM) ─────────────────────────
+router.post('/lm-load', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const result = await proxyToAceStep('/v1/lora/lm-load', 'POST', req.body);
+    res.json(result || { message: 'LM LoRA loaded' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/lm-unload', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const result = await proxyToAceStep('/v1/lora/lm-unload', 'POST', req.body);
+    res.json(result || { message: 'LM LoRA unloaded' });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/lm-scale', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const result = await proxyToAceStep('/v1/lora/lm-scale', 'POST', req.body);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.get('/lm-status', authMiddleware, async (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    const result = await proxyToAceStep('/v1/lora/lm-status', 'GET');
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export default router;
 
