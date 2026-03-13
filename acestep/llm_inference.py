@@ -2804,6 +2804,18 @@ class LLMHandler:
                 # Update constrained processor state AFTER sampling
                 self._update_constrained_processor_state(constrained_processor, next_tokens)
 
+                # ── Token sequence diagnostic (first 20 tokens) ──
+                if step < 20 and self._lm_lora_loaded and step == 0:
+                    token_text = self.llm_tokenizer.decode(next_tokens[0].item())
+                    logger.info(f"[LM LoRA DIAG] Token #{step}: {next_tokens[0].item()} = '{token_text}'")
+                if step == 19 and self._lm_lora_loaded:
+                    # Log tokens 0-19 in one line for easy comparison
+                    recent = generated_ids[0, -20:].tolist()
+                    decoded = [self.llm_tokenizer.decode(t) for t in recent]
+                    logger.info(f"[LM LoRA DIAG] First 20 tokens: {recent}")
+                    logger.info(f"[LM LoRA DIAG] Decoded: {decoded[:10]}...")
+                # ────────────────────────────────────────────────────
+
                 # Check for EOS token in conditional sequences BEFORE unsqueezing
                 # Stop if any conditional sequence generates EOS token
                 # next_tokens shape: [batch_size] (only conditional tokens)
