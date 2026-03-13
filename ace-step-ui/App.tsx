@@ -170,6 +170,7 @@ function AppContent() {
   // Download Modal
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [songToDownload, setSongToDownload] = useState<Song | null>(null);
+  const [bulkDownloadSongs, setBulkDownloadSongs] = useState<Song[]>([]);
 
   // Re-master Modal
   const [showRemasterConsole, setShowRemasterConsole] = useState(false);
@@ -1685,7 +1686,14 @@ function AppContent() {
   };
 
   const openDownloadModal = (song: Song) => {
+    setBulkDownloadSongs([]);
     setSongToDownload(song);
+    setIsDownloadModalOpen(true);
+  };
+
+  const openBulkDownloadModal = (songs: Song[]) => {
+    setBulkDownloadSongs(songs);
+    setSongToDownload(null);
     setIsDownloadModalOpen(true);
   };
 
@@ -1733,6 +1741,55 @@ function AppContent() {
     } catch (error) {
       console.error('Download failed:', error);
       showToast(`Failed to download ${format.toUpperCase()}`, 'error');
+    }
+  };
+
+  const handleBulkDownloadFormat = async (format: DownloadFormat, version: 'mastered' | 'original' | 'both' = 'mastered') => {
+    if (bulkDownloadSongs.length === 0) return;
+
+    const downloadOneSong = (song: Song, url: string, suffix: string) => {
+      const targetUrl = new URL('/api/songs/download', window.location.origin);
+      targetUrl.searchParams.set('audioUrl', url);
+      targetUrl.searchParams.set('title', `${song.title || 'song'}${suffix}`);
+      targetUrl.searchParams.set('format', format);
+      if (song.id) targetUrl.searchParams.set('songId', song.id);
+      if (format === 'mp3') {
+        const br = localStorage.getItem('mp3_export_bitrate');
+        if (br) targetUrl.searchParams.set('mp3Bitrate', br);
+      }
+      if (format === 'opus') {
+        const br = localStorage.getItem('opus_export_bitrate');
+        if (br) targetUrl.searchParams.set('opusBitrate', br);
+      }
+      const link = document.createElement('a');
+      link.href = targetUrl.toString();
+      const ext = format === 'opus' ? 'ogg' : format;
+      link.download = `${song.title || 'song'}${suffix}.${ext}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+
+    try {
+      let delay = 0;
+      for (const song of bulkDownloadSongs) {
+        if (!song.audioUrl) continue;
+        if (version === 'mastered' || version === 'both') {
+          setTimeout(() => downloadOneSong(song, song.audioUrl, ''), delay);
+          delay += 400;
+        }
+        if (version === 'original' || version === 'both') {
+          const origUrl = song.generationParams?.originalAudioUrl || (song as any).originalAudioUrl;
+          if (origUrl) {
+            setTimeout(() => downloadOneSong(song, origUrl, ' (Unmastered)'), delay);
+            delay += 400;
+          }
+        }
+      }
+      showToast(`Downloading ${bulkDownloadSongs.length} tracks as ${format.toUpperCase()}`, 'success');
+    } catch (error) {
+      console.error('Bulk download failed:', error);
+      showToast(`Bulk download failed`, 'error');
     }
   };
 
@@ -1954,6 +2011,7 @@ function AppContent() {
                 onReusePrompt={handleReuse}
                 onDelete={handleDeleteSong}
                 onDeleteMany={handleDeleteSongs}
+                onBulkDownload={openBulkDownloadModal}
                 onDeleteAll={handleDeleteAll}
                 onUseAsReference={handleUseAsReference}
                 onCoverSong={handleCoverSong}
@@ -2200,10 +2258,14 @@ function AppContent() {
       />
       <DownloadModal
         isOpen={isDownloadModalOpen}
-        onClose={() => setIsDownloadModalOpen(false)}
-        onDownload={handleDownloadFormat}
+        onClose={() => { setIsDownloadModalOpen(false); setBulkDownloadSongs([]); }}
+        onDownload={bulkDownloadSongs.length > 0 ? handleBulkDownloadFormat : handleDownloadFormat}
         songTitle={songToDownload?.title}
-        hasOriginal={!!(songToDownload?.generationParams?.originalAudioUrl || (songToDownload as any)?.originalAudioUrl)}
+        songCount={bulkDownloadSongs.length > 0 ? bulkDownloadSongs.length : undefined}
+        hasOriginal={bulkDownloadSongs.length > 0
+          ? bulkDownloadSongs.some(s => !!(s.generationParams?.originalAudioUrl || (s as any).originalAudioUrl))
+          : !!(songToDownload?.generationParams?.originalAudioUrl || (songToDownload as any)?.originalAudioUrl)
+        }
       />
       <SettingsModal
         isOpen={showSettingsModal}

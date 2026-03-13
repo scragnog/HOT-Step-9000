@@ -10,6 +10,7 @@ interface DownloadModalProps {
     onClose: () => void;
     onDownload: (format: DownloadFormat, version: DownloadVersion) => void;
     songTitle?: string;
+    songCount?: number;
     hasOriginal?: boolean;
 }
 
@@ -18,6 +19,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
     onClose,
     onDownload,
     songTitle,
+    songCount,
     hasOriginal
 }) => {
     const { t } = useI18n();
@@ -46,7 +48,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
                 <div className="flex items-center justify-between p-4 border-b border-white/5">
                     <div className="flex items-center gap-2 text-white">
                         <Download size={18} className="text-pink-500" />
-                        <h3 className="font-semibold text-sm">Download Track</h3>
+                        <h3 className="font-semibold text-sm">{songCount && songCount > 1 ? `Download ${songCount} Tracks` : 'Download Track'}</h3>
                     </div>
                     <button
                         onClick={onClose}
@@ -59,7 +61,10 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
                 {/* Body */}
                 <div className="p-4 space-y-4">
                     <p className="text-xs text-zinc-400">
-                        Select audio format for <span className="text-white font-medium">"{songTitle || 'Untitled'}"</span>:
+                        {songCount && songCount > 1
+                            ? <>Select audio format for <span className="text-white font-medium">{songCount} selected tracks</span>:</>
+                            : <>Select audio format for <span className="text-white font-medium">"{songTitle || 'Untitled'}"</span>:</>
+                        }
                     </p>
 
                     <div className="grid grid-cols-2 gap-2">
@@ -106,7 +111,7 @@ export const DownloadModal: React.FC<DownloadModalProps> = ({
                         className="w-full flex items-center justify-center gap-2 py-2.5 bg-gradient-to-r from-orange-500 to-pink-600 hover:from-orange-400 hover:to-pink-500 text-white rounded-xl font-medium text-sm transition-all shadow-lg shadow-pink-500/20"
                     >
                         <Download size={16} />
-                        Download {selectedFormat.toUpperCase()}
+                        Download {selectedFormat.toUpperCase()}{songCount && songCount > 1 ? ` (${songCount})` : ''}
                     </button>
                 </div>
             </div>

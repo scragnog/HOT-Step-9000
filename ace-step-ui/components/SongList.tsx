@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Song } from '../types';
-import { Play, MoreHorizontal, Heart, ThumbsDown, ListPlus, Pause, Search, Filter, Check, Globe, Lock, Loader2, ThumbsUp, Share2, Video, Info, Clock, ChevronLeft, ChevronRight, Trash2, LayoutList, LayoutGrid, List, ArrowLeftRight, X } from 'lucide-react';
+import { Play, MoreHorizontal, Heart, ThumbsDown, ListPlus, Pause, Search, Filter, Check, Globe, Lock, Loader2, ThumbsUp, Share2, Video, Info, Clock, ChevronLeft, ChevronRight, Trash2, LayoutList, LayoutGrid, List, ArrowLeftRight, X, Download } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
 import { SongDropdownMenu } from './SongDropdownMenu';
@@ -34,6 +34,7 @@ interface SongListProps {
     onDelete?: (song: Song) => void;
     onSongUpdate?: (updatedSong: Song) => void;
     onDeleteMany?: (songs: Song[], onSuccess?: () => void) => void;
+    onBulkDownload?: (songs: Song[]) => void;
     onDeleteAll?: () => void;
     onUseAsReference?: (song: Song) => void;
     onCoverSong?: (song: Song) => void;
@@ -139,6 +140,7 @@ export const SongList: React.FC<SongListProps> = ({
     onDelete,
     onSongUpdate,
     onDeleteMany,
+    onBulkDownload,
     onDeleteAll,
     onUseAsReference,
     onCoverSong,
@@ -476,6 +478,20 @@ export const SongList: React.FC<SongListProps> = ({
                                         disabled={!selectedSongs.length}
                                     >
                                         {t('delete')}
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            if (!selectedSongs.length || !onBulkDownload) return;
+                                            onBulkDownload(selectedSongs);
+                                        }}
+                                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold border flex items-center gap-1.5 ${selectedSongs.length
+                                            ? 'border-pink-500 text-pink-600 hover:bg-pink-50 dark:hover:bg-pink-500/10'
+                                            : 'border-zinc-200 dark:border-white/10 text-zinc-400 cursor-not-allowed'
+                                            }`}
+                                        disabled={!selectedSongs.length}
+                                    >
+                                        <Download size={12} />
+                                        {t('download') || 'Download'}
                                     </button>
                                 </div>
                             </div>
