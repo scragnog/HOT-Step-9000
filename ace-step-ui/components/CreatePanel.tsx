@@ -2768,8 +2768,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                     value={lmLoraScale}
                     onChange={handleLmLoraScaleChange}
                     min={0}
-                    max={2}
-                    step={0.05}
+                    max={10}
+                    step={0.1}
                   />
                 </div>
               )}

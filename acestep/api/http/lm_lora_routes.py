@@ -24,7 +24,7 @@ class LoadLmLoraRequest(BaseModel):
 
 
 class SetLmLoraScaleRequest(BaseModel):
-    scale: float = Field(..., ge=0.0, le=2.0, description="LM LoRA scale (0.0-2.0)")
+    scale: float = Field(..., ge=0.0, le=10.0, description="LM LoRA scale (0.0-10.0)")
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
