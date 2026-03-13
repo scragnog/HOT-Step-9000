@@ -188,6 +188,8 @@ class LLMHandler:
             if self.last_init_params:
                 params = dict(self.last_init_params)
                 params["backend"] = "pt"
+                # Force CPU offload so the LLM frees VRAM for DiT after generation
+                params["offload_to_cpu"] = True
                 self.unload()
                 self.initialize(**params)
             else:
