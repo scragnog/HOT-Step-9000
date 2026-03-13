@@ -2633,6 +2633,20 @@ class LLMHandler:
         """
         model = self.llm
         device = self.device
+
+        # ── LM LoRA diagnostic ──────────────────────────────────────
+        try:
+            from peft import PeftModel as _PM
+            is_peft = isinstance(model, _PM)
+            if is_peft:
+                active = getattr(model, 'active_adapter', 'unknown')
+                configs = {n: f"r={c.r}, alpha={c.lora_alpha}" for n, c in model.peft_config.items()}
+                logger.info(f"[LM LoRA DIAG] PEFT active: adapter={active}, configs={configs}")
+            else:
+                logger.info(f"[LM LoRA DIAG] No PEFT adapter — base model ({type(model).__name__})")
+        except ImportError:
+            pass
+        # ────────────────────────────────────────────────────────────
         batch_size = batch_input_ids.shape[0] // 2  # Half are conditional, half are unconditional
         cond_start_idx = 0
         uncond_start_idx = batch_size
