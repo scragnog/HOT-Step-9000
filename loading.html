@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ACE-Step — Starting Up</title>
+    <title>HOT-Step 9000 — Starting Up</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
 
@@ -16,7 +16,7 @@
 
         body {
             font-family: 'Inter', -apple-system, sans-serif;
-            background: #0a0a0f;
+            background: #000000;
             color: #e0e0e8;
             display: flex;
             align-items: center;
@@ -31,9 +31,9 @@
             position: fixed;
             inset: 0;
             background:
-                radial-gradient(ellipse 80% 60% at 50% 0%, rgba(99, 60, 255, .15), transparent),
-                radial-gradient(ellipse 60% 50% at 80% 100%, rgba(0, 200, 255, .08), transparent),
-                radial-gradient(ellipse 50% 40% at 10% 60%, rgba(255, 60, 170, .06), transparent);
+                radial-gradient(ellipse 80% 60% at 50% 0%, rgba(99, 60, 255, .08), transparent),
+                radial-gradient(ellipse 60% 50% at 80% 100%, rgba(0, 200, 255, .05), transparent),
+                radial-gradient(ellipse 50% 40% at 10% 60%, rgba(255, 60, 170, .04), transparent);
             animation: shimmer 8s ease-in-out infinite alternate;
             z-index: 0;
         }
@@ -58,23 +58,13 @@
             padding: 2rem;
         }
 
-        /* Logo / title */
-        h1 {
-            font-size: 2.4rem;
-            font-weight: 700;
-            background: linear-gradient(135deg, #a78bfa, #60a5fa, #34d399);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: .35rem;
-            letter-spacing: -.02em;
-        }
-
-        .subtitle {
-            font-size: .85rem;
-            color: #888;
-            margin-bottom: 2rem;
-            font-weight: 400;
+        /* Logo image */
+        .logo {
+            width: 100%;
+            max-width: 420px;
+            height: auto;
+            margin-bottom: 1.5rem;
+            filter: drop-shadow(0 0 30px rgba(167, 139, 250, .15));
         }
 
         /* Model selection area */
@@ -336,8 +326,7 @@
 
 <body>
     <div class="container">
-        <h1>HOT-Step 9000</h1>
-        <p class="subtitle">AI Music Generation Studio</p>
+        <img src="images/hotstep9000-mainlogo.webp" alt="HOT-Step 9000" class="logo">
 
         <!-- Model Selection -->
         <div class="model-selection" id="modelSelection">
