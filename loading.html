@@ -25,30 +25,7 @@
             overflow: hidden;
         }
 
-        /* Animated background gradient */
-        body::before {
-            content: '';
-            position: fixed;
-            inset: 0;
-            background:
-                radial-gradient(ellipse 80% 60% at 50% 0%, rgba(99, 60, 255, .08), transparent),
-                radial-gradient(ellipse 60% 50% at 80% 100%, rgba(0, 200, 255, .05), transparent),
-                radial-gradient(ellipse 50% 40% at 10% 60%, rgba(255, 60, 170, .04), transparent);
-            animation: shimmer 8s ease-in-out infinite alternate;
-            z-index: 0;
-        }
 
-        @keyframes shimmer {
-            0% {
-                opacity: .6;
-                transform: scale(1);
-            }
-
-            100% {
-                opacity: 1;
-                transform: scale(1.05);
-            }
-        }
 
         .container {
             position: relative;
@@ -64,7 +41,6 @@
             max-width: 420px;
             height: auto;
             margin-bottom: 1.5rem;
-            filter: drop-shadow(0 0 30px rgba(167, 139, 250, .15));
         }
 
         /* Model selection area */
