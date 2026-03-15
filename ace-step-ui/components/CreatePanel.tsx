@@ -578,6 +578,44 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     }
   }, [loraLoaded, advancedAdapters]);
 
+  // Validate persisted audio URLs on startup — clear stale refs whose files
+  // have been deleted between sessions to prevent "Invalid source audio" errors.
+  useEffect(() => {
+    const validateUrl = async (url: string): Promise<boolean> => {
+      if (!url) return false;
+      try {
+        const res = await fetch(url, { method: 'HEAD' });
+        return res.ok;
+      } catch {
+        return false;
+      }
+    };
+
+    (async () => {
+      // Check persisted cover/source audio
+      if (sourceAudioUrl) {
+        const ok = await validateUrl(sourceAudioUrl);
+        if (!ok) {
+          console.warn('[Startup] Persisted sourceAudioUrl is stale, clearing:', sourceAudioUrl);
+          setSourceAudioUrl('');
+          setSourceAudioTitle('');
+          setSourceDuration(0);
+          setDetectedBpm(null);
+          setDetectedKey(null);
+        }
+      }
+      // Check persisted mastering reference
+      if (masteringParams?.reference_file) {
+        const ok = await validateUrl(masteringParams.reference_file);
+        if (!ok) {
+          console.warn('[Startup] Persisted mastering reference is stale, clearing');
+          setMasteringParams((prev: MasteringParamsType | null) => prev ? { ...prev, reference_file: undefined } : prev);
+        }
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Mount only
+
 
 
   // LoRA API handlers
