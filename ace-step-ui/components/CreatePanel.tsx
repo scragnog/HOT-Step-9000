@@ -1761,12 +1761,6 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     []
   );
 
-  // Clear detected BPM/key when source audio changes
-  React.useEffect(() => {
-    setDetectedBpm(null);
-    setDetectedKey(null);
-  }, [sourceAudioUrl]);
-
   // Analyze source audio with Essentia (BPM & key detection)
   const handleAnalyzeSource = async () => {
     if (!sourceAudioUrl || isAnalyzing) return;
@@ -1799,6 +1793,42 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       setIsAnalyzing(false);
     }
   };
+
+  // Clear detected BPM/key when source audio changes, and auto-analyze
+  React.useEffect(() => {
+    setDetectedBpm(null);
+    setDetectedKey(null);
+    if (sourceAudioUrl) {
+      // Add a small timeout to let the UI settle before blocking on the API call
+      const t = setTimeout(() => {
+        void handleAnalyzeSource();
+      }, 500);
+      return () => clearTimeout(t);
+    }
+  }, [sourceAudioUrl]);
+
+  // Calculate effective BPM and Key Scale based on user modifications (Cover Settings)
+  // These apply to Cover, Repaint, and Audio2Audio, using the editable bpm/keyScale as the base.
+  const effectiveBpm = (() => {
+    if (taskType === 'extract') return 0;
+    if (bpm && tempoScale !== 1.0) return Math.round(bpm * tempoScale);
+    return bpm;
+  })();
+
+  const effectiveKeyScale = (() => {
+    if (taskType === 'extract') return '';
+    if (keyScale && pitchShift !== 0) {
+      const CHROMATIC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+      const parts = keyScale.split(' ');
+      const note = parts[0];
+      const idx = CHROMATIC.indexOf(note);
+      if (idx !== -1) {
+        const newIdx = ((idx + pitchShift) % 12 + 12) % 12;
+        return `${CHROMATIC[newIdx]}${parts.length > 1 ? ' ' + parts.slice(1).join(' ') : ''}`;
+      }
+    }
+    return keyScale;
+  })();
 
   const handleGenerate = () => {
     const styleWithGender = (() => {
@@ -1843,25 +1873,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
             ? !isVocalTrack
             : instrumental,
           vocalLanguage,
-          bpm: taskType === 'extract' ? 0 : (() => {
-            // When source audio was analyzed and tempo is scaled, send effective BPM
-            // so the model's conditioning matches the transformed audio waveform
-            if (detectedBpm && tempoScale !== 1.0) return Math.round(detectedBpm * tempoScale);
-            return bpm;
-          })(),
-          keyScale: taskType === 'extract' ? '' : (() => {
-            // When source audio was analyzed and pitch is shifted, send transposed key
-            if (detectedKey && pitchShift !== 0) {
-              const CHROMATIC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-              const parts = detectedKey.split(' ');
-              const idx = CHROMATIC.indexOf(parts[0]);
-              if (idx !== -1) {
-                const newIdx = ((idx + pitchShift) % 12 + 12) % 12;
-                return `${CHROMATIC[newIdx]}${parts.length > 1 ? ' ' + parts.slice(1).join(' ') : ''}`;
-              }
-            }
-            return keyScale;
-          })(),
+          bpm: effectiveBpm,
+          keyScale: effectiveKeyScale,
           timeSignature: taskType === 'extract' ? '' : timeSignature,
           duration,
           inferenceSteps,
@@ -2499,9 +2512,9 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
             setShowSubGenreDropdown={setShowSubGenreDropdown}
             filteredSubGenres={filteredSubGenres}
             musicTags={musicTags}
-            bpm={bpm}
+            bpm={effectiveBpm}
             setBpm={setBpm}
-            keyScale={keyScale}
+            keyScale={effectiveKeyScale}
             setKeyScale={setKeyScale}
             timeSignature={timeSignature}
             setTimeSignature={setTimeSignature}
@@ -2543,6 +2556,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           setTempoScale={setTempoScale}
           pitchShift={pitchShift}
           setPitchShift={setPitchShift}
+          bpm={bpm}
+          keyScale={keyScale}
           detectedBpm={detectedBpm}
           detectedKey={detectedKey}
           autoMaster={autoMaster}
@@ -2844,13 +2859,21 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       <div className="p-4 mt-auto sticky bottom-0 bg-zinc-50/95 dark:bg-suno-panel/95 backdrop-blur-sm z-10 border-t border-zinc-200 dark:border-white/5 space-y-3">
         <button
           onClick={handleGenerate}
-          className={`w-full h-12 rounded-xl font-bold text-base flex items-center justify-center gap-2 transition-all transform active:scale-[0.98] shadow-lg ${isGenerating
-            ? 'bg-gradient-to-r from-orange-400/80 to-pink-500/80 text-white hover:brightness-110'
-            : 'bg-gradient-to-r from-orange-500 to-pink-600 text-white hover:brightness-110'
+          className={`w-full h-12 rounded-xl font-bold text-base flex items-center justify-center gap-2 transition-all transform active:scale-[0.98] shadow-lg ${
+            isAnalyzing 
+              ? 'bg-zinc-400 dark:bg-zinc-600 text-white cursor-wait opacity-80 hover:brightness-100'
+              : isGenerating
+                ? 'bg-gradient-to-r from-orange-400/80 to-pink-500/80 text-white hover:brightness-110'
+                : 'bg-gradient-to-r from-orange-500 to-pink-600 text-white hover:brightness-110'
             }`}
-          disabled={!isAuthenticated}
+          disabled={!isAuthenticated || isAnalyzing}
         >
-          {isGenerating ? (
+          {isAnalyzing ? (
+            <>
+              <span className="inline-block w-4 h-4 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
+              <span>Please wait, analysing source audio...</span>
+            </>
+          ) : isGenerating ? (
             <>
               <span className="inline-block w-4 h-4 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
               <span>

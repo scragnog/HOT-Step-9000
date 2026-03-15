@@ -13,6 +13,8 @@ interface CoverRepaintSettingsProps {
     setTempoScale: (val: number) => void;
     pitchShift: number;
     setPitchShift: (val: number) => void;
+    bpm: number | null;
+    keyScale: string | null;
     detectedBpm: number | null;
     detectedKey: string | null;
     autoMaster: boolean;
@@ -46,6 +48,8 @@ export const CoverRepaintSettings: React.FC<CoverRepaintSettingsProps> = ({
     setTempoScale,
     pitchShift,
     setPitchShift,
+    bpm,
+    keyScale,
     detectedBpm,
     detectedKey,
     autoMaster,
@@ -166,20 +170,20 @@ export const CoverRepaintSettings: React.FC<CoverRepaintSettingsProps> = ({
                                 </div>
                             )}
 
-                            {/* Source Analysis Info — show detected + computed output */}
-                            {showTempoAndPitch && detectedBpm !== null && detectedKey !== null && (
+                            {/* Source Analysis Info — show user inputs + computed output */}
+                            {showTempoAndPitch && bpm !== 0 && keyScale && (
                                 <div className="rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/30 px-3 py-2 text-[11px] space-y-1">
                                     <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-medium">
                                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" />
                                         </svg>
-                                        {t('detectedFromSource')}: {detectedBpm} BPM, {detectedKey}
+                                        Base: {bpm} BPM, {keyScale}
                                     </div>
                                     {(tempoScale !== 1.0 || pitchShift !== 0) && (
                                         <div className="text-emerald-600 dark:text-emerald-500">
-                                            → {t('outputBpm')}: {Math.round(detectedBpm * tempoScale)} BPM
+                                            → Output: {bpm ? Math.round(bpm * tempoScale) : 0} BPM
                                             {pitchShift !== 0 && (
-                                                <span className="ml-2">| {t('outputKey')}: {transposeKey(detectedKey, pitchShift)}</span>
+                                                <span className="ml-2">| Key: {transposeKey(keyScale, pitchShift)}</span>
                                             )}
                                         </div>
                                     )}
