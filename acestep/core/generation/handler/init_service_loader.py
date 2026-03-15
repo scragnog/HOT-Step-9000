@@ -75,6 +75,18 @@ class InitServiceLoaderMixin:
         self.model.config._attn_implementation = attn_implementation
         self.config = self.model.config
 
+        # Merged models (SFT+Turbo weight averages) are NOT pure distillation
+        # checkpoints — they can benefit from higher step counts, guidance, and
+        # shift adjustments.  Override the inherited is_turbo flag.
+        _model_basename = os.path.basename(model_checkpoint_path)
+        if "merge" in _model_basename and getattr(self.config, "is_turbo", False):
+            logger.info(
+                "[_load_main_model_from_checkpoint] Merged model '{}' detected "
+                "— overriding is_turbo=False",
+                _model_basename,
+            )
+            self.config.is_turbo = False
+
         if not self.offload_to_cpu:
             self.model = self.model.to(device).to(self.dtype)
         elif not self.offload_dit_to_cpu:

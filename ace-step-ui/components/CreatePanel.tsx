@@ -355,9 +355,10 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     return mapping[modelId] || modelId;
   };
 
-  // Check if model is a turbo variant
+  // Check if model is a turbo variant (excluding merged models —
+  // SFT+Turbo merges are weight averages, NOT pure distillation checkpoints)
   const isTurboModel = (modelId: string): boolean => {
-    return modelId.includes('turbo');
+    return modelId.includes('turbo') && !modelId.includes('merge');
   };
 
   // Check if model is a pure base model (only base supports extract/lego/complete)
