@@ -1,15 +1,10 @@
-# New Features
+# HOT-Step 9000 — Features
 
-This document tracks all new features added on top of the upstream [sdbds/ACE-Step-1.5-for-windows](https://github.com/sdbds/ACE-Step-1.5-for-windows) (qinglong branch).
-
-> **Workflow:** Each feature is developed on a dedicated branch (`feature/<name>`), committed, pushed to [scragnog/ACE-Step-1.5-for-windows](https://github.com/scragnog/ACE-Step-1.5-for-windows), and merged into the default branch (`qinglong`).
+This document details all features added on top of the upstream ACE-Step 1.5 codebase.
 
 ---
 
 ## Upstream Sync (v1.5.0-sync)
-
-**Branch:** `qinglong`
-**Status:** ✅ Merged
 
 Synced 37 upstream commits from [sdbds/ACE-Step-1.5-for-windows](https://github.com/sdbds/ACE-Step-1.5-for-windows). Safely integrated core improvements while preserving all custom features (Guidance Mode, Auto-Mastering, Advanced Adapters).
 
@@ -35,9 +30,6 @@ Synced 37 upstream commits from [sdbds/ACE-Step-1.5-for-windows](https://github.
 
 ## Melodic Variation
 
-**Branch:** `qinglong`
-**Status:** ✅ Merged
-
 A slider that adds controlled melodic randomness to generation by adjusting the language model's repetition penalty. Higher values encourage the LM to explore less-repeated token sequences, introducing more melodic variety; lower values reinforce repetitive structure.
 
 ### What's included
@@ -59,9 +51,6 @@ A slider that adds controlled melodic randomness to generation by adjusting the 
 ---
 
 ## Quality Scoring (PMI + DiT Alignment)
-
-**Branch:** `qinglong`
-**Status:** ✅ Merged
 
 Automatic quality scoring computed at the end of each generation and displayed in the UI. Two complementary metrics assess different aspects of generation quality.
 
@@ -88,9 +77,6 @@ Automatic quality scoring computed at the end of each generation and displayed i
 
 ## Job Cancellation & Queue Management
 
-**Branch:** `qinglong`
-**Status:** ✅ Merged
-
 Cancel any running or queued generation job without restarting the server. Sends a cooperative stop signal to the Python backend that halts inference at the next safe checkpoint.
 
 ### What's included
@@ -114,9 +100,6 @@ Cancel any running or queued generation job without restarting the server. Sends
 ---
 
 ## Upscale to HQ
-
-**Branch:** `qinglong`
-**Status:** ✅ Merged
 
 Re-run inference on a previously generated preview track at higher quality settings. Preserves the audio codes from the first pass to guide the upscale, producing a higher-fidelity version of the same generation without starting from scratch.
 
@@ -143,9 +126,6 @@ Re-run inference on a previously generated preview track at higher quality setti
 ---
 
 ## Tempo Scale & Pitch Shift (Cover Mode)
-
-**Branch:** `qinglong`  
-**Status:** ✅ Merged
 
 Pre-process source audio before VAE encoding with pitch-preserving tempo changes and speed-preserving pitch shifts. Enables changing the tempo of a cover independently from its key, or transposing a male vocal track into a female range (or vice versa) before generation.
 
@@ -175,9 +155,6 @@ Pre-process source audio before VAE encoding with pitch-preserving tempo changes
 
 ## Activation Steering (TADA)
 
-**Branch:** `feature/activation-steering`  
-**Status:** ⚠️ Experimental (In-Progress)  
-
 Total integration of Task Adaptive Directional Activation (TADA), enabling zero-shot generation guidance by modifying model activations directly.  
 > **Note:** This feature is currently in-progress, experimental, and may not yet work as intended.
 
@@ -203,9 +180,6 @@ Total integration of Task Adaptive Directional Activation (TADA), enabling zero-
 
 ## Advanced Guidance & Solver Modes
 
-**Branch:** `feature/pag-dpmsde-tooltips`  
-**Status:** ✅ Merged
-
 Total overhaul of the inference backend to support 7 distinct guidance modes and 4 ODE solver algorithms, complete with UI integrations and educational tooltips.
 
 ### What's included
@@ -227,9 +201,6 @@ Total overhaul of the inference backend to support 7 distinct guidance modes and
 ---
 
 ## One-Click Launcher with Model Selection
-
-**Branch:** `feature/model-loading-enhancements`  
-**Status:** ✅ Merged
 
 Single-click launch experience with an interactive loading screen that lets you choose which models to load before the servers start.
 
@@ -267,9 +238,6 @@ Single-click launch experience with an interactive loading screen that lets you 
 
 ## LM Model Hot-Switching
 
-**Branch:** `feature/model-loading-enhancements`  
-**Status:** ✅ Merged
-
 Fixes a bug where changing the Language Model (5Hz LM) in the UI had no effect — the original model loaded at startup was always used regardless of the user's selection. Now supports live switching between LM models during a session.
 
 ### What's included
@@ -291,9 +259,6 @@ Fixes a bug where changing the Language Model (5Hz LM) in the UI had no effect �
 ---
 
 ## Enhanced Model Selector
-
-**Branch:** `qinglong`  
-**Status:** ✅ Merged
 
 Dynamic model discovery and hot-swap switching. The model dropdown auto-populates from all installed checkpoints and supports switching the active DiT model without restarting the server.
 
@@ -321,9 +286,6 @@ Dynamic model discovery and hot-swap switching. The model dropdown auto-populate
 
 ## Simple Shutdown
 
-**Branch:** `feature/Simple-Shutdown`  
-**Status:** ✅ Merged
-
 Quit button in the sidebar that gracefully shuts down all ACE-Step processes (Python API, Vite frontend, Express backend, and their hosting terminal windows).
 
 ### What's included
@@ -350,9 +312,6 @@ Quit button in the sidebar that gracefully shuts down all ACE-Step processes (Py
 
 ## Persistent Settings
 
-**Branch:** `feature/Persistent-Settings`  
-**Status:** ✅ Merged
-
 Toggleable localStorage persistence for all generation settings. Disabled by default — once enabled in Settings, every parameter survives page refresh.
 
 ### What's included
@@ -374,9 +333,6 @@ Toggleable localStorage persistence for all generation settings. Disabled by def
 ---
 
 ## Track List Updates
-
-**Branch:** `feature/Track-List-Updates`  
-**Status:** ✅ Merged
 
 A collection of track list UX improvements, bug fixes, and a new bulk-delete feature.
 
@@ -406,9 +362,6 @@ A collection of track list UX improvements, bug fixes, and a new bulk-delete fea
 ---
 
 ## Advanced Multi-Adapter System
-
-**Branch:** `feature/advanced-adapters`  
-**Status:** ✅ Merged
 
 Slot-based multi-adapter loading (up to 4 simultaneous LoRA/LoKr adapters) with per-slot scaling, per-module-group scaling (Self-Attn, Cross-Attn, MLP), and per-layer scaling (layers 0–23). Uses weight-space merging approach. Existing basic single-adapter UI is preserved — the advanced system is behind an opt-in "Advanced" checkbox.
 
@@ -458,9 +411,6 @@ Basic mode uses PEFT runtime hooks (existing). Advanced mode uses **weight-space
 
 ## Layer Ablation Lab
 
-**Branch:** `qinglong`  
-**Status:** ✅ Merged
-
 Developer tool for systematically exploring what each adapter layer contributes to the generated audio. Accessible via Developer Mode in the Create panel. Runs an automated sweep — generating one track per layer with that layer zeroed — to identify functional roles of each of the 24 transformer layers.
 
 ### What's included
@@ -486,11 +436,7 @@ From empirical testing on a Green Day LoKr adapter:
 - **Layers 8–15 (Style):** Affects musical energy and genre coherence at the song-structure level. Coherent on their own; contribute to discordance when missing alongside other active groups  
 - **Layers 16–23 (Coherence):** The binding layer group. Their absence causes harmonic discordance even when voice and style layers are active. Preserve at ≥0.5 to avoid artifacts
 
-
 ## Creation Panel Reorganization
-
-**Branch:** `feature/cot-accordion`  
-**Status:** ✅ Merged
 
 Total UX reorganization and architectural refactoring of the Create panel to reduce cognitive overload and group related settings.
 
@@ -513,9 +459,6 @@ Total UX reorganization and architectural refactoring of the Create panel to red
 ---
 
 ## JSON Export & Import
-
-**Branch:** `feature/json-export-import`  
-**Status:** ✅ Merged
 
 Export all generation parameters to a JSON file and import them later to reproduce exact configurations. Includes full adapter and steering parameter persistence in the Generation Parameters sidebar.
 
@@ -544,9 +487,6 @@ Export all generation parameters to a JSON file and import them later to reprodu
 
 ## Debug Panel & UI Polish
 
-**Branch:** `feature/debug-panel`  
-**Status:** ✅ Merged
-
 Live system monitoring panel and UI polish improvements: a collapsible debug panel showing GPU VRAM, RAM, and CPU usage alongside a real-time streaming API log, a resizable Create Panel, and a streamlined sidebar toggle.
 
 ### What's included
@@ -571,9 +511,6 @@ Live system monitoring panel and UI polish improvements: a collapsible debug pan
 ---
 
 ## Stem Extraction (Extract Mode)
-
-**Branch:** `feature/extract-task`  
-**Status:** ✅ Merged
 
 Full stem extraction workflow using ACE-Step's generative extract task. Select one or more instrument stems to isolate from a source audio file — each creates a separate queued job. Includes quality presets, style hints, and lyrics guidance for vocal tracks.
 
@@ -607,9 +544,6 @@ Full stem extraction workflow using ACE-Step's generative extract task. Select o
 ---
 
 ## Server-Side Stem Separation
-
-**Branch:** `feature/server-stem-split`  
-**Status:** ✅ Merged
 
 Professional-grade audio stem separation using BS-RoFormer and Demucs models, fully integrated into the Python API with a synchronized multi-track mixer UI. Replaces the old client-side demucs-web page.
 
@@ -660,9 +594,6 @@ Models are lazy-downloaded on first use (~1.8 GB total) to `/tmp/audio-separator
 
 ## Live Music Visualizer
 
-**Branch:** `qinglong`  
-**Status:** ✅ Merged
-
 Real-time audio-reactive visualizations powered by the Web Audio API. Repurposes the existing video generator's drawing engine into a shared module used by both live playback visualization and MP4 export. Features 10 presets, a Winamp/MilkDrop-inspired fullscreen mode, and an optional ambient background for the song list.
 
 ### What's included
@@ -708,9 +639,6 @@ Real-time audio-reactive visualizations powered by the Web Audio API. Repurposes
 
 ## Synced Lyrics & Song Structure
 
-**Branch:** `qinglong`  
-**Status:** ✅ Merged
-
 Real-time synced lyrics display and song structure visualization. LRC lyrics files are automatically downloaded alongside generated audio, displayed as an overlay on the visualizer and a collapsible bar in the song list. Section markers from the LRC file (Verse, Chorus, Bridge, etc.) are shown as positioned labels above the player waveform.
 
 ### What's included
@@ -737,9 +665,6 @@ Real-time synced lyrics display and song structure visualization. LRC lyrics fil
 
 ## Visualizer Preset Selection
 
-**Branch:** `qinglong`  
-**Status:** ✅ Merged
-
 Configurable pool of visualizer presets for random rotation. Users choose which presets are included via checkboxes in Settings. Multiple visualizer instances (art box, song list background, fullscreen) coordinate to never show the same preset simultaneously.
 
 ### What's included
@@ -762,9 +687,6 @@ Configurable pool of visualizer presets for random rotation. Users choose which 
 ---
 
 ## A/B Track Comparison
-
-**Branch:** `qinglong`  
-**Status:** ✅ Merged
 
 Side-by-side A/B comparison of any two tracks in the song list. Both audio elements play simultaneously (one muted, one audible) with instant switching, synchronized positions, and full pause/resume control.
 
@@ -798,9 +720,6 @@ The **Browse** button on both basic and advanced adapter panels now opens a nati
 <!-- 
 ## [Next Feature Name]
 
-**Branch:** `feature/...`  
-**Status:** 🚧 In Progress / ✅ Merged
-
 Brief description.
 
 ### What's included
@@ -813,9 +732,6 @@ Brief description.
 ---
 
 ## Timestep Scheduler
-
-**Branch:** `qinglong`  
-**Status:** ✅ Merged
 
 Pluggable timestep distribution system for the diffusion process. Controls *where* denoising steps are concentrated across the noise schedule, complementing the existing solver (which controls *how* each step is computed) and guidance mode (which controls *what direction* each step moves).
 
@@ -862,9 +778,6 @@ Inspired by ComfyUI's multi-pass denoising workflows, the **Composite** schedule
 ---
 
 ## Auto-Mastering & Mastering Console
-
-**Branch:** `qinglong`  
-**Status:** ✅ Merged
 
 Automatic post-generation mastering that applies a professional mastering profile to every generated track. The system includes an interactive console for real-time adjustments, a reference-based matching mode using the Matchering library, persistent settings across sessions, and the ability to remaster previously generated tracks.
 
@@ -917,8 +830,6 @@ Automatic post-generation mastering that applies a professional mastering profil
 
 > ⚠️ **Deprecated:** The [Auto-Mastering](#auto-mastering) feature above replaces this for most use cases. This tool remains available for users who want manual per-stem DSP control.
 
-**Branch:** `feature/audio-enhancer`  
-**Status:** ✅ Merged  
 **Based on:** [ShmuelRonen/ComfyUI-Audio_Quality_Enhancer](https://github.com/ShmuelRonen/ComfyUI-Audio_Quality_Enhancer)
 
 Post-processing engine for enhancing generated audio quality. Ported from the ComfyUI Audio Quality Enhancer's "AI Audio Enhancer Pro" node, adapted to run as a standalone backend service with a React modal UI. No external binaries required (SoX dependency removed — reverb/echo implemented purely in Python).

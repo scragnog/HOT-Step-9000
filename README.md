@@ -27,6 +27,7 @@ While currently optimized and supported specifically for **Windows environments*
 
 HOT-Step 9000 sits on top of the original ACE-Step backend but introduces a massive array of new tools and features for advanced AI music creation:
 
+- **Auto-Mastering:** Every generated track can be automatically mastered with two options — a built-in 6-stage Processing Chain (EQ, saturation, stereo widening, compression, limiter) or reference-based mastering via [Matchering](https://github.com/sergree/matchering). Interactive console for real-time tweaks, persistent presets, and one-click remastering of existing tracks.
 - **Advanced Multi-Adapter System:** Slot-based loading of up to 4 simultaneous LoRA/LoKr adapters with per-layer scaling via weight-space merging.
 - **Activation Steering (TADA):** Experimental zero-shot generation guidance by modifying model activations directly.
 - **Advanced Guidance & Solvers:** 7 guidance modes (including PAG, APG, ADG) and 4 ODE solvers (Euler, Heun, DPM++ 2M, RK4).
