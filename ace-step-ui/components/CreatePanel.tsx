@@ -213,11 +213,11 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [lmRepetitionPenalty, setLmRepetitionPenalty] = usePersistedState('ace-lmRepetitionPenalty', 1.0);
   const [lmNegativePrompt, setLmNegativePrompt] = usePersistedState('ace-lmNegativePrompt', 'NO USER INPUT');
 
-  // Expert Parameters — session-specific audio state (NOT persisted)
+  // Expert Parameters — audio state
   const [referenceAudioUrl, setReferenceAudioUrl] = useState('');
-  const [sourceAudioUrl, setSourceAudioUrl] = useState('');
+  const [sourceAudioUrl, setSourceAudioUrl] = usePersistedState('ace-sourceAudioUrl', '');
   const [referenceAudioTitle, setReferenceAudioTitle] = useState('');
-  const [sourceAudioTitle, setSourceAudioTitle] = useState('');
+  const [sourceAudioTitle, setSourceAudioTitle] = usePersistedState('ace-sourceAudioTitle', '');
 
   // Source audio analysis state (Essentia BPM/key detection)
   const [detectedBpm, setDetectedBpm] = useState<number | null>(null);
@@ -232,7 +232,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [tempoScale, setTempoScale] = usePersistedState('ace-tempoScale', 1.0);
   const [pitchShift, setPitchShift] = usePersistedState('ace-pitchShift', 0);
   const [autoMaster, setAutoMaster] = usePersistedState('ace-autoMaster', true);
-  const [masteringParams, setMasteringParams] = useState<MasteringParamsType | null>(null);
+  const [masteringParams, setMasteringParams] = usePersistedState<MasteringParamsType | null>('ace-masteringParams', null);
   const [showMasteringConsole, setShowMasteringConsole] = useState(false);
   const [enableNormalization, setEnableNormalization] = usePersistedState('ace-enableNormalization', true);
   const [normalizationDb, setNormalizationDb] = usePersistedState('ace-normalizationDb', -1.0);
@@ -289,10 +289,11 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [adapterFolder, setAdapterFolder] = usePersistedState('ace-adapterFolder', './lokr_output');
   const [adapterFiles, setAdapterFiles] = useState<Array<{ name: string; path: string; size: number; type: string }>>([]);
   const [loadingAdapterPath, setLoadingAdapterPath] = useState<string | null>(null);;
-  const [adapterSlots, setAdapterSlots] = useState<Array<{
+  const [adapterSlots, setAdapterSlots] = usePersistedState<Array<{
     slot: number; name: string; path: string; type: string; scale: number;
     delta_keys: number; group_scales: { self_attn: number; cross_attn: number; mlp: number };
-  }>>([]);
+    layer_scales?: Record<number, number>;
+  }>>('ace-adapterSlots', []);
   const [expandedSlots, setExpandedSlots] = useState<Set<number>>(new Set());
   // Per-adapter persisted scales (keyed by adapter filename)
   const [savedGroupScales, setSavedGroupScales] = usePersistedState<Record<string, { self_attn: number; cross_attn: number; mlp: number }>>('ace-adapterGroupScales', {});
@@ -1342,6 +1343,60 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     void refreshLoraStatus();
   }, [refreshLoraStatus]);
 
+  // Auto-reload persisted adapters into the backend after startup.
+  // The backend loses all loaded adapters on restart, but adapterSlots is
+  // now persisted via usePersistedState. When the backend becomes available
+  // (fetchedModels populated), we reload each persisted adapter.
+  const adapterAutoReloadDoneRef = useRef(false);
+  useEffect(() => {
+    if (adapterAutoReloadDoneRef.current) return;
+    if (!token || fetchedModels.length === 0) return;
+    // Read persisted slots (current state at mount time)
+    if (adapterSlots.length === 0) {
+      adapterAutoReloadDoneRef.current = true;
+      return;
+    }
+    adapterAutoReloadDoneRef.current = true;
+    const slotsToReload = [...adapterSlots];
+
+    (async () => {
+      setIsLoraLoading(true);
+      setAdapterLoadingMessage('Restoring adapters from previous session...');
+      // Clear slots so they get rebuilt from fresh backend status
+      setAdapterSlots([]);
+      setLoraLoaded(false);
+
+      for (const slot of slotsToReload) {
+        try {
+          setAdapterLoadingMessage(`Loading ${slot.name}...`);
+          const savedScale = savedOverallScales[slot.name];
+          const savedGroups = savedGroupScales[slot.name];
+          await generateApi.loadLora({
+            lora_path: slot.path,
+            slot: slot.slot,
+            ...(savedScale != null && savedScale !== 1.0 ? { scale: savedScale } : {}),
+            ...(savedGroups != null ? { group_scales: savedGroups } : {}),
+          }, token);
+        } catch (err) {
+          console.error(`[AutoReload] Failed to restore adapter ${slot.name}:`, err);
+        }
+      }
+
+      // Refresh live status after all adapters loaded
+      try {
+        const status = await generateApi.getLoraStatus(token);
+        if (status?.advanced?.slots && status.advanced.slots.length > 0) {
+          setAdapterSlots(status.advanced.slots);
+          setLoraLoaded(true);
+          setAdapterTriggerWord((status as any).trigger_word || '');
+        }
+      } catch {
+        // ignore status refresh failure
+      }
+      setIsLoraLoading(false);
+      setAdapterLoadingMessage(null);
+    })();
+  }, [token, fetchedModels]);
   // Re-fetch models after generation completes to update active model status
   // Don't change selection, just refresh the is_active status
   const prevIsGeneratingRef = useRef(isGenerating);
@@ -1460,6 +1515,19 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       setUploadError(message);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const [isUploadingMatchering, setIsUploadingMatchering] = useState(false);
+
+  const uploadMatcheringReference = async (file: File) => {
+    if (!token) throw new Error(t('pleaseSignInToUploadAudio'));
+    setIsUploadingMatchering(true);
+    try {
+      const result = await generateApi.uploadAudio(file, token);
+      return result.url;
+    } finally {
+      setIsUploadingMatchering(false);
     }
   };
 
@@ -2579,6 +2647,10 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           showOutputProcessing={showOutputProcessing}
           setShowOutputProcessing={setShowOutputProcessing}
           onOpenMasteringConsole={() => setShowMasteringConsole(true)}
+          masteringParams={masteringParams}
+          setMasteringParams={setMasteringParams}
+          onUploadMatcheringRef={uploadMatcheringReference}
+          isUploadingMatchering={isUploadingMatchering}
         />
 
         {/* Mastering Console Modal */}

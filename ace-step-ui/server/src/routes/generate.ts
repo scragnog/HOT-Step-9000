@@ -291,7 +291,13 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
         latent_shift: params.latentShift ?? 0.0,
         latent_rescale: params.latentRescale ?? 1.0,
         ...(params.autoMaster !== undefined ? { auto_master: params.autoMaster } : {}),
-        ...(params.masteringParams ? { mastering_params: params.masteringParams } : {}),
+        ...(params.masteringParams ? { mastering_params: {
+          ...params.masteringParams,
+          // Resolve matchering reference_file URL to absolute filesystem path for Python
+          ...(params.masteringParams.reference_file
+            ? { reference_file: resolveAudioPath(params.masteringParams.reference_file) }
+            : {}),
+        }} : {}),
         enable_normalization: params.enableNormalization !== false,
         normalization_db: params.normalizationDb ?? -1.0,
         task_type: params.taskType || 'text2music',

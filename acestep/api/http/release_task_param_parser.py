@@ -42,6 +42,8 @@ PARAM_ALIASES: Dict[str, list[str]] = {
     "allow_lm_batch": ["allow_lm_batch", "allowLmBatch", "parallel_thinking"],
     "track_name": ["track_name", "trackName"],
     "track_classes": ["track_classes", "trackClasses", "instruments"],
+    "auto_master": ["auto_master", "autoMaster"],
+    "mastering_params": ["mastering_params", "masteringParams"],
 }
 
 
