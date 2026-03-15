@@ -227,9 +227,6 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
   try {
     const params = req.body as GenerateBody;
 
-    // DEBUG: trace autoMaster value from frontend
-    console.log(`[DEBUG autoMaster] typeof=${typeof params.autoMaster}, value=${JSON.stringify(params.autoMaster)}, raw body key present=${'autoMaster' in req.body}`);
-
     if (!params.customMode && !params.songDescription) {
       res.status(400).json({ error: 'Song description required for simple mode' });
       return;

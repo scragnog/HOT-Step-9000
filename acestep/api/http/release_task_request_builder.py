@@ -86,6 +86,15 @@ def build_generate_music_request(
         get_lrc=parser.bool("get_lrc"),
         get_scores=parser.bool("get_scores"),
         score_scale=parser.float("score_scale", 0.1),
+        # Output processing
+        tempo_scale=parser.float("tempo_scale", 1.0),
+        pitch_shift=parser.int("pitch_shift", 0),
+        enable_normalization=parser.bool("enable_normalization", True),
+        normalization_db=parser.float("normalization_db", -1.0),
+        auto_master=parser.bool("auto_master", True),
+        mastering_params=parser.get("mastering_params") or None,
+        latent_shift=parser.float("latent_shift", 0.0),
+        latent_rescale=parser.float("latent_rescale", 1.0),
         # Activation steering
         steering_enabled=parser.bool("steering_enabled"),
         steering_loaded=parser.get("steering_loaded") or [],
