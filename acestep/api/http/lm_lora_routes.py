@@ -1,8 +1,8 @@
-"""LM LoRA HTTP routes for PEFT adapter lifecycle on the 5Hz LLM.
+"""LM LoRA HTTP routes for merge-based adapter lifecycle on the 5Hz LLM.
 
 Separate from the DiT LoRA routes — these operate on the language model,
-not the diffusion transformer. Enables artist-style adapter loading
-for code generation during inference.
+not the diffusion transformer. Adapters are merged into the base model
+weights and loaded via vLLM for full-speed generation.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from acestep.llm_inference import LLMHandler
 
 class LoadLmLoraRequest(BaseModel):
     lm_lora_path: str = Field(..., description="Path to PEFT adapter directory")
+    scale: float = Field(1.0, ge=0.0, le=10.0, description="LoRA scale (baked at merge time)")
 
 
 class SetLmLoraScaleRequest(BaseModel):
@@ -56,10 +57,15 @@ def register_lm_lora_routes(
 
     @app.post("/v1/lora/lm-load")
     async def load_lm_lora(request: LoadLmLoraRequest, _: None = Depends(verify_api_key)):
-        """Load a PEFT LoRA adapter onto the 5Hz LLM."""
+        """Load a PEFT LoRA adapter by merging into the base model.
+
+        Merges the adapter at the specified scale, saves to a temp checkpoint,
+        and reinitializes vLLM from the merged model. Takes ~2 min on first load
+        (cached for subsequent loads at the same scale).
+        """
         handler = _require_llm_handler(app)
         try:
-            result = handler.load_lm_lora(request.lm_lora_path)
+            result = handler.load_lm_lora(request.lm_lora_path, request.scale)
             if _is_ok(result):
                 return wrap_response({
                     "message": result,
@@ -87,7 +93,7 @@ def register_lm_lora_routes(
 
     @app.post("/v1/lora/lm-scale")
     async def set_lm_lora_scale(request: SetLmLoraScaleRequest, _: None = Depends(verify_api_key)):
-        """Set the LM LoRA adapter scale (0.0-2.0)."""
+        """Change the LM LoRA scale. Triggers a full re-merge + reinit (~2 min)."""
         handler = _require_llm_handler(app)
         try:
             result = handler.set_lm_lora_scale(request.scale)

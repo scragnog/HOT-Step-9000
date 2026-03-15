@@ -282,7 +282,6 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [lmLoraScale, setLmLoraScale] = usePersistedState('ace-lmLoraScale', 1.0);
   const [lmLoraError, setLmLoraError] = useState<string | null>(null);
   const [isLmLoraLoading, setIsLmLoraLoading] = useState(false);
-  const [lmLoraAutoSwitched, setLmLoraAutoSwitched] = useState(false);
 
 
   // Advanced adapter state
@@ -658,17 +657,11 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       if (lmLoraLoaded) {
         const result = await generateApi.unloadLmLora(token);
         setLmLoraLoaded(false);
-        setLmLoraAutoSwitched(false);
         console.log('LM LoRA unloaded:', result?.message);
       } else {
-        const result = await generateApi.loadLmLora({ lm_lora_path: lmLoraPath }, token);
+        const result = await generateApi.loadLmLora({ lm_lora_path: lmLoraPath, scale: lmLoraScale }, token);
         setLmLoraLoaded(true);
         console.log('LM LoRA loaded:', result?.message);
-        // Check if backend auto-switched from vLLM
-        try {
-          const status = await generateApi.getLmLoraStatus(token);
-          setLmLoraAutoSwitched(status?.auto_switched ?? false);
-        } catch { /* ignore status check failure */ }
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'LM LoRA operation failed';
@@ -681,12 +674,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
 
   const handleLmLoraScaleChange = async (newScale: number) => {
     setLmLoraScale(newScale);
-    if (!token || !lmLoraLoaded) return;
-    try {
-      await generateApi.setLmLoraScale(newScale, token);
-    } catch (err) {
-      console.error('Failed to set LM LoRA scale:', err);
-    }
+    // Scale is baked at merge time — changing it while loaded requires re-merge
+    // We only update local state here; user must unload+reload to apply new scale
   };
 
 
@@ -2723,14 +2712,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                     fontSize: '10px', padding: '1px 6px', borderRadius: '4px',
                     background: 'var(--accent-primary)', color: 'var(--bg-primary)',
                     fontWeight: 600,
-                  }}>ACTIVE</span>
-                )}
-                {lmLoraAutoSwitched && (
-                  <span style={{
-                    fontSize: '10px', padding: '1px 6px', borderRadius: '4px',
-                    background: 'var(--warning, #f59e0b)', color: '#000',
-                    fontWeight: 600,
-                  }}>PT mode</span>
+                  }}>MERGED</span>
                 )}
               </div>
             </button>
@@ -2744,7 +2726,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                   placeholder="Path to PEFT adapter directory..."
                   className="text-input"
                   style={{ flex: 1, fontSize: '12px' }}
-                  disabled={isLmLoraLoading}
+                  disabled={isLmLoraLoading || lmLoraLoaded}
                 />
                 <button
                   className={`btn btn-sm ${lmLoraLoaded ? 'btn-danger' : 'btn-primary'}`}
@@ -2754,22 +2736,28 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                 >
                   {isLmLoraLoading ? (
                     <Loader2 size={12} className="spin" />
-                  ) : lmLoraLoaded ? 'Unload' : 'Load'}
+                  ) : lmLoraLoaded ? 'Unload' : 'Merge & Load'}
                 </button>
               </div>
 
-              {/* Scale slider (only when loaded) */}
-              {lmLoraLoaded && (
-                <div style={{ marginBottom: '6px' }}>
-                  <EditableSlider
-                    label="Scale"
-                    value={lmLoraScale}
-                    onChange={handleLmLoraScaleChange}
-                    min={0}
-                    max={10}
-                    step={0.1}
-                  />
-                </div>
+              {/* Scale slider (always visible — set before loading, locked after) */}
+              <div style={{ marginBottom: '6px' }}>
+                <EditableSlider
+                  label={`Scale${lmLoraLoaded ? ' (locked — unload to change)' : ''}`}
+                  value={lmLoraScale}
+                  onChange={handleLmLoraScaleChange}
+                  min={0}
+                  max={10}
+                  step={0.1}
+                  disabled={lmLoraLoaded}
+                />
+              </div>
+
+              {isLmLoraLoading && (
+                <div style={{
+                  fontSize: '11px', color: 'var(--text-secondary)',
+                  padding: '4px 8px', fontStyle: 'italic',
+                }}>Merging adapter into model... this takes ~2 min</div>
               )}
 
               {/* Error message */}

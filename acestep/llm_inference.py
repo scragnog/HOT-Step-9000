@@ -89,11 +89,12 @@ class LLMHandler:
         self._mlx_model = None
         self._mlx_model_path = None
 
-        # LM LoRA (PEFT adapter on the language model)
+        # LM LoRA (merge-based: adapter is baked into a temp checkpoint)
         self._lm_lora_loaded = False
         self._lm_lora_path = ""
         self._lm_lora_scale = 1.0
-        self._lm_lora_prev_backend = None  # Tracks backend before auto-switch
+        self._lm_lora_merged_dir = ""  # Temp dir holding the merged checkpoint
+        self._lm_lora_original_model_path = ""  # Original model path before merge
 
     def unload(self) -> None:
         """Release LM weights/tokenizer and clear caches to free memory."""
@@ -158,14 +159,27 @@ class LLMHandler:
             torch.xpu.synchronize()
         print("[LLMHandler] Unloaded — VRAM cache flushed.")
 
-    # ── LM LoRA (PEFT adapter) methods ──────────────────────────────────
+    # ── LM LoRA (merge-based) ────────────────────────────────────────
 
-    def load_lm_lora(self, adapter_path: str) -> str:
-        """Load a PEFT LoRA adapter onto the LLM.
+    @staticmethod
+    def _lm_lora_cache_key(adapter_path: str, scale: float) -> str:
+        """Return a short hash for caching merged checkpoints."""
+        import hashlib
+        raw = f"{os.path.abspath(adapter_path)}|{scale:.4f}"
+        return hashlib.sha256(raw.encode()).hexdigest()[:12]
 
-        If the current backend is vLLM/nano-vllm, auto-switches to PT backend
-        first (PEFT requires a HuggingFace model). The previous backend is
-        remembered so it can be restored on unload.
+    def load_lm_lora(self, adapter_path: str, scale: float = 1.0) -> str:
+        """Load a PEFT LoRA adapter by merging it into the base model.
+
+        Flow:
+        1. Load base model in PyTorch (CPU to save VRAM)
+        2. Apply PEFT adapter + set scale
+        3. model.merge_and_unload() — bake weights permanently
+        4. Save merged model to checkpoints/.tmp_merged_lm/<cache_key>/
+        5. Reinitialize vLLM from the merged checkpoint
+
+        Uses hash-based caching: if the same adapter+scale was previously
+        merged, the saved checkpoint is reused (skip merge, fast reload).
         """
         import gc
 
@@ -180,126 +194,179 @@ class LLMHandler:
         if not os.path.isdir(adapter_path) or not os.path.isfile(config_path):
             return f"\u274c Not a valid PEFT adapter directory (missing adapter_config.json): {adapter_path}"
 
-        # Auto-switch from vLLM to PT if needed
-        if self.llm_backend in ("vllm",) and self.llm is not None:
-            logger.info("[LM LoRA] Auto-switching from vLLM to PT backend for PEFT compatibility")
-            self._lm_lora_prev_backend = self.llm_backend
-            # Re-init with PT backend using the last init params
-            if self.last_init_params:
-                params = dict(self.last_init_params)
-                params["backend"] = "pt"
-                # Force CPU offload so the LLM frees VRAM for DiT after generation
-                params["offload_to_cpu"] = True
-                self.unload()
-                self.initialize(**params)
-            else:
-                return "\u274c Cannot auto-switch backend: no previous init params available"
-
-        if self.llm is None or self.llm_backend != "pt":
-            return "\u274c LLM not loaded or not using PT backend. LM LoRA requires PT backend."
+        if not self.last_init_params:
+            return "\u274c Cannot load LM LoRA: no previous init params available"
 
         try:
-            from peft import PeftModel
-            logger.info(f"[LM LoRA] Loading adapter from {adapter_path}")
-            self.llm = PeftModel.from_pretrained(
-                self.llm,
-                adapter_path,
-                is_trainable=False,
-            )
-            self.llm.eval()
+            params = dict(self.last_init_params)
+            checkpoint_dir = params["checkpoint_dir"]
+            original_model = params["lm_model_path"]
+
+            # Store the original model path for unload
+            full_original = os.path.join(checkpoint_dir, original_model)
+            self._lm_lora_original_model_path = full_original
+
+            # Check cache
+            cache_key = self._lm_lora_cache_key(adapter_path, scale)
+            merged_dir = os.path.join(checkpoint_dir, ".tmp_merged_lm", cache_key)
+
+            if os.path.isdir(merged_dir) and os.path.isfile(os.path.join(merged_dir, "config.json")):
+                logger.info(f"[LM LoRA] Cache hit for {os.path.basename(adapter_path)} @ scale={scale:.2f}")
+            else:
+                # ── Merge phase (PT, CPU-only to save VRAM) ──────────
+                logger.info(f"[LM LoRA] Merging adapter from {adapter_path} at scale={scale:.2f}")
+
+                from transformers import AutoModelForCausalLM
+                from peft import PeftModel
+                from peft.tuners.lora import LoraLayer
+
+                merge_start = time.time()
+
+                # Load base model on CPU to avoid fighting vLLM for VRAM
+                logger.info("[LM LoRA] Loading base model on CPU for merge...")
+                base_model = AutoModelForCausalLM.from_pretrained(
+                    full_original, torch_dtype=torch.bfloat16, device_map="cpu"
+                )
+
+                # Apply PEFT adapter
+                logger.info("[LM LoRA] Applying PEFT adapter...")
+                peft_model = PeftModel.from_pretrained(
+                    base_model, adapter_path, is_trainable=False
+                )
+
+                # Set user-requested scale on every LoRA layer
+                if scale != 1.0:
+                    config = next(iter(peft_model.peft_config.values()))
+                    original_scaling = config.lora_alpha / config.r
+                    new_scaling = original_scaling * scale
+                    for module in peft_model.modules():
+                        if isinstance(module, LoraLayer):
+                            for name in module.scaling:
+                                module.scaling[name] = new_scaling
+                    logger.info(f"[LM LoRA] Scale set to {scale:.2f} (effective={new_scaling:.2f})")
+
+                # Merge adapter into base weights
+                logger.info("[LM LoRA] Merging adapter weights into model...")
+                merged_model = peft_model.merge_and_unload()
+
+                # Save to cache directory
+                os.makedirs(merged_dir, exist_ok=True)
+                logger.info(f"[LM LoRA] Saving merged checkpoint to {merged_dir}...")
+                merged_model.save_pretrained(merged_dir)
+
+                # Also copy the tokenizer files so vLLM can load
+                import shutil
+                for fname in os.listdir(full_original):
+                    if fname.startswith("tokenizer") or fname in (
+                        "vocab.json", "merges.txt", "special_tokens_map.json",
+                        "added_tokens.json", "chat_template.jinja",
+                    ):
+                        src = os.path.join(full_original, fname)
+                        dst = os.path.join(merged_dir, fname)
+                        if os.path.isfile(src) and not os.path.exists(dst):
+                            shutil.copy2(src, dst)
+
+                # Free merge artifacts
+                del merged_model, peft_model, base_model
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+
+                merge_secs = time.time() - merge_start
+                logger.info(f"[LM LoRA] Merge complete in {merge_secs:.1f}s")
+
+            # ── Reinitialize vLLM from merged checkpoint ─────────
+            logger.info("[LM LoRA] Reinitializing LLM from merged checkpoint...")
+            self.unload()
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            # Rebuild init params pointing at the merged directory
+            reinit_params = dict(params)
+            # The initialize() method builds full_lm_model_path = checkpoint_dir / lm_model_path
+            # So we need to give it a relative path that resolves to merged_dir
+            reinit_params["lm_model_path"] = os.path.relpath(merged_dir, checkpoint_dir)
+            reinit_params["backend"] = "vllm"
+
+            status_msg, success = self.initialize(**reinit_params)
+            if not success:
+                return f"\u274c Failed to initialize merged model: {status_msg}"
+
             self._lm_lora_loaded = True
             self._lm_lora_path = adapter_path
-            self._lm_lora_scale = 1.0
+            self._lm_lora_scale = scale
+            self._lm_lora_merged_dir = merged_dir
 
-            # Adapter weight diagnostic
-            lora_params = 0
-            lora_nonzero = 0
-            for name, param in self.llm.named_parameters():
-                if "lora_" in name:
-                    lora_params += param.numel()
-                    lora_nonzero += (param != 0).sum().item()
-            logger.info(
-                f"[LM LoRA] Adapter loaded: {lora_params:,} LoRA params, "
-                f"{lora_nonzero:,} non-zero ({100*lora_nonzero/max(lora_params,1):.1f}%)"
+            return (
+                f"\u2705 LM LoRA loaded (merged) from {os.path.basename(adapter_path)} "
+                f"at scale={scale:.2f}"
             )
-            return f"\u2705 LM LoRA loaded from {os.path.basename(adapter_path)}"
 
         except Exception as exc:
-            logger.error(f"[LM LoRA] Failed to load adapter: {exc}")
+            logger.error(f"[LM LoRA] Failed to load adapter: {exc}", exc_info=True)
             return f"\u274c Failed to load LM LoRA: {str(exc)}"
 
     def unload_lm_lora(self) -> str:
-        """Unload the PEFT LoRA adapter and restore base LLM."""
+        """Unload the merged LM LoRA by reinitializing from the original model."""
         import gc
 
         if not self._lm_lora_loaded:
             return "\u26a0\ufe0f No LM LoRA adapter is loaded"
 
         try:
-            if self.llm is not None:
-                from peft import PeftModel
-                if isinstance(self.llm, PeftModel):
-                    self.llm = self.llm.unload()
-                    logger.info("[LM LoRA] Adapter unloaded, base model restored")
+            if not self.last_init_params:
+                return "\u274c Cannot restore: no init params available"
 
-            self._lm_lora_loaded = False
-            self._lm_lora_path = ""
-            self._lm_lora_scale = 1.0
+            params = dict(self.last_init_params)
+            checkpoint_dir = params["checkpoint_dir"]
 
+            # Restore original model path
+            if self._lm_lora_original_model_path:
+                original_rel = os.path.relpath(self._lm_lora_original_model_path, checkpoint_dir)
+            else:
+                original_rel = params.get("lm_model_path", "acestep-5Hz-lm-1.7B")
+
+            logger.info(f"[LM LoRA] Restoring original model: {original_rel}")
+            self.unload()
             gc.collect()
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-            # Optionally restore previous vLLM backend
-            if self._lm_lora_prev_backend == "vllm" and self.last_init_params:
-                logger.info("[LM LoRA] Restoring vLLM backend")
-                params = dict(self.last_init_params)
-                params["backend"] = "vllm"
-                self.unload()
-                self.initialize(**params)
-                self._lm_lora_prev_backend = None
+            reinit_params = dict(params)
+            reinit_params["lm_model_path"] = original_rel
+            reinit_params["backend"] = "vllm"
 
-            return "\u2705 LM LoRA unloaded"
+            status_msg, success = self.initialize(**reinit_params)
+            if not success:
+                return f"\u274c Failed to restore original model: {status_msg}"
+
+            self._lm_lora_loaded = False
+            self._lm_lora_path = ""
+            self._lm_lora_scale = 1.0
+            self._lm_lora_merged_dir = ""
+            self._lm_lora_original_model_path = ""
+
+            return "\u2705 LM LoRA unloaded, original model restored"
 
         except Exception as exc:
-            logger.error(f"[LM LoRA] Failed to unload adapter: {exc}")
+            logger.error(f"[LM LoRA] Failed to unload: {exc}", exc_info=True)
             return f"\u274c Failed to unload LM LoRA: {str(exc)}"
 
     def set_lm_lora_scale(self, scale: float) -> str:
-        """Set the LoRA adapter scaling factor (0.0 = base only, 1.0 = full adapter)."""
+        """Change the LM LoRA scale. Requires a full re-merge + reinit."""
         if not self._lm_lora_loaded:
             return "\u26a0\ufe0f No LM LoRA adapter is loaded"
 
-        try:
-            from peft import PeftModel
-            from peft.tuners.lora import LoraLayer
-            if isinstance(self.llm, PeftModel):
-                # Get original alpha/r from config for reference scaling
-                config = next(iter(self.llm.peft_config.values()))
-                original_scaling = config.lora_alpha / config.r  # e.g. 128/64 = 2.0
+        if abs(scale - self._lm_lora_scale) < 1e-4:
+            return f"\u2705 LM LoRA scale already at {scale:.2f}"
 
-                # New effective scaling = original * user_scale
-                new_scaling = original_scaling * scale
+        adapter_path = self._lm_lora_path
+        logger.info(f"[LM LoRA] Re-merging at new scale {scale:.2f} (was {self._lm_lora_scale:.2f})")
 
-                # Update the cached scaling on every LoRA layer
-                layers_updated = 0
-                for module in self.llm.modules():
-                    if isinstance(module, LoraLayer):
-                        for adapter_name in module.scaling:
-                            module.scaling[adapter_name] = new_scaling
-                            layers_updated += 1
-
-                logger.info(
-                    f"[LM LoRA] Scale set to {scale:.2f} "
-                    f"(effective scaling={new_scaling:.2f}, {layers_updated} layers updated)"
-                )
-
-            self._lm_lora_scale = scale
-            return f"\u2705 LM LoRA scale set to {scale:.2f}"
-
-        except Exception as exc:
-            logger.error(f"[LM LoRA] Failed to set scale: {exc}")
-            return f"\u274c Failed to set LM LoRA scale: {str(exc)}"
+        # Unload current merged model, re-merge at new scale
+        self._lm_lora_loaded = False  # Allow load_lm_lora to proceed
+        return self.load_lm_lora(adapter_path, scale)
 
     def get_lm_lora_status(self) -> dict:
         """Return current LM LoRA adapter state."""
@@ -2654,32 +2721,6 @@ class LLMHandler:
         model = self.llm
         device = self.device
 
-        # ── LM LoRA diagnostic ──────────────────────────────────────
-        try:
-            from peft import PeftModel as _PM
-            is_peft = isinstance(model, _PM)
-            if is_peft:
-                active = getattr(model, 'active_adapter', 'unknown')
-                configs = {n: f"r={c.r}, alpha={c.lora_alpha}" for n, c in model.peft_config.items()}
-                # Get actual layer scaling from first LoRA layer
-                layer_scaling = "?"
-                try:
-                    from peft.tuners.lora import LoraLayer as _LL
-                    for m in model.modules():
-                        if isinstance(m, _LL) and hasattr(m, 'scaling'):
-                            layer_scaling = next(iter(m.scaling.values()))
-                            break
-                except Exception:
-                    layer_scaling = "import_failed"
-                logger.info(
-                    f"[LM LoRA DIAG] PEFT active: adapter={active}, configs={configs}, "
-                    f"layer_scaling={layer_scaling}, user_scale={self._lm_lora_scale}"
-                )
-            else:
-                logger.info(f"[LM LoRA DIAG] No PEFT adapter — base model ({type(model).__name__})")
-        except ImportError:
-            pass
-        # ────────────────────────────────────────────────────────────
         batch_size = batch_input_ids.shape[0] // 2  # Half are conditional, half are unconditional
         cond_start_idx = 0
         uncond_start_idx = batch_size
@@ -2708,72 +2749,13 @@ class LLMHandler:
         # Build logits processor for non-CFG operations (repetition penalty, top_k, top_p)
         logits_processor = self._build_logits_processor(repetition_penalty)
 
-        # Separate KV caches for split-pass mode (LM LoRA + CFG)
-        past_kv_cond = None
-        past_kv_uncond = None
-
-        outputs = None  # May not be set when using split-pass for LM LoRA
         with torch.inference_mode():
             for step in tqdm(range(max_new_tokens), desc="LLM CFG Generation", unit="token", disable=self.disable_tqdm):
-                # ── LM LoRA: split forward pass for proper CFG interaction ──
-                # When a PEFT adapter is loaded, we must run the conditional
-                # pass WITH the adapter and the unconditional pass WITHOUT it.
-                # Otherwise CFG's (cond - uncond) subtraction cancels the
-                # adapter's effect since it appears equally in both.
-                if self._lm_lora_loaded:
-                    try:
-                        from peft import PeftModel as _PM
-                        if isinstance(model, _PM):
-                            # Conditional pass (WITH adapter)
-                            cond_ids = generated_ids[cond_start_idx:cond_start_idx+batch_size]
-                            cond_kwargs = {k: v[cond_start_idx:cond_start_idx+batch_size] for k, v in model_kwargs.items()}
-                            cond_out = self._forward_pass(model, cond_ids, cond_kwargs, past_kv_cond, use_cache)
-                            cond_logits_raw = cond_out.logits[:, -1, :]
-                            if use_cache and hasattr(cond_out, 'past_key_values'):
-                                past_kv_cond = cond_out.past_key_values
+                # Standard batch forward pass
+                outputs = self._forward_pass(model, generated_ids, model_kwargs, past_key_values, use_cache)
+                next_token_logits = outputs.logits[:, -1, :]  # [batch_size*2, vocab_size]
 
-                            # Unconditional pass (WITHOUT adapter)
-                            uncond_ids = generated_ids[uncond_start_idx:uncond_start_idx+batch_size]
-                            uncond_kwargs = {k: v[uncond_start_idx:uncond_start_idx+batch_size] for k, v in model_kwargs.items()}
-                            with model.disable_adapter():
-                                uncond_out = self._forward_pass(model, uncond_ids, uncond_kwargs, past_kv_uncond, use_cache)
-                            uncond_logits_raw = uncond_out.logits[:, -1, :]
-                            if use_cache and hasattr(uncond_out, 'past_key_values'):
-                                past_kv_uncond = uncond_out.past_key_values
 
-                            # Recombine into the expected [cond, uncond] batch format
-                            next_token_logits = torch.cat([cond_logits_raw, uncond_logits_raw], dim=0)
-                        else:
-                            outputs = self._forward_pass(model, generated_ids, model_kwargs, past_key_values, use_cache)
-                            next_token_logits = outputs.logits[:, -1, :]
-                    except Exception:
-                        outputs = self._forward_pass(model, generated_ids, model_kwargs, past_key_values, use_cache)
-                        next_token_logits = outputs.logits[:, -1, :]
-                else:
-                    # Standard batch forward pass (no adapter)
-                    outputs = self._forward_pass(model, generated_ids, model_kwargs, past_key_values, use_cache)
-                    next_token_logits = outputs.logits[:, -1, :]  # [batch_size*2, vocab_size]
-
-                # ── LM LoRA A/B logit diagnostic (first step only) ──
-                if step == 0 and self._lm_lora_loaded:
-                    try:
-                        from peft import PeftModel as _PM
-                        if isinstance(model, _PM):
-                            with_adapter_logits = next_token_logits[0, :20].clone()
-                            # Disable adapter and re-run
-                            with model.disable_adapter():
-                                outputs_base = self._forward_pass(model, generated_ids, model_kwargs, None, use_cache)
-                                base_logits = outputs_base.logits[:, -1, :][0, :20]
-                            diff = (with_adapter_logits - base_logits).abs().mean().item()
-                            max_diff = (with_adapter_logits - base_logits).abs().max().item()
-                            logger.info(
-                                f"[LM LoRA DIAG] Logit comparison (first 20 tokens): "
-                                f"mean_diff={diff:.6f}, max_diff={max_diff:.6f}, "
-                                f"ADAPTER {'HAS EFFECT' if diff > 1e-4 else 'NO EFFECT ⚠️'}"
-                            )
-                    except Exception as e:
-                        logger.warning(f"[LM LoRA DIAG] A/B test failed: {e}")
-                # ────────────────────────────────────────────────────
 
                 # Split conditional and unconditional logits
                 cond_logits = next_token_logits[cond_start_idx:cond_start_idx+batch_size]
@@ -2804,17 +2786,7 @@ class LLMHandler:
                 # Update constrained processor state AFTER sampling
                 self._update_constrained_processor_state(constrained_processor, next_tokens)
 
-                # ── Token sequence diagnostic (first 20 tokens) ──
-                if step < 20 and self._lm_lora_loaded and step == 0:
-                    token_text = self.llm_tokenizer.decode(next_tokens[0].item())
-                    logger.info(f"[LM LoRA DIAG] Token #{step}: {next_tokens[0].item()} = '{token_text}'")
-                if step == 19 and self._lm_lora_loaded:
-                    # Log tokens 0-19 in one line for easy comparison
-                    recent = generated_ids[0, -20:].tolist()
-                    decoded = [self.llm_tokenizer.decode(t) for t in recent]
-                    logger.info(f"[LM LoRA DIAG] First 20 tokens: {recent}")
-                    logger.info(f"[LM LoRA DIAG] Decoded: {decoded[:10]}...")
-                # ────────────────────────────────────────────────────
+
 
                 # Check for EOS token in conditional sequences BEFORE unsqueezing
                 # Stop if any conditional sequence generates EOS token
@@ -2828,7 +2800,7 @@ class LLMHandler:
                 model_kwargs['attention_mask'] = attention_mask
 
                 # Update past_key_values for next iteration
-                if use_cache and outputs is not None and hasattr(outputs, 'past_key_values'):
+                if use_cache and hasattr(outputs, 'past_key_values'):
                     past_key_values = outputs.past_key_values
 
                 # Update streamer
