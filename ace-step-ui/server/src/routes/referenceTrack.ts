@@ -14,29 +14,52 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const AUDIO_DIR = path.join(__dirname, '../../public/audio');
 
+const ALLOWED_AUDIO_MIMETYPES = [
+  'audio/mpeg',
+  'audio/wav',
+  'audio/flac',
+  'audio/mp3',
+  'audio/x-wav',
+  'audio/x-flac',
+  'audio/mp4',
+  'audio/x-m4a',
+  'audio/aac',
+  'video/mp4',
+  'application/octet-stream', // Fallback — some browsers report this for audio files
+];
+
+const ALLOWED_AUDIO_EXTENSIONS = ['.mp3', '.wav', '.flac', '.m4a', '.mp4', '.ogg', '.opus', '.webm', '.aac'];
+
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB max
+  limits: { fileSize: 200 * 1024 * 1024 }, // 200MB max (uncompressed WAV files can be large)
   fileFilter: (_req, file, cb) => {
-    const allowedTypes = [
-      'audio/mpeg',
-      'audio/wav',
-      'audio/flac',
-      'audio/mp3',
-      'audio/x-wav',
-      'audio/x-flac',
-      'audio/mp4',
-      'audio/x-m4a',
-      'audio/aac',
-      'video/mp4',
-    ];
-    if (allowedTypes.includes(file.mimetype) || file.originalname.match(/\.(mp3|wav|flac|m4a|mp4|ogg|opus|webm)$/i)) {
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (ALLOWED_AUDIO_MIMETYPES.includes(file.mimetype) || ALLOWED_AUDIO_EXTENSIONS.includes(ext)) {
       cb(null, true);
     } else {
-      cb(new Error('Invalid file type. Only MP3, WAV, FLAC, M4A, MP4, OGG, Opus, and WebM are allowed.'));
+      cb(new Error(`Invalid file type "${file.originalname}" (${file.mimetype}). Allowed: ${ALLOWED_AUDIO_EXTENSIONS.join(', ')}`));
     }
   }
 });
+
+// Wrap multer middleware so errors come back as JSON instead of crashing
+const uploadSingle = (fieldName: string) => {
+  return (req: AuthenticatedRequest, res: Response, next: () => void) => {
+    upload.single(fieldName)(req as any, res as any, (err: any) => {
+      if (err) {
+        const status = err.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+        const message = err.code === 'LIMIT_FILE_SIZE'
+          ? 'File too large. Maximum size is 200 MB.'
+          : err.message || 'Upload failed';
+        console.error('[UPLOAD ERROR]', message);
+        res.status(status).json({ error: message });
+        return;
+      }
+      next();
+    });
+  };
+};
 
 const findWhisperExecutable = async (): Promise<string | null> => {
   if (process.env.WHISPER_CMD) return process.env.WHISPER_CMD;
@@ -150,7 +173,7 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
 });
 
 // Upload a new reference track
-router.post('/', authMiddleware, upload.single('audio'), async (req: AuthenticatedRequest, res: Response) => {
+router.post('/', authMiddleware, uploadSingle('audio'), async (req: AuthenticatedRequest, res: Response) => {
   try {
     if (!req.file) {
       res.status(400).json({ error: 'No file uploaded' });
