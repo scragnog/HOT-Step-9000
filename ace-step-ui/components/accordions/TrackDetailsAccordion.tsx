@@ -68,6 +68,9 @@ interface TrackDetailsAccordionProps {
     detectedBpm?: number | null;
     detectedKey?: string | null;
     triggerWord?: string;
+    taskType?: string;
+    sourceDuration?: number;
+    tempoScale?: number;
 }
 
 export const TrackDetailsAccordion: React.FC<TrackDetailsAccordionProps> = ({
@@ -80,6 +83,7 @@ export const TrackDetailsAccordion: React.FC<TrackDetailsAccordionProps> = ({
     showStyleSub, setShowStyleSub, style, setStyle, refreshMusicTags, isFormattingStyle, handleFormat, styleRef, styleHeight, startResizingStyle, genreDropdownRef, showGenreDropdown, setShowGenreDropdown, selectedMainGenre, setSelectedMainGenre, selectedSubGenre, setSelectedSubGenre, getSubGenreCount, genreSearch, setGenreSearch, filteredCombinedGenres, subGenreDropdownRef, showSubGenreDropdown, setShowSubGenreDropdown, filteredSubGenres, musicTags,
     bpm, setBpm, keyScale, setKeyScale, timeSignature, setTimeSignature, duration, setDuration,
     detectedBpm, detectedKey, triggerWord,
+    taskType, sourceDuration, tempoScale,
 }) => {
     const { t } = useI18n();
 
@@ -218,6 +222,9 @@ export const TrackDetailsAccordion: React.FC<TrackDetailsAccordionProps> = ({
                         setDuration={setDuration}
                         detectedBpm={detectedBpm}
                         detectedKey={detectedKey}
+                        taskType={taskType}
+                        sourceDuration={sourceDuration}
+                        tempoScale={tempoScale}
                     />
 
                 </div>

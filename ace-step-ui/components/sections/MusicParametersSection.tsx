@@ -14,6 +14,9 @@ interface MusicParametersSectionProps {
     setDuration: (val: number) => void;
     detectedBpm?: number | null;
     detectedKey?: string | null;
+    taskType?: string;
+    sourceDuration?: number;
+    tempoScale?: number;
 }
 
 export const MusicParametersSection: React.FC<MusicParametersSectionProps> = ({
@@ -26,7 +29,10 @@ export const MusicParametersSection: React.FC<MusicParametersSectionProps> = ({
     duration,
     setDuration,
     detectedBpm,
-    detectedKey
+    detectedKey,
+    taskType,
+    sourceDuration,
+    tempoScale = 1.0,
 }) => {
     const { t } = useI18n();
 
@@ -88,17 +94,30 @@ export const MusicParametersSection: React.FC<MusicParametersSectionProps> = ({
             </div>
 
             {/* Duration */}
-            <EditableSlider
-                label={t('duration')}
-                value={duration}
-                min={-1}
-                max={600}
-                step={5}
-                onChange={setDuration}
-                formatDisplay={(val) => val === -1 ? t('auto') : `${val}${t('seconds')}`}
-                title={t('durationTooltip')}
-                autoLabel={t('auto')}
-            />
+            {(taskType === 'cover' || taskType === 'repaint') ? (
+                <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{t('duration')}</label>
+                    <div className="w-full bg-zinc-100 dark:bg-black/30 border border-zinc-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-500 dark:text-zinc-400 cursor-not-allowed select-none">
+                        {sourceDuration && sourceDuration > 0
+                            ? `${Math.round(sourceDuration / tempoScale)}s (${Math.round(sourceDuration)}s × ${tempoScale}x tempo)`
+                            : 'Set cover audio first'
+                        }
+                    </div>
+                    <p className="text-[10px] text-zinc-500">Duration is determined by the source audio and tempo scale</p>
+                </div>
+            ) : (
+                <EditableSlider
+                    label={t('duration')}
+                    value={duration}
+                    min={-1}
+                    max={600}
+                    step={5}
+                    onChange={setDuration}
+                    formatDisplay={(val) => val === -1 ? t('auto') : `${val}${t('seconds')}`}
+                    title={t('durationTooltip')}
+                    autoLabel={t('auto')}
+                />
+            )}
         </div>
     );
 };

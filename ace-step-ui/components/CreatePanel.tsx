@@ -2646,6 +2646,9 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
             detectedBpm={detectedBpm}
             detectedKey={detectedKey}
             triggerWord={adapterTriggerWord}
+            taskType={taskType}
+            sourceDuration={sourceDuration}
+            tempoScale={tempoScale}
           />
         )}
 
