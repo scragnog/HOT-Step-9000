@@ -71,6 +71,8 @@ interface TrackDetailsAccordionProps {
     taskType?: string;
     sourceDuration?: number;
     tempoScale?: number;
+    effectiveBpm?: number;
+    effectiveKeyScale?: string;
 }
 
 export const TrackDetailsAccordion: React.FC<TrackDetailsAccordionProps> = ({
@@ -84,6 +86,7 @@ export const TrackDetailsAccordion: React.FC<TrackDetailsAccordionProps> = ({
     bpm, setBpm, keyScale, setKeyScale, timeSignature, setTimeSignature, duration, setDuration,
     detectedBpm, detectedKey, triggerWord,
     taskType, sourceDuration, tempoScale,
+    effectiveBpm, effectiveKeyScale,
 }) => {
     const { t } = useI18n();
 
@@ -208,6 +211,8 @@ export const TrackDetailsAccordion: React.FC<TrackDetailsAccordionProps> = ({
                         bpm={bpm}
                         keyScale={keyScale}
                         timeSignature={timeSignature}
+                        effectiveBpm={effectiveBpm}
+                        effectiveKeyScale={effectiveKeyScale}
                         triggerWord={triggerWord}
                     />
 
