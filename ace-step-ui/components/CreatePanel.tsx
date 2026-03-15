@@ -1397,6 +1397,42 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       setAdapterLoadingMessage(null);
     })();
   }, [token, fetchedModels]);
+
+  // Validate persisted audio URLs on startup — if the backing file was
+  // removed between sessions (e.g. disk cleanup), clear the stale URL
+  // so the user sees "no audio" instead of a cryptic generation error.
+  useEffect(() => {
+    const validateUrl = async (url: string): Promise<boolean> => {
+      if (!url) return true; // empty is fine
+      try {
+        const res = await fetch(url, { method: 'HEAD' });
+        return res.ok;
+      } catch {
+        return false;
+      }
+    };
+
+    (async () => {
+      // Check cover source audio
+      if (sourceAudioUrl) {
+        const ok = await validateUrl(sourceAudioUrl);
+        if (!ok) {
+          console.warn('[Persistence] Cover source audio file no longer exists, clearing:', sourceAudioUrl);
+          setSourceAudioUrl('');
+          setSourceAudioTitle('');
+        }
+      }
+      // Check matchering reference audio (inside masteringParams)
+      if (masteringParams?.reference_file) {
+        const ok = await validateUrl(masteringParams.reference_file);
+        if (!ok) {
+          console.warn('[Persistence] Matchering reference file no longer exists, clearing:', masteringParams.reference_file);
+          setMasteringParams(prev => prev ? { ...prev, reference_file: undefined, reference_name: undefined } as any : null);
+        }
+      }
+    })();
+  }, []); // Run once on mount
+
   // Re-fetch models after generation completes to update active model status
   // Don't change selection, just refresh the is_active status
   const prevIsGeneratingRef = useRef(isGenerating);
@@ -2580,10 +2616,12 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
             setShowSubGenreDropdown={setShowSubGenreDropdown}
             filteredSubGenres={filteredSubGenres}
             musicTags={musicTags}
-            bpm={effectiveBpm}
+            bpm={bpm}
             setBpm={setBpm}
-            keyScale={effectiveKeyScale}
+            keyScale={keyScale}
             setKeyScale={setKeyScale}
+            effectiveBpm={effectiveBpm}
+            effectiveKeyScale={effectiveKeyScale}
             timeSignature={timeSignature}
             setTimeSignature={setTimeSignature}
             duration={duration}
