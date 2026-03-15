@@ -223,6 +223,9 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [detectedBpm, setDetectedBpm] = useState<number | null>(null);
   const [detectedKey, setDetectedKey] = useState<string | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  // Persisted cache of analysis results keyed by audio URL — avoids re-running
+  // Essentia when the same cover audio is restored from a previous session.
+  const [analysisCache, setAnalysisCache] = usePersistedState<Record<string, { bpm: number; key: string }>>('ace-analysisCache', {});
   const [audioCodes, setAudioCodes] = useState('');
   const [repaintingStart, setRepaintingStart] = useState(0);
   const [repaintingEnd, setRepaintingEnd] = useState(-1);
@@ -1889,6 +1892,10 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
         const keyStr = `${data.key} ${data.scale || ''}`.trim();
         setDetectedKey(keyStr);
         setKeyScale(keyStr);
+        // Cache the results keyed by audio URL
+        if (data.bpm > 0 && keyStr) {
+          setAnalysisCache(prev => ({ ...prev, [sourceAudioUrl]: { bpm: data.bpm, key: keyStr } }));
+        }
       }
       console.log(`[Analyze] Detected BPM: ${data.bpm}, Key: ${data.key} ${data.scale}`);
     } catch (err) {
@@ -1898,12 +1905,22 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     }
   };
 
-  // Clear detected BPM/key when source audio changes, and auto-analyze
+  // When source audio changes: check cache first, otherwise auto-analyze
   React.useEffect(() => {
     setDetectedBpm(null);
     setDetectedKey(null);
     if (sourceAudioUrl) {
-      // Add a small timeout to let the UI settle before blocking on the API call
+      // Check if we have cached analysis for this exact URL
+      const cached = analysisCache[sourceAudioUrl];
+      if (cached) {
+        console.log(`[Analyze] Using cached results for ${sourceAudioUrl}: BPM=${cached.bpm}, Key=${cached.key}`);
+        setDetectedBpm(cached.bpm);
+        setBpm(cached.bpm);
+        setDetectedKey(cached.key);
+        setKeyScale(cached.key);
+        return;
+      }
+      // No cache hit — run Essentia analysis after a brief UI settle delay
       const t = setTimeout(() => {
         void handleAnalyzeSource();
       }, 500);
