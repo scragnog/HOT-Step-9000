@@ -644,8 +644,8 @@ export const SongList: React.FC<SongListProps> = ({
                 </div> {/* End container */}
             </div> {/* End scroll area */}
 
-            {/* Lyrics Bar — shown when playing and NOT in comparison mode */}
-            {!(abTrackA && abTrackB) && isPlaying && currentSong && (
+            {/* Lyrics Bar — shown when playing and NOT in comparison mode, hidden for cover/repaint */}
+            {!(abTrackA && abTrackB) && isPlaying && currentSong && currentSong.generationParams?.taskType !== 'cover' && currentSong.generationParams?.taskType !== 'repaint' && (
                 <LyricsBar
                     audioUrl={currentSong.audioUrl}
                     currentTime={currentTime ?? 0}

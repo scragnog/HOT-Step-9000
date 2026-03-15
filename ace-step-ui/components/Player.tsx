@@ -709,7 +709,10 @@ export const Player: React.FC<PlayerProps> = ({
         <div className="h-20 lg:h-24 bg-white dark:bg-black/95 backdrop-blur border-t border-zinc-200 dark:border-white/10 flex flex-col z-50 transition-colors duration-300 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] dark:shadow-none">
 
             {/* Section Markers — thin row above waveform showing song structure */}
-            <SectionMarkers audioUrl={currentSong.audioUrl} duration={duration} />
+            {/* Hidden for cover/repaint songs: LRC timestamps are generated pre-audio and don't align with the actual cover output */}
+            {currentSong.generationParams?.taskType !== 'cover' && currentSong.generationParams?.taskType !== 'repaint' && (
+                <SectionMarkers audioUrl={currentSong.audioUrl} duration={duration} />
+            )}
 
             {/* Progress Bar with Waveform Overlay */}
             <div

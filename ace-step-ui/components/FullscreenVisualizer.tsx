@@ -125,12 +125,14 @@ export const FullscreenVisualizer: React.FC<FullscreenVisualizerProps> = ({
                 instanceId="fullscreen"
             />
 
-            {/* Synced lyrics overlay — always visible, not tied to HUD */}
-            <LyricsOverlay
-                audioUrl={song.audioUrl}
-                currentTime={currentTime}
-                isPlaying={isPlaying}
-            />
+            {/* Synced lyrics overlay — always visible, not tied to HUD; hidden for cover/repaint */}
+            {song.generationParams?.taskType !== 'cover' && song.generationParams?.taskType !== 'repaint' && (
+                <LyricsOverlay
+                    audioUrl={song.audioUrl}
+                    currentTime={currentTime}
+                    isPlaying={isPlaying}
+                />
+            )}
 
             {/* HUD Overlay */}
             <div

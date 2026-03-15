@@ -163,12 +163,14 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ song, onClose, onOpe
                                     onFullscreen={onFullscreenVisualizer}
                                     instanceId="artbox"
                                 />
-                                {/* Synced lyrics overlay */}
-                                <LyricsOverlay
-                                    audioUrl={song.audioUrl}
-                                    currentTime={currentTime ?? 0}
-                                    isPlaying={true}
-                                />
+                                {/* Synced lyrics overlay — hidden for cover/repaint (timestamps don't match actual output) */}
+                                {song.generationParams?.taskType !== 'cover' && song.generationParams?.taskType !== 'repaint' && (
+                                    <LyricsOverlay
+                                        audioUrl={song.audioUrl}
+                                        currentTime={currentTime ?? 0}
+                                        isPlaying={true}
+                                    />
+                                )}
                             </div>
                         ) : (
                             <>
