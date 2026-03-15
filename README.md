@@ -31,16 +31,21 @@ HOT-Step 9000 sits on top of the original ACE-Step backend but introduces a mass
 - **Advanced Multi-Adapter System:** Slot-based loading of up to 4 simultaneous LoRA/LoKr adapters with per-layer scaling via weight-space merging.
 - **Activation Steering (TADA):** Experimental zero-shot generation guidance by modifying model activations directly.
 - **Advanced Guidance & Solvers:** 7 guidance modes (including PAG, APG, ADG) and 4 ODE solvers (Euler, Heun, DPM++ 2M, RK4).
-- **Stem Extraction:** Both generative extraction (via DiT) and deterministic separation (BS-RoFormer/Demucs) with a built-in multi-track mixer.
+- **Timestep Scheduler:** 6 pluggable timestep distributions (Linear, DDIM, SGM, Bong Tangent, Linear Quadratic, Composite 2-Stage) for controlling where denoising effort is concentrated.
+- **Cover Mode Tools:** Tempo scaling (0.5x–2.0x) and pitch shifting (±12 semitones) for covers and repaints, applied before VAE encoding.
+- **Stem Extraction & Separation:** Both generative extraction (via DiT) and deterministic separation (BS-RoFormer/Demucs) with a built-in multi-track mixer.
 - **Upscale to HQ:** Re-run low-step preview audio at higher quality settings using precomputed audio codes.
-- **Melodic Variation / Repetition Settings:** Adjust the language model's repetition penalty for varied or hypnotic melodic phrasing.
+- **Melodic Variation:** Adjust the language model's repetition penalty for varied or hypnotic melodic phrasing.
 - **Quality Scoring:** Automatic PMI and DiT alignment scores on every generated track.
-- **Synced Lyrics & Live Visualizer:** Real-time Web Audio API visualizers (10 presets) with synced `.lrc` lyrics overlays and section markers.
-- **A/B Track Comparison:** Side-by-side simultaneous playback of any two tracks for critical listening.
-- **Layer Ablation Lab:** Developer tool to run automated sweeps across adapter layers to isolate their functional impact.
-- **One-Click Hot-Switching:** Change LM and DiT models instantly without restarting the server.
-- **JSON Export/Import:** Save and share complete generation configurations.
-- **UI & QoL:** Persistent settings, debug panel, queue management, job cancellation, tempo/pitch shifting in cover mode, and a simple one-click shutdown.
+- **Synced Lyrics & Live Visualizer:** Real-time Web Audio API visualizers (10 presets, configurable pool, fullscreen mode) with synced `.lrc` lyrics overlays and section markers.
+- **A/B Track Comparison:** Side-by-side simultaneous playback of any two tracks with instant toggle and parameter diff view.
+- **Layer Ablation Lab:** Developer tool for automated layer sweeps to isolate adapter functional impact across 24 transformer layers.
+- **One-Click Launcher:** Interactive loading screen with model selection dropdowns, auto-continue timer, and real-time service health polling.
+- **Model Hot-Switching:** Change LM and DiT models instantly without restarting the server, with dynamic model discovery from the checkpoints directory.
+- **JSON Export/Import:** Save and share complete generation configurations including adapter and steering state.
+- **Creation Panel Overhaul:** Reorganized from a single monolithic panel into ~13 modular accordion sections with Simple vs Custom modes.
+- **Audio Enhancement Studio (Legacy):** Per-stem DSP engine with 6 presets, reverb, echo, stereo widening, and optional Demucs stem separation.
+- **UI & QoL:** Persistent settings, debug panel with GPU/RAM/CPU monitoring, waveform visualizer, track list pagination, job cancellation, queue management, bulk operations, and a simple one-click shutdown.
 
 *For a detailed, technical breakdown of every new feature, see [FEATURES.md](./FEATURES.md).*
 
