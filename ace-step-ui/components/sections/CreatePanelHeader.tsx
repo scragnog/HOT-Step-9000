@@ -59,7 +59,8 @@ export const CreatePanelHeader: React.FC<CreatePanelHeaderProps> = ({
                     <img 
             src="/hotstep-logo-small.webp" 
             alt="HOT-Step 9000 Logo" 
-            className="h-5 rounded opacity-90 object-contain hover:opacity-100 transition-opacity"
+            style={{ width: '200px', height: 'auto' }}
+            className="rounded opacity-90 object-contain hover:opacity-100 transition-opacity"
           />
                 </div>
 

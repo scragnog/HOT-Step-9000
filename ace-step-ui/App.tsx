@@ -2172,8 +2172,8 @@ function AppContent() {
           onToggle={() => setShowLeftSidebar(!showLeftSidebar)}
           onQuit={() => {
             setConfirmDialog({
-              title: 'Quit ACE-Step',
-              message: 'Are you sure you wish to shut down ACE-Step? This will stop the Python API and all servers.',
+              title: 'Quit HOT-Step 9000',
+              message: 'Are you sure you wish to shut down HOT-Step 9000? This will stop the Python API and all servers.',
               confirmLabel: 'Shut Down',
               danger: true,
               onConfirm: async () => {
@@ -2395,7 +2395,7 @@ function AppContent() {
       {isShutdown && (
         <div className="fixed inset-0 z-[200] flex flex-col items-center justify-center bg-black text-white">
           <div className="text-6xl mb-6">👋</div>
-          <h1 className="text-2xl font-bold mb-2">ACE-Step has shut down</h1>
+          <h1 className="text-2xl font-bold mb-2">HOT-Step 9000 has shut down</h1>
           <p className="text-zinc-400">You may now close this browser tab.</p>
         </div>
       )}

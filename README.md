@@ -2,7 +2,7 @@
 
 # HOT-Step 9000
 
-<img src="./images/hotstep9000-mainlogo.jpg" width="400px" alt="HOT-Step 9000 Logo">
+<img src="./images/hotstep9000-transparentlogo.webp" width="400px" alt="HOT-Step 9000 Logo">
 
 **Local AI Music Generator for Windows**
 
@@ -14,16 +14,16 @@
 
 **HOT-Step 9000** is a fully functional, open-source local AI music generation suite designed for Windows.
 
-This project is a standalone evolution and heavy modification of [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5). It originally started as a fork of [sdbds/ACE-Step-1.5-for-windows](https://github.com/sdbds/ACE-Step-1.5-for-windows) (qinglong branch) but has since grown into its own distinct application with significant UI Overhauls, advanced features, and quality-of-life improvements.
+This project is a standalone evolution modification of [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5). It originally started as a fork of [sdbds/ACE-Step-1.5-for-windows](https://github.com/sdbds/ACE-Step-1.5-for-windows) but has since grown into its own distinct application with significant UI Overhauls, advanced features, and quality-of-life improvements.
 
-### ⚠️ Work In Progress
-This application is under active, ongoing development. You may occasionally encounter bugs, floating buttons, or unoptimized features. We welcome bug reports and feature requests via GitHub Issues. 
+### ⚠Work In Progress
+This application is under active, ongoing development. You may occasionally encounter bugs or unoptimized features. We welcome bug reports and feature requests via GitHub Issues. 
 
-While currently optimized and supported specifically for **Windows environments**, PRs contributing cross-platform support are more than welcome.
+While currently optimized and supported specifically for **Windows environments**, PRs contributing cross-platform support are welcome.
 
 ---
 
-## 🎸 Key Features
+## Key Features
 
 HOT-Step 9000 sits on top of the original ACE-Step backend but introduces a massive array of new tools and features for advanced AI music creation:
 
@@ -45,26 +45,26 @@ HOT-Step 9000 sits on top of the original ACE-Step backend but introduces a mass
 
 ---
 
-## 🚀 Installation & Usage
+## Installation & Usage
 
 *(Assuming basic Python/CUDA knowledge and a suitable Windows GPU environment)*
 
 1. Clone the repository.
-2. Run `1、install-uv-qinglong.ps1` to install dependencies.
+2. Run `install.bat` to install dependencies.
 3. Download applicable models into the `checkpoints/` directory.
 4. Run `LAUNCH.bat` to start the application with the interactive loading screen.
-5. In the UI, set your generation parameters, enter a prompt, and click **Summon bangers**.
+5. In the UI, set your generation parameters, enter a prompt, and bring forth the **bangers**.
 
 ---
 
-## 🤝 Lineage & Credits
+## Lineage & Credits
 
 HOT-Step 9000 exists thanks to the incredible open-source AI audio community:
 
 - Core models and initial application framework by the **[ACE-Step 1.5 Team](https://github.com/ace-step/ACE-Step-1.5)**.
 - Windows compatibility layer and upstream scaffolding by **[sdbds](https://github.com/sdbds/ACE-Step-1.5-for-windows)**.
-- UI Overhaul, advanced tooling, and new features by **Ambsd** / **scragnog**.
+- UI Overhaul, advanced tooling, and new features by **scragnog**.
 
-## 📝 License
+## License
 
 This project inherits the licensing of its upstream parents. See original repositories for detailed model and code licensing. Please use AI generation tools responsibly.

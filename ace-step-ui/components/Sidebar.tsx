@@ -61,7 +61,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </svg>
             </button>
             {isOpen && (
-              <span className="text-lg font-bold text-zinc-900 dark:text-white whitespace-nowrap">ACE Step</span>
+              <div className="flex flex-col items-center leading-tight">
+                <span className="text-lg font-bold text-zinc-900 dark:text-white whitespace-nowrap">HOT-Step</span>
+                <span className="text-xs font-semibold tracking-[0.25em] text-zinc-500 dark:text-zinc-400">9000</span>
+              </div>
             )}
           </div>
         </div>
