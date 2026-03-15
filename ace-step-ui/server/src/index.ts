@@ -13,6 +13,28 @@ import cron from 'node-cron';
 import { config } from './config/index.js';
 import { runCleanupJob, cleanupDeletedSongs } from './services/cleanup.js';
 
+// Setup mirroring of console output to session log file if configured by LAUNCH.bat
+if (process.env.ACESTEP_LOG_DIR) {
+  const fs = await import('fs');
+  const logFile = path.join(process.env.ACESTEP_LOG_DIR, 'node_console.log');
+
+  const originalStdoutWrite = process.stdout.write.bind(process.stdout);
+  const originalStderrWrite = process.stderr.write.bind(process.stderr);
+
+  (process.stdout as any).write = (chunk: any, encoding?: any, callback?: any) => {
+    try { fs.appendFileSync(logFile, chunk); } catch (e) { /* ignore */ }
+    return originalStdoutWrite(chunk, encoding, callback);
+  };
+
+  (process.stderr as any).write = (chunk: any, encoding?: any, callback?: any) => {
+    try { fs.appendFileSync(logFile, chunk); } catch (e) { /* ignore */ }
+    return originalStderrWrite(chunk, encoding, callback);
+  };
+
+  console.log(`[Logger] Node.js console output is being mirrored transparently to ${logFile}`);
+}
+
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 

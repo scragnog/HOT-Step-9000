@@ -6,12 +6,20 @@ import os
 import sys
 
 # ---- File-based generation log for diagnostics ----
-# All loguru output is also written to logs/generation.log for offline comparison
-_gen_log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs")
-os.makedirs(_gen_log_dir, exist_ok=True)
+# All loguru output is written to the session's python_api.log (or fallback to generation.log)
+_default_log_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs")
+_session_log_dir = os.environ.get("ACESTEP_LOG_DIR")
+
+if _session_log_dir:
+    os.makedirs(_session_log_dir, exist_ok=True)
+    _log_file_path = os.path.join(_session_log_dir, "python_api.log")
+else:
+    os.makedirs(_default_log_dir, exist_ok=True)
+    _log_file_path = os.path.join(_default_log_dir, "generation.log")
+
 from loguru import logger as _early_logger
 _early_logger.add(
-    os.path.join(_gen_log_dir, "generation.log"),
+    _log_file_path,
     rotation="10 MB",
     retention=3,
     format="{time:YYYY-MM-DD HH:mm:ss.SSS} | {level:<7} | {message}",

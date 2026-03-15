@@ -16,9 +16,17 @@ if exist update.lock del update.lock
 if exist boot.lock del boot.lock
 
 
-REM Tell ace-step-ui start.bat not to open a browser ??? our loading page handles that
+REM Tell ace-step-ui start.bat not to open a browser - our loading page handles that
 set "ACESTEP_NO_BROWSER=1"
 
+REM Generate timestamp for logging session
+for /f "tokens=2 delims==" %%I in ('wmic os get localdatetime /value') do set datetime=%%I
+REM datetime format: 20231025143000.000000+120
+set "LOG_TIMESTAMP=%datetime:~0,4%-%datetime:~4,2%-%datetime:~6,2%_%datetime:~8,2%-%datetime:~10,2%-%datetime:~12,2%"
+set "ACESTEP_LOG_DIR=%~dp0logs\%LOG_TIMESTAMP%"
+if not exist "%ACESTEP_LOG_DIR%" mkdir "%ACESTEP_LOG_DIR%"
+if not exist "%ACESTEP_LOG_DIR%\generations" mkdir "%ACESTEP_LOG_DIR%\generations"
+echo [Logging] Session logs will be written to: logs\%LOG_TIMESTAMP%
 echo.
 REM Read frontend port from .env
 set "VITE_PORT=3000"
@@ -182,7 +190,7 @@ set "UV_INDEX_STRATEGY=unsafe-best-match"
 REM Pre-install build deps (required when UV_NO_BUILD_ISOLATION=1)
 .venv\Scripts\python.exe -m pip install hatchling editables >nul 2>&1
 
-start /min "ACE-Step Python API" cmd /k "cd /d "%~dp0" && call .venv\Scripts\activate.bat && set "PYTHONPATH=%~dp0" && set "HF_HOME=huggingface" && set "XFORMERS_FORCE_DISABLE_TRITON=1" && set "UV_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cu130" && set "UV_CACHE_DIR=%LOCALAPPDATA%\uv\cache" && set "UV_NO_BUILD_ISOLATION=1" && set "UV_LINK_MODE=symlink" && set "UV_INDEX_STRATEGY=unsafe-best-match" && python acestep/api_server.py --port 8001 --host 127.0.0.1"
+start /min "ACE-Step Python API" cmd /k "cd /d "%~dp0" && call .venv\Scripts\activate.bat && set "PYTHONPATH=%~dp0" && set "HF_HOME=huggingface" && set "XFORMERS_FORCE_DISABLE_TRITON=1" && set "UV_EXTRA_INDEX_URL=https://download.pytorch.org/whl/cu130" && set "UV_CACHE_DIR=%LOCALAPPDATA%\uv\cache" && set "UV_NO_BUILD_ISOLATION=1" && set "UV_LINK_MODE=symlink" && set "UV_INDEX_STRATEGY=unsafe-best-match" && set "PYTHONUNBUFFERED=1" && python acestep/api_server.py --port 8001 --host 127.0.0.1"
 echo   Started (minimized window).
 echo.
 
