@@ -245,7 +245,17 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
       [localJobId, req.user!.id, JSON.stringify(params)]
     );
 
-    // Call 8001 API to start generation
+    // File-based debug logging (console.log goes to stdout which is hard to capture)
+    const _fs = await import('fs');
+    const _debugLog = `[${new Date().toISOString()}] sourceAudioUrl: ${JSON.stringify(params.sourceAudioUrl)}\n` +
+        `[${new Date().toISOString()}] taskType: ${JSON.stringify(params.taskType)}\n` +
+        `[${new Date().toISOString()}] resolved src_audio_path: ${params.sourceAudioUrl ? resolveAudioPath(params.sourceAudioUrl) : 'N/A'}\n` +
+        `[${new Date().toISOString()}] body keys: ${Object.keys(params).join(', ')}\n` +
+        `---\n`;
+    try { _fs.appendFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '../../../../logs/node_debug.log'), _debugLog); } catch(e) { console.error('Debug log write failed:', e); }
+    console.log('[COVER DEBUG] sourceAudioUrl:', params.sourceAudioUrl);
+    console.log('[COVER DEBUG] resolved src_audio_path:', params.sourceAudioUrl ? resolveAudioPath(params.sourceAudioUrl) : 'N/A');
+    console.log('[COVER DEBUG] taskType:', params.taskType);
     const acestepResponse = await fetch(`${config.acestep.apiUrl}/release_task`, {
       method: 'POST',
       headers: {

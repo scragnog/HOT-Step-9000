@@ -470,7 +470,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [audioModalTarget, setAudioModalTarget] = useState<'reference' | 'source'>('reference');
   const [tempAudioUrl, setTempAudioUrl] = useState('');
   const [useReferenceAudio, setUseReferenceAudio] = usePersistedState('acestep-useReferenceAudio', false);
-  const [audioTab, setAudioTab] = useState<'reference' | 'source'>('reference');
+
   const referenceAudioRef = useRef<HTMLAudioElement>(null);
   const sourceAudioRef = useRef<HTMLAudioElement>(null);
   const [referencePlaying, setReferencePlaying] = useState(false);
@@ -1752,7 +1752,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
 
   const handleWorkspaceDrop = (e: React.DragEvent<HTMLDivElement>) => {
     if (e.dataTransfer.files?.length || e.dataTransfer.types.includes('application/x-ace-audio')) {
-      handleDrop(e, audioTab);
+      handleDrop(e, 'source');
     }
   };
 
@@ -2167,8 +2167,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
               </div>
               <div className="text-[11px] text-zinc-500 dark:text-zinc-400">
                 {dragKind === 'audio'
-                  ? (audioTab === 'reference' ? t('usingAsReference') : t('usingAsCover'))
-                  : (audioTab === 'reference' ? t('uploadingAsReference') : t('uploadingAsCover'))}
+                  ? t('usingAsCover')
+                  : t('uploadingAsCover')}
               </div>
             </div>
           </div>
@@ -2234,8 +2234,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
         <TaskTypeSelector
           taskType={taskType}
           setTaskType={setTaskType}
-          audioTab={audioTab}
-          setAudioTab={setAudioTab}
+
           useReferenceAudio={useReferenceAudio}
           selectedModel={selectedModel}
         />
@@ -2370,8 +2369,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
               useReferenceAudio={false}
               setUseReferenceAudio={setUseReferenceAudio}
               taskType={taskType}
-              audioTab={'source'}
-              setAudioTab={setAudioTab}
+
               referenceAudioUrl={referenceAudioUrl}
               referenceAudioTitle={referenceAudioTitle}
               referencePlaying={referencePlaying}
@@ -2427,8 +2425,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
               useReferenceAudio={useReferenceAudio}
               setUseReferenceAudio={setUseReferenceAudio}
               taskType={taskType}
-              audioTab={audioTab}
-              setAudioTab={setAudioTab}
+
               referenceAudioUrl={referenceAudioUrl}
               referenceAudioTitle={referenceAudioTitle}
               referencePlaying={referencePlaying}
