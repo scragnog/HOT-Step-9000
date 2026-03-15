@@ -14,7 +14,7 @@
 
 **HOT-Step 9000** is a fully functional, open-source local AI music generation suite designed for Windows.
 
-This project is a standalone evolution modification of [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5). It originally started as a fork of [sdbds/ACE-Step-1.5-for-windows](https://github.com/sdbds/ACE-Step-1.5-for-windows) but has since grown into its own distinct application with significant UI Overhauls, advanced features, and quality-of-life improvements.
+This project is a standalone frontend for [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5). It originally started as a fork of [sdbds/ACE-Step-1.5-for-windows](https://github.com/sdbds/ACE-Step-1.5-for-windows) but has since grown into its own distinct application with significant UI Overhauls, advanced features, and quality-of-life improvements.
 
 ### ⚠Work In Progress
 This application is under active, ongoing development. You may occasionally encounter bugs or unoptimized features. We welcome bug reports and feature requests via GitHub Issues. 
