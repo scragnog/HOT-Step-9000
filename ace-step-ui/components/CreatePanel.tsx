@@ -1338,11 +1338,16 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     let cancelled = false;
     const loadModelsAndLimits = async () => {
       // Backend can start slowly; retry silently until models are available.
+      let initialSyncDone = false;
       const attemptRefresh = async (attempt: number) => {
         if (cancelled) return;
-        // Pass true for isInitial only on first attempt
-        const ok = await refreshModels(attempt === 0);
-        if (!ok) {
+        // Pass isInitial=true until the first SUCCESSFUL refresh completes.
+        // This ensures the LM model dropdown syncs from the backend even if
+        // the first few attempts fail (backend still booting).
+        const ok = await refreshModels(!initialSyncDone);
+        if (ok) {
+          initialSyncDone = true;
+        } else {
           const delayMs = Math.min(15000, 800 * Math.pow(1.6, attempt));
           modelsRetryTimeoutRef.current = window.setTimeout(() => { void attemptRefresh(attempt + 1); }, delayMs);
         }
