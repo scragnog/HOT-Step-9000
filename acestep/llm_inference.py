@@ -96,6 +96,11 @@ class LLMHandler:
         self._lm_lora_merged_dir = ""  # Temp dir holding the merged checkpoint
         self._lm_lora_original_model_path = ""  # Original model path before merge
 
+        # vLLM reinit cache — preserve the original gpu_memory_utilization so
+        # re-initialization after merge doesn't fight DiT for VRAM.
+        self._vllm_gpu_memory_utilization: Optional[float] = None
+        self._vllm_max_model_len: Optional[int] = None
+
     def unload(self) -> None:
         """Release LM weights/tokenizer and clear caches to free memory."""
         import gc
@@ -943,9 +948,19 @@ class LLMHandler:
         except Exception as e:
             return f"❌ Error initializing 5Hz LM: {str(e)}\n\nTraceback:\n{traceback.format_exc()}", False
 
-    def _initialize_5hz_lm_vllm(self, model_path: str, enforce_eager: bool = False) -> str:
+    def _initialize_5hz_lm_vllm(
+        self,
+        model_path: str,
+        enforce_eager: bool = False,
+        gpu_memory_utilization_override: Optional[float] = None,
+        max_model_len_override: Optional[int] = None,
+    ) -> str:
         """Initialize 5Hz LM model using vllm backend. When enforce_eager is True, CUDA graph
-        capture is disabled (required when LoRA training may run in the same process)."""
+        capture is disabled (required when LoRA training may run in the same process).
+
+        When gpu_memory_utilization_override / max_model_len_override are provided
+        (e.g. during LM-LoRA merge reinit), skip recalculation and reuse the
+        values from the original initialization."""
         if not torch.cuda.is_available():
             self.llm_initialized = False
             logger.error("CUDA/ROCm is not available. Please check your GPU setup.")
@@ -964,18 +979,45 @@ class LLMHandler:
             torch.cuda.empty_cache()
             self._cleanup_torch_distributed_state()
 
-            # Use adaptive GPU memory utilization based on model size
-            gpu_memory_utilization, low_gpu_memory_mode = self.get_gpu_memory_utilization(
-                model_path=model_path,
-                minimal_gpu=3,
-                min_ratio=0.1,
-                max_ratio=0.9
+            # Use overrides if provided, or fall back to cached values from
+            # the original init.  This is critical for LM LoRA merge reinit:
+            # at that point DiT is on GPU, so recalculating would over-allocate
+            # and starve DiT of VRAM.
+            use_override = (
+                gpu_memory_utilization_override is not None
+                or self._vllm_gpu_memory_utilization is not None
             )
+            if use_override:
+                gpu_memory_utilization = (
+                    gpu_memory_utilization_override
+                    or self._vllm_gpu_memory_utilization
+                )
+                low_gpu_memory_mode = False
+                logger.info(
+                    f"[LM reinit] Reusing gpu_memory_utilization={gpu_memory_utilization:.3f}"
+                )
+            else:
+                # First init — calculate adaptively based on model size
+                gpu_memory_utilization, low_gpu_memory_mode = self.get_gpu_memory_utilization(
+                    model_path=model_path,
+                    minimal_gpu=3,
+                    min_ratio=0.1,
+                    max_ratio=0.9
+                )
 
-            if low_gpu_memory_mode:
+            if max_model_len_override is not None:
+                self.max_model_len = max_model_len_override
+            elif self._vllm_max_model_len is not None:
+                self.max_model_len = self._vllm_max_model_len
+            elif low_gpu_memory_mode:
                 self.max_model_len = 2048
             else:
                 self.max_model_len = 4096
+
+            # Cache these values for future reinit (LM LoRA merge)
+            if self._vllm_gpu_memory_utilization is None:
+                self._vllm_gpu_memory_utilization = gpu_memory_utilization
+                self._vllm_max_model_len = self.max_model_len
 
             logger.info(f"Initializing 5Hz LM with model: {model_path}, enforce_eager: {enforce_eager}, tensor_parallel_size: 1, max_model_len: {self.max_model_len}, gpu_memory_utilization: {gpu_memory_utilization:.3f}")
             start_time = time.time()
@@ -990,7 +1032,7 @@ class LLMHandler:
             logger.info(f"5Hz LM initialized successfully in {time.time() - start_time:.2f} seconds")
             self.llm_initialized = True
             self.llm_backend = "vllm"
-            return f"✅ 5Hz LM initialized successfully\nModel: {model_path}\nDevice: {device_name}\nGPU Memory Utilization: {gpu_memory_utilization:.3f}\nLow GPU Memory Mode: {low_gpu_memory_mode}"
+            return f"✅ 5Hz LM initialized successfully\nModel: {model_path}\nDevice: {device_name}\nGPU Memory Utilization: {gpu_memory_utilization:.3f}\nLow GPU Memory Mode: {low_gpu_memory_mode if gpu_memory_utilization_override is None else 'N/A (override)'}"  
         except Exception as e:
             self.llm_initialized = False
             return f"❌ Error initializing 5Hz LM: {str(e)}\n\nTraceback:\n{traceback.format_exc()}"
