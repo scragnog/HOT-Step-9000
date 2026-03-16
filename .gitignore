@@ -11,7 +11,8 @@ Folder.jpg
 .agents/
 
 
-data/
+/data/
+!ace-step-ui/data/
 *.mp3
 *.wav
 
