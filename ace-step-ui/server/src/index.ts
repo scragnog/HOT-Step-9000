@@ -414,13 +414,13 @@ app.post('/api/shutdown', async (_req, res) => {
       };
 
       // ── 1. Snapshot the entire process table in ONE call (~200ms) ──
-      const psCmd = `powershell -NoProfile -Command "Get-CimInstance Win32_Process | ForEach-Object { $_.ProcessId.ToString() + '|' + $_.ParentProcessId.ToString() + '|' + $_.Name } "`;
+      const psCmd = `powershell -NoProfile -Command "Get-CimInstance Win32_Process | ForEach-Object { $_.ProcessId.ToString() + '|' + $_.ParentProcessId.ToString() + '|' + $_.Name + '|' + $_.CommandLine } "`;
       const psOut = run(psCmd);
-      const procMap = new Map<string, { parentPid: string; name: string }>();
+      const procMap = new Map<string, { parentPid: string; name: string; cmdLine: string }>();
       for (const line of psOut.split('\n')) {
         const parts = line.trim().split('|');
         if (parts.length >= 3) {
-          procMap.set(parts[0], { parentPid: parts[1], name: parts[2].toLowerCase() });
+          procMap.set(parts[0], { parentPid: parts[1], name: parts[2].toLowerCase(), cmdLine: parts.slice(3).join('|') });
         }
       }
       console.log(`[Shutdown] Loaded ${procMap.size} processes from snapshot`);
@@ -442,9 +442,21 @@ app.post('/api/shutdown', async (_req, res) => {
           visited.add(pp);
           const parentInfo = procMap.get(pp);
           if (parentInfo && shellNames.has(parentInfo.name)) {
+            // Safety check: Don't kill the main launch.bat cmd.exe
+            if (parentInfo.name === 'cmd.exe') {
+               const cmdLine = (parentInfo.cmdLine || '').toLowerCase();
+               // We only want to kill cmd.exe wrappers created by npm, or our `cmd /k` windows.
+               // launch.bat's cmd.exe lacks these signatures.
+               if (!cmdLine.includes('/k') && !cmdLine.includes('npm') && !cmdLine.includes('node') && !cmdLine.includes('python')) {
+                   console.log(`[Shutdown] Refusing to kill root cmd.exe ${pp}: ${cmdLine}`);
+                   break;
+               }
+            }
             ancestors.push(pp);
+            current = pp;
+          } else {
+            break;
           }
-          current = pp;
         }
         return ancestors;
       };
