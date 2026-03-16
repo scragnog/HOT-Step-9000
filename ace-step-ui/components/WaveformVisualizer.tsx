@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { useAudioAnalysis } from '../context/AudioAnalysisContext';
 
 interface WaveformVisualizerProps {
   audioUrl: string | null;
@@ -55,6 +56,7 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
   const abortRef = useRef<AbortController | null>(null);
   const rafRef = useRef<number>(0);
   const smoothBassRef = useRef(0);
+  const { resume } = useAudioAnalysis();
 
   // Generate waveform data from audio file
   useEffect(() => {
@@ -93,7 +95,7 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
         if (!audioBuffer || controller.signal.aborted) return;
 
         const channelData = audioBuffer.getChannelData(0);
-        const samples = Math.min(800, Math.floor(canvasRef.current?.clientWidth || 600));
+        const samples = Math.min(1600, Math.floor(canvasRef.current?.clientWidth || 600) * 2);
         const blockSize = Math.floor(channelData.length / samples);
         const peaks: number[] = [];
 
@@ -200,6 +202,9 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
       return;
     }
 
+    // Resume AudioContext if it was suspended by the browser
+    resume();
+
     const freqData = new Uint8Array(analyserNode.frequencyBinCount);
 
     const tick = () => {
@@ -228,7 +233,7 @@ export const WaveformVisualizer: React.FC<WaveformVisualizerProps> = ({
     return () => {
       cancelAnimationFrame(rafRef.current);
     };
-  }, [isPlaying, analyserNode, bounceIntensity, waveformData, drawWaveform]);
+  }, [isPlaying, analyserNode, bounceIntensity, waveformData, drawWaveform, resume]);
 
   const handleClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
     if (!duration) return;

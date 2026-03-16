@@ -65,7 +65,7 @@ export const LiveVisualizer: React.FC<LiveVisualizerProps> = ({
 }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const animationRef = useRef<number>(0);
-    const { analyserNode } = useAudioAnalysis();
+    const { analyserNode, resume } = useAudioAnalysis();
 
     // Enabled presets pool
     const [enabledPresets, setEnabledPresets] = useState<PresetType[]>(getEnabledPresets);
@@ -161,6 +161,9 @@ export const LiveVisualizer: React.FC<LiveVisualizerProps> = ({
             return;
         }
 
+        // Resume AudioContext if it was suspended by the browser
+        resume();
+
         const canvas = canvasRef.current;
         if (!canvas) return;
 
@@ -200,7 +203,7 @@ export const LiveVisualizer: React.FC<LiveVisualizerProps> = ({
 
         animationRef.current = requestAnimationFrame(render);
         return () => cancelAnimationFrame(animationRef.current);
-    }, [isPlaying, analyserNode, currentPreset]);
+    }, [isPlaying, analyserNode, currentPreset, resume]);
 
     return (
         <div
