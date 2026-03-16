@@ -22,6 +22,7 @@ import { PlaylistDetail } from './components/PlaylistDetail';
 import { Toast, ToastType } from './components/Toast';
 import { StemSplitterModal } from './components/StemSplitterModal';
 import { AudioEnhancerModal, openAudioEnhancer } from './components/AudioEnhancerModal';
+import { RefineModal } from './components/RefineModal';
 import { MasteringConsoleModal, MasteringParams as MasteringParamsType } from './components/MasteringConsoleModal';
 import { SearchPage } from './components/SearchPage';
 import { ConfirmDialog } from './components/ConfirmDialog';
@@ -2282,6 +2283,7 @@ function AppContent() {
       />
       <StemSplitterModal />
       <AudioEnhancerModal />
+      <RefineModal />
       {/* Re-master via Mastering Console */}
       <MasteringConsoleModal
         isOpen={showRemasterConsole}
