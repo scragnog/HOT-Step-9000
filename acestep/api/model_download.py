@@ -92,14 +92,34 @@ def download_from_modelscope(repo_id: str, local_dir: str, model_name: str) -> s
     return os.path.join(local_dir, model_name)
 
 
+_WEIGHT_EXTENSIONS = {".safetensors", ".bin", ".ckpt", ".h5", ".msgpack"}
+
+
+def _has_weight_files(directory: str) -> bool:
+    """Return True if *directory* contains at least one model weight file."""
+    if not os.path.isdir(directory):
+        return False
+    return any(
+        os.path.splitext(f)[1] in _WEIGHT_EXTENSIONS
+        for f in os.listdir(directory)
+        if os.path.isfile(os.path.join(directory, f))
+    )
+
+
 def ensure_model_downloaded(model_name: str, checkpoint_dir: str) -> str:
     """Ensure model exists locally, downloading from configured source if missing."""
 
     model_path = os.path.join(checkpoint_dir, model_name)
 
-    if os.path.exists(model_path) and os.listdir(model_path):
-        print(f"[Model Download] Model {model_name} already exists at {model_path}")
-        return model_path
+    if os.path.exists(model_path):
+        if _has_weight_files(model_path):
+            print(f"[Model Download] Model {model_name} already exists at {model_path}")
+            return model_path
+        # Ghost directory — exists but missing weight files
+        print(f"[Model Download] WARNING: Directory exists for {model_name} but no weight files found!")
+        print(f"[Model Download] Path: {model_path}")
+        print(f"[Model Download] This usually means a previous download was interrupted.")
+        print(f"[Model Download] Re-downloading {model_name}...")
 
     repo_id = MODEL_REPO_MAPPING.get(model_name, DEFAULT_REPO_ID)
     print(f"[Model Download] Model {model_name} not found, checking network...")

@@ -38,6 +38,38 @@ _CHECKPOINT_TO_VARIANT: Dict[str, str] = {
     "acestep-v15-turbo-rl": "turbo",
 }
 
+# Weight file extensions that transformers/diffusers look for when loading models
+_WEIGHT_FILE_EXTENSIONS = {".safetensors", ".bin", ".ckpt", ".h5", ".msgpack"}
+
+_INCOMPLETE_DOWNLOAD_GUIDANCE = (
+    "\n"
+    "============================================================\n"
+    "  INCOMPLETE MODEL DOWNLOAD DETECTED\n"
+    "============================================================\n"
+    "  The model directory exists but is missing weight files.\n"
+    "  This usually means a previous download was interrupted.\n"
+    "\n"
+    "  To fix this, try one of:\n"
+    "    1. Re-run install.bat (recommended)\n"
+    "    2. Run: python -m acestep.model_downloader --force\n"
+    "    3. Delete the checkpoints folder and re-run install.bat\n"
+    "============================================================\n"
+)
+
+
+def _has_weight_files(model_dir: Path) -> bool:
+    """Check if a model directory contains actual weight files.
+
+    A directory that exists but has no weight files (e.g. only config.json)
+    indicates an interrupted download and should be treated as missing.
+    """
+    if not model_dir.exists() or not model_dir.is_dir():
+        return False
+    for f in model_dir.iterdir():
+        if f.is_file() and f.suffix in _WEIGHT_FILE_EXTENSIONS:
+            return True
+    return False
+
 
 def _get_models_source_dir() -> Path:
     """Get the acestep/models/ directory (authoritative source for model code)."""
@@ -332,9 +364,12 @@ def get_checkpoints_dir(custom_dir: Optional[str] = None) -> Path:
 def check_main_model_exists(checkpoints_dir: Optional[Path] = None) -> bool:
     """
     Check if the main model components exist in the checkpoints directory.
-    
+
+    Validates that each component directory contains actual weight files,
+    not just metadata/config from an interrupted download.
+
     Returns:
-        True if all main model components exist, False otherwise.
+        True if all main model components exist with weight files, False otherwise.
     """
     if checkpoints_dir is None:
         checkpoints_dir = get_checkpoints_dir()
@@ -345,19 +380,28 @@ def check_main_model_exists(checkpoints_dir: Optional[Path] = None) -> bool:
         component_path = checkpoints_dir / component
         if not component_path.exists():
             return False
+        if not _has_weight_files(component_path):
+            logger.warning(
+                f"[Model Check] Directory exists but missing weight files: {component_path}"
+            )
+            print(_INCOMPLETE_DOWNLOAD_GUIDANCE)
+            return False
     return True
 
 
 def check_model_exists(model_name: str, checkpoints_dir: Optional[Path] = None) -> bool:
     """
     Check if a specific model exists in the checkpoints directory.
-    
+
+    Validates that the model directory contains actual weight files,
+    not just metadata/config from an interrupted download.
+
     Args:
         model_name: Name of the model to check
         checkpoints_dir: Custom checkpoints directory (optional)
-    
+
     Returns:
-        True if the model exists, False otherwise.
+        True if the model exists with weight files, False otherwise.
     """
     if not model_name:
         logger.warning("[check_model_exists] Empty model_name; treating as missing.")
@@ -368,7 +412,15 @@ def check_model_exists(model_name: str, checkpoints_dir: Optional[Path] = None) 
         checkpoints_dir = Path(checkpoints_dir)
 
     model_path = checkpoints_dir / model_name
-    return model_path.exists()
+    if not model_path.exists():
+        return False
+    if not _has_weight_files(model_path):
+        logger.warning(
+            f"[Model Check] Directory exists but missing weight files: {model_path}"
+        )
+        print(_INCOMPLETE_DOWNLOAD_GUIDANCE)
+        return False
+    return True
 
 
 def list_available_models() -> Dict[str, str]:
@@ -471,7 +523,14 @@ def download_submodel(
     model_path = checkpoints_dir / model_name
 
     if not force and model_path.exists():
-        return True, f"Model '{model_name}' already exists at {model_path}"
+        if not _has_weight_files(model_path):
+            logger.warning(
+                f"[Model Download] Ghost directory detected for '{model_name}' "
+                f"at {model_path} — re-downloading..."
+            )
+            print(_INCOMPLETE_DOWNLOAD_GUIDANCE)
+        else:
+            return True, f"Model '{model_name}' already exists at {model_path}"
 
     repo_id = SUBMODEL_REGISTRY[model_name]
 

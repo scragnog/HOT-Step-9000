@@ -108,6 +108,18 @@ def initialize_models_at_startup(
     if not ok:
         app.state._init_error = status_msg
         print(f"[API Server] ERROR: Primary model failed to load: {status_msg}")
+        print()
+        print("=" * 60)
+        print("  MODEL LOAD FAILED — How to fix:")
+        print("=" * 60)
+        print("  This usually means the model files are missing or corrupt.")
+        print()
+        print("  Try one of these solutions:")
+        print("    1. Re-run install.bat (recommended — re-downloads models)")
+        print("    2. Run: python -m acestep.model_downloader --force")
+        print("    3. Delete the checkpoints/ folder and re-run install.bat")
+        print("=" * 60)
+        print()
         raise RuntimeError(status_msg)
     app.state._initialized = True
     print(f"[API Server] Primary model loaded: {get_model_name(config_path)}")
