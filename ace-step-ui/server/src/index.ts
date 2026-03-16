@@ -454,10 +454,11 @@ app.post('/api/shutdown', async (req, res) => {
                }
             }
             ancestors.push(pp);
-            current = pp;
-          } else {
-            break;
           }
+          // Always advance to the next parent, even if this one wasn't a shell.
+          // Intermediate non-shell processes (e.g. node.exe from npm) sit between
+          // the service and its cmd.exe wrapper — we must walk past them.
+          current = pp;
         }
         return ancestors;
       };
