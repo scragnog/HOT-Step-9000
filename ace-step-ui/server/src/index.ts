@@ -426,7 +426,10 @@ app.post('/api/shutdown', async (_req, res) => {
       console.log(`[Shutdown] Loaded ${procMap.size} processes from snapshot`);
 
       // ── 2. Walk UP the tree from a PID, collecting shell ancestors ──
-      const shellNames = new Set(['cmd.exe', 'powershell.exe', 'pwsh.exe', 'conhost.exe', 'windowsterminal.exe']);
+      // We only target cmd.exe and conhost.exe.
+      // We MUST NOT target windowsterminal.exe, powershell.exe, or pwsh.exe,
+      // as they may be hosting the parent `launch.bat` script which needs to survive to run the update loop.
+      const shellNames = new Set(['cmd.exe', 'conhost.exe']);
       const collectAncestors = (startPid: string): string[] => {
         const ancestors: string[] = [];
         let current = startPid;
