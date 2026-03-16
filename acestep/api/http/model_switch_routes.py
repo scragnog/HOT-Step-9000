@@ -64,8 +64,9 @@ def register_model_switch_routes(
         Used by loading.html to detect when models are fully loaded.
         Returns active_model: null until initialization is complete.
         """
+        import os
         current_model = get_model_name(app.state._config_path) if getattr(app.state, "_initialized", False) else None
-        current_lm = getattr(app.state, "_llm_model_path", "") or None
+        current_lm = os.getenv("ACESTEP_LM_MODEL_PATH", "").strip() or None
         return wrap_response({
             "active_model": current_model,
             "lm_model": current_lm,
