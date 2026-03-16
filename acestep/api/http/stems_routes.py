@@ -57,7 +57,7 @@ def register_stems_routes(
             svc = _get_stem_service()
             return {
                 "available": svc.is_available(),
-                "modes": ["vocals", "multi-4", "multi-6", "two-pass"],
+                "modes": ["vocals", "every-stem"],
             }
         except Exception:
             return {"available": False, "modes": []}
