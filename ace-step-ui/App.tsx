@@ -1180,11 +1180,17 @@ function AppContent() {
       const storedGlobalParams = localStorage.getItem('globalMasteringParams');
       const globalMasteringParams = storedGlobalParams ? JSON.parse(storedGlobalParams) : undefined;
 
+      // Merge mastering params: global defaults from MasteringConsole are the base,
+      // per-job params from Cover Settings (e.g. newly uploaded reference file) override.
+      const mergedMasteringParams = (globalMasteringParams || params.masteringParams)
+        ? { ...(globalMasteringParams || {}), ...(params.masteringParams || {}) }
+        : undefined;
+
       const job = await generateApi.startGeneration({
         ...params,
         // Normalize duration: treat 0 or negative as undefined
         duration: params.duration && params.duration > 0 ? params.duration : undefined,
-        ...(globalMasteringParams ? { masteringParams: globalMasteringParams } : {})
+        ...(mergedMasteringParams ? { masteringParams: mergedMasteringParams } : {})
       }, token);
 
       const tempId = `job_${job.jobId}`;
