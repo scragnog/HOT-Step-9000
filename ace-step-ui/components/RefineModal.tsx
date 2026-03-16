@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
 import { X, Wand2, Loader2, Play, Pause, ChevronDown } from 'lucide-react';
 import { Song } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 // ---- Global open hook ----
 type OpenFn = (song: Song) => void;
@@ -37,6 +38,7 @@ export const RefineModal: React.FC = () => {
     const [error, setError] = useState('');
     const [resultJobId, setResultJobId] = useState('');
     const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    const { token } = useAuth();
 
     // Register global open function
     useEffect(() => {
@@ -135,9 +137,12 @@ export const RefineModal: React.FC = () => {
                 body.seed = gp.seed;
             }
 
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
             const resp = await fetch('/api/generate', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify(body),
             });
 
@@ -153,7 +158,12 @@ export const RefineModal: React.FC = () => {
             // Poll for completion
             pollRef.current = setInterval(async () => {
                 try {
-                    const statusResp = await fetch(`/api/generate/status/${jobId}`);
+                    const statusHeaders: Record<string, string> = {};
+                    if (token) statusHeaders['Authorization'] = `Bearer ${token}`;
+                    
+                    const statusResp = await fetch(`/api/generate/status/${jobId}`, {
+                        headers: statusHeaders,
+                    });
                     if (!statusResp.ok) return;
                     const statusData = await statusResp.json();
 
