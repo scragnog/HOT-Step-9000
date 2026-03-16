@@ -1804,6 +1804,9 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         cover_noise_strength: float = 0.0,
         **kwargs,
     ):
+        # Extract step progress callback (passed by handler layer)
+        on_step_callback = kwargs.pop("on_step_callback", None)
+
         # Valid shifts: only discrete values 1, 2, 3 are supported
         VALID_SHIFTS = [1.0, 2.0, 3.0]
         
@@ -1947,7 +1950,11 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         for step_idx in range(num_steps):
             current_timestep = t_schedule[step_idx].item()
             t_curr_tensor = current_timestep * torch.ones((bsz,), device=device, dtype=dtype)
-            
+
+            # Fire step progress callback for UI updates
+            if on_step_callback is not None:
+                on_step_callback(step_idx=step_idx, total_steps=num_steps)
+
             if step_idx >= cover_steps and not _switched_to_non_cover:
                 _switched_to_non_cover = True
                 encoder_hidden_states = encoder_hidden_states_non_cover

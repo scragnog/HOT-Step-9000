@@ -1813,6 +1813,9 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         scheduler: str = "linear",
         **kwargs,
     ):
+        # Extract step progress callback (passed by handler layer)
+        on_step_callback = kwargs.pop("on_step_callback", None)
+
         if attention_mask is None:
             latent_length = src_latents.shape[1]
             attention_mask = torch.ones(src_latents.shape[0], latent_length, device=src_latents.device, dtype=src_latents.dtype)
@@ -1975,6 +1978,10 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         _switched_to_non_cover = False
         with torch.no_grad():
             for step_idx, (t_curr, t_prev) in enumerate(iterator):
+                # Fire step progress callback for UI updates
+                if on_step_callback is not None:
+                    on_step_callback(step_idx=step_idx, total_steps=infer_steps)
+
                 if step_idx >= cover_steps and not _switched_to_non_cover:
                     _switched_to_non_cover = True
                     if do_cfg_guidance:

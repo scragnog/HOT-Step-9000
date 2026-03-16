@@ -52,6 +52,7 @@ class ServiceGenerateMixin:
         scheduler: str = "linear",
         refine_passes: int = 0,
         refine_strength: float = 0.3,
+        progress=None,
     ) -> Dict[str, Any]:
         """Generate music latents and metadata from text/audio conditioning inputs.
 
@@ -141,6 +142,7 @@ class ServiceGenerateMixin:
             scheduler=scheduler,
             refine_passes=refine_passes,
             refine_strength=refine_strength,
+            progress=progress,
         )
         try:
             if getattr(self, "steering_enabled", False):

@@ -80,6 +80,7 @@ class ServiceGenerateExecuteMixin:
         scheduler: str = "linear",
         refine_passes: int = 0,
         refine_strength: float = 0.3,
+        progress=None,
     ) -> Dict[str, Any]:
         """Build kwargs passed to model generation backends."""
         kwargs = {
@@ -117,6 +118,17 @@ class ServiceGenerateExecuteMixin:
         }
         if timesteps is not None:
             kwargs["timesteps"] = torch.tensor(timesteps, dtype=torch.float32, device=self.device)
+
+        # Build on_step_callback from progress for real-time UI step updates
+        if progress is not None:
+            def _on_step_callback(step_idx, total_steps, **_kw):
+                # Map diffusion steps to progress range [0.52, 0.79]
+                frac = (step_idx + 1) / max(total_steps, 1)
+                value = 0.52 + frac * 0.27
+                progress(value, desc=f"Generating: step {step_idx + 1} of {total_steps}...")
+
+            kwargs["on_step_callback"] = _on_step_callback
+
         return kwargs
 
     def _execute_service_generate_diffusion(

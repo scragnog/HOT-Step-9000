@@ -744,6 +744,8 @@ def generate_music(
             # Keep a reference to the unmastered tensor for dual-file save
             unmastered_tensor = audio_tensor.clone()
             if params.auto_master:
+                if progress:
+                    progress(0.90, desc="Mastering audio...")
                 requested_mode = params.mastering_params.get("mode") if params.mastering_params else "internal"
                 
                 if requested_mode == "matchering":
