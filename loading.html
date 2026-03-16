@@ -357,9 +357,18 @@
         const start = Date.now();
         const state = { apiUp: false, apiReady: false, backend: false, frontend: false };
         let userClickedStart = false;
+        let isUpdating = false;
 
         // Port comes from loading-config.js (written by LAUNCH.bat) or defaults to 3000
         if (typeof VITE_PORT === 'undefined') var VITE_PORT = '3000';
+
+        // Check if we just completed an update
+        const urlParams = new URLSearchParams(window.location.search);
+        let updateSuccess = false;
+        if (urlParams.get('updated') === '1') {
+            updateSuccess = true;
+            window.history.replaceState({}, document.title, window.location.pathname);
+        }
         if (typeof AVAILABLE_MODELS === 'undefined') var AVAILABLE_MODELS = [];
         if (typeof AVAILABLE_LM_MODELS === 'undefined') var AVAILABLE_LM_MODELS = [];
         if (typeof CURRENT_MODEL === 'undefined') var CURRENT_MODEL = 'acestep-v15-base';
@@ -397,6 +406,17 @@
         const btnLaunch = document.getElementById('btnLaunch');
         const btnUpdate = document.getElementById('btnUpdate');
         const envUpdatedEl = document.getElementById('envUpdated');
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (updateSuccess && envUpdatedEl) {
+                envUpdatedEl.textContent = "✓ Update and restart complete!";
+                envUpdatedEl.classList.add('show');
+                setTimeout(() => {
+                    envUpdatedEl.classList.remove('show');
+                    setTimeout(() => envUpdatedEl.textContent = "✓ Models saved to .env", 500);
+                }, 5000);
+            }
+        });
 
         async function updateEnvViaExpress(configPath, lmModelPath, retries = 5) {
             for (let attempt = 1; attempt <= retries; attempt++) {
@@ -448,7 +468,7 @@
                 // If it succeeds, the Express backend has restarted!
                 const r = await probeNoCors('http://localhost:3001/health', 1500);
                 if (r) {
-                    window.location.reload();
+                    window.location.href = window.location.pathname + '?updated=1';
                     return;
                 }
             } catch(e) {}
@@ -456,6 +476,7 @@
         }
 
         btnUpdate.addEventListener('click', async () => {
+            isUpdating = true;
             btnLaunch.disabled = true;
             btnUpdate.disabled = true;
             btnUpdate.textContent = "Updating... Please wait";
@@ -464,7 +485,7 @@
             document.getElementById('s-backend').style.display = 'none';
             document.getElementById('s-frontend').style.display = 'none';
             document.getElementById('d-api').style.display = 'none';
-            document.getElementById('elapsed').textContent = "Pulling latest code from GitHub. The server will restart shortly...";
+            document.getElementById('elapsed').textContent = "Pulling latest code and restarting servers... (takes 30-60s)";
             
             // Signal update and suicide
             try {
@@ -472,6 +493,7 @@
                 // Wait 5 seconds to guarantee windows die, then start polling for resurrection
                 setTimeout(pollRestart, 5000);
             } catch (e) {
+                isUpdating = false;
                 btnUpdate.textContent = "Error: Couldn't reach backend";
                 btnLaunch.disabled = false;
                 btnUpdate.disabled = false;
@@ -549,6 +571,12 @@
         }
 
         async function poll() {
+            if (isUpdating) {
+                document.getElementById('elapsed').textContent = `Updating servers... Elapsed: ${elapsed()}`;
+                setTimeout(poll, 2500);
+                return;
+            }
+
             // ---- Python API: two-phase check (HTTP up → models loaded) ----
             if (!state.apiReady) {
                 setIcon('i-api', 'running'); setRow('s-api', 'running');
