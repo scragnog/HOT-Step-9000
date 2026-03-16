@@ -2156,9 +2156,145 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
                 xt, solver_state = solver_fn(xt, vt, t_curr_f, t_prev_f, solver_state, model_fn=model_fn)
 
         x_gen = xt
+
+        # ── Iterative Refinement Passes ──────────────────────────────────
+        # After the main diffusion completes, optionally re-noise and
+        # re-denoise the output to clean up fine detail (fizziness, metallic
+        # artifacts).  Each pass adds partial noise back and walks the ODE
+        # from that point, reusing the same conditioning.
+        refine_passes = kwargs.get("refine_passes", 0)
+        refine_strength = kwargs.get("refine_strength", 0.3)
+        refine_passes = max(0, min(int(refine_passes), 5))  # Clamp 0-5
+        refine_strength = max(0.05, min(float(refine_strength), 0.70))  # Clamp 0.05-0.70
+
+        if refine_passes > 0:
+            logger.info(
+                f"[generate_audio] Starting {refine_passes} refinement pass(es) "
+                f"with strength={refine_strength:.2f}"
+            )
+            # Build a fresh full schedule for refinement (not truncated by cover)
+            refine_t_values = schedule_fn(kwargs.get("_orig_infer_steps", infer_steps), shift)
+            refine_t_full = torch.tensor(refine_t_values + [0.0], device=device, dtype=dtype)
+            # Find the start point based on refine_strength
+            # refine_strength=0.3 means add 30% noise, so start from t~0.3
+            effective_noise = refine_strength
+            refine_t_list = refine_t_full[:-1].tolist()
+            nearest_refine_t = min(refine_t_list, key=lambda x: abs(x - effective_noise))
+            refine_start_idx = refine_t_list.index(nearest_refine_t)
+            refine_schedule = refine_t_full[refine_start_idx:]
+            refine_steps = len(refine_schedule) - 1
+
+            if refine_steps > 0:
+                base_seed = seed if seed is not None else 42
+                for pass_idx in range(refine_passes):
+                    pass_seed = base_seed + pass_idx + 1
+                    logger.info(
+                        f"[generate_audio] Refinement pass {pass_idx + 1}/{refine_passes}: "
+                        f"seed={pass_seed}, start_t={nearest_refine_t:.4f}, steps={refine_steps}"
+                    )
+                    # Generate fresh noise and re-noise the output
+                    refine_noise = self.prepare_noise(x_gen, pass_seed)
+                    xt = self.renoise(x_gen, nearest_refine_t, refine_noise)
+                    # Fresh KV cache and solver state for this pass
+                    refine_past_kv = EncoderDecoderCache(DynamicCache(), DynamicCache())
+                    refine_solver_state = {}
+                    refine_momentum = MomentumBuffer()
+
+                    # Rebuild model_fn for multi-eval solvers with fresh momentum
+                    refine_model_fn = None
+                    if needs_model_fn:
+                        refine_model_fn = _make_model_fn(
+                            self.decoder, do_cfg_guidance, attention_mask,
+                            encoder_hidden_states, encoder_attention_mask, context_latents,
+                            diffusion_guidance_sale, guidance_fn, cfg_interval_start, cfg_interval_end,
+                            refine_momentum, bsz, device, dtype,
+                            is_pag_mode=is_pag, pag_scale_val=pag_scale,
+                            pag_start_val=pag_start, pag_end_val=pag_end,
+                        )
+
+                    # Run denoising from partial noise
+                    refine_iter = zip(refine_schedule[:-1], refine_schedule[1:])
+                    with torch.no_grad():
+                        for r_step, (r_t_curr, r_t_prev) in enumerate(refine_iter):
+                            # Build input batch
+                            if is_pag and do_cfg_guidance:
+                                x = torch.cat([xt, xt, xt], dim=0)
+                            elif do_cfg_guidance:
+                                x = torch.cat([xt, xt], dim=0)
+                            else:
+                                x = xt
+
+                            # PAG identity mask
+                            r_pag_kw = {}
+                            r_t_f = r_t_curr.item() if isinstance(r_t_curr, torch.Tensor) else float(r_t_curr)
+                            do_pag_step = is_pag and do_cfg_guidance and (pag_start <= r_t_f <= pag_end)
+                            if do_pag_step:
+                                r_pag_mask = torch.zeros(x.shape[0], dtype=torch.bool, device=device)
+                                r_pag_mask[2*bsz:] = True
+                                r_pag_kw['pag_identity_mask'] = r_pag_mask
+
+                            r_t_tensor = r_t_curr * torch.ones((x.shape[0],), device=device, dtype=dtype)
+                            decoder_out = self.decoder(
+                                hidden_states=x, timestep=r_t_tensor, timestep_r=r_t_tensor,
+                                attention_mask=attention_mask,
+                                encoder_hidden_states=encoder_hidden_states,
+                                encoder_attention_mask=encoder_attention_mask,
+                                context_latents=context_latents,
+                                use_cache=not do_pag_step,
+                                past_key_values=refine_past_kv if not do_pag_step else None,
+                                **r_pag_kw,
+                            )
+                            vt = decoder_out[0]
+                            if not do_pag_step:
+                                refine_past_kv = decoder_out[1]
+
+                            # Apply guidance
+                            apply_cfg = r_t_curr >= cfg_interval_start and r_t_curr <= cfg_interval_end
+                            if do_cfg_guidance:
+                                if is_pag:
+                                    pred_cond, pred_null, pred_pag = vt.chunk(3)
+                                else:
+                                    pred_cond, pred_null = vt.chunk(2)
+                                if apply_cfg:
+                                    dt_val = float(r_t_curr - r_t_prev)
+                                    if is_pag and do_pag_step:
+                                        from acestep.core.generation.guidance import pag_combined_guidance
+                                        vt = pag_combined_guidance(
+                                            pred_cond, pred_null, pred_pag,
+                                            diffusion_guidance_sale, pag_scale,
+                                            momentum_buffer=refine_momentum,
+                                            latents=xt, sigma=r_t_curr,
+                                            dt=dt_val,
+                                            step_idx=r_step, total_steps=refine_steps,
+                                        )
+                                    else:
+                                        vt = guidance_fn(
+                                            pred_cond, pred_null, diffusion_guidance_sale,
+                                            momentum_buffer=refine_momentum,
+                                            latents=xt, sigma=r_t_curr,
+                                            dt=dt_val,
+                                            step_idx=r_step, total_steps=refine_steps,
+                                        )
+                                else:
+                                    vt = pred_cond
+
+                            # Solver step
+                            r_t_curr_f = r_t_curr.item() if isinstance(r_t_curr, torch.Tensor) else float(r_t_curr)
+                            r_t_prev_f = r_t_prev.item() if isinstance(r_t_prev, torch.Tensor) else float(r_t_prev)
+                            xt, refine_solver_state = solver_fn(
+                                xt, vt, r_t_curr_f, r_t_prev_f,
+                                refine_solver_state, model_fn=refine_model_fn,
+                            )
+
+                    x_gen = xt
+                    logger.info(f"[generate_audio] Refinement pass {pass_idx + 1} complete")
+
+                logger.info(f"[generate_audio] All {refine_passes} refinement pass(es) complete")
+        # ── End Refinement ────────────────────────────────────────────────
+
         end_time = time.time()
         time_costs["diffusion_time_cost"] = end_time - start_time
-        time_costs["diffusion_per_step_time_cost"] = time_costs["diffusion_time_cost"] / infer_steps
+        time_costs["diffusion_per_step_time_cost"] = time_costs["diffusion_time_cost"] / max(infer_steps, 1)
         time_costs["total_time_cost"] = end_time - total_start_time
         return {
             "target_latents": x_gen,

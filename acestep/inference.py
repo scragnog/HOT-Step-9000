@@ -188,6 +188,10 @@ class GenerationParams:
     steering_loaded: List[str] = field(default_factory=list)
     steering_alphas: Dict[str, float] = field(default_factory=dict)
 
+    # Iterative Refinement
+    refine_passes: int = 0       # Number of refinement re-denoise passes (0=disabled, 1-3)
+    refine_strength: float = 0.3 # How much noise to add back per pass (0.05-0.70)
+
     # Preview → HQ Upscale
     lm_hints_path: Optional[str] = None  # Path to pre-saved LM thinking tensor (.pt) for upscale
 
@@ -660,6 +664,8 @@ def generate_music(
             steering_loaded=params.steering_loaded,
             steering_alphas=params.steering_alphas,
             scheduler=params.scheduler,
+            refine_passes=params.refine_passes,
+            refine_strength=params.refine_strength,
             progress=progress,
         )
 

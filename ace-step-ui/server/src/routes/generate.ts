@@ -175,6 +175,10 @@ interface GenerateBody {
   pagStart?: number;
   pagEnd?: number;
   pagScale?: number;
+
+  // Iterative Refinement
+  refinePasses?: number;
+  refineStrength?: number;
 }
 
 router.post('/upload-audio', authMiddleware, audioUpload.single('audio'), async (req: AuthenticatedRequest, res: Response) => {
@@ -325,6 +329,8 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
         get_lrc: params.getLrc || false,
         get_scores: params.getScores || false,
         score_scale: params.scoreScale ?? 0.1,
+        refine_passes: params.refinePasses ?? 0,
+        refine_strength: params.refineStrength ?? 0.3,
         lm_repetition_penalty: params.lmRepetitionPenalty ?? 1.0,
         // Always send LM model selection (enables hot-switching regardless of thinking mode)
         lm_model_path: params.lmModel || undefined,

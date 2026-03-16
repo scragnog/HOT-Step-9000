@@ -132,6 +132,18 @@ class GenerateMusicRequest(BaseModel):
     steering_loaded: List[str] = Field(default_factory=list, description="List of loaded steering concept names")
     steering_alphas: Dict[str, float] = Field(default_factory=dict, description="Per-concept alpha values")
 
+    # ── Iterative Refinement ──────────────────────────────────────
+    refine_passes: int = Field(
+        default=0,
+        description="Number of iterative refinement re-denoise passes (0=disabled, 1-3 recommended). "
+        "Each pass adds partial noise back to the output and re-denoises for crisper detail.",
+    )
+    refine_strength: float = Field(
+        default=0.3,
+        description="How much noise to add back per refinement pass (0.05-0.70). "
+        "Lower values make subtler changes; higher values allow more restructuring.",
+    )
+
     class Config:
         """Legacy pydantic config preserving prior population semantics."""
 

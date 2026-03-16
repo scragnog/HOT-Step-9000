@@ -185,6 +185,9 @@ def build_generation_setup(
         steering_enabled=getattr(req, "steering_enabled", False),
         steering_loaded=getattr(req, "steering_loaded", []),
         steering_alphas=getattr(req, "steering_alphas", {}),
+        # Iterative refinement
+        refine_passes=getattr(req, "refine_passes", 0),
+        refine_strength=getattr(req, "refine_strength", 0.3),
         # LM parameters
         thinking=thinking,
         lm_temperature=req.lm_temperature,
