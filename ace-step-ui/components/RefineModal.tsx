@@ -115,7 +115,9 @@ export const RefineModal: React.FC = () => {
                 lmCfgScale: gp.lmCfgScale,
                 lmTopK: gp.lmTopK,
                 lmTopP: gp.lmTopP,
-                lmNegativePrompt: gp.lmNegativePrompt,
+                // Extra processing
+                getLrc: gp.getLrc ?? true,
+                getScores: gp.getScores,
                 // PAG
                 usePag: gp.usePag || false,
                 pagStart: gp.pagStart,
@@ -130,12 +132,6 @@ export const RefineModal: React.FC = () => {
                 // DiT model
                 ditModel: gp.ditModel || song.ditModel,
             };
-
-            // Use original seed if available (for reproducibility + refinement)
-            if (gp.seed && gp.seed > 0) {
-                body.randomSeed = false;
-                body.seed = gp.seed;
-            }
 
             const headers: Record<string, string> = { 'Content-Type': 'application/json' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
