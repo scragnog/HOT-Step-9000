@@ -90,14 +90,18 @@ export const CoverRepaintSettings: React.FC<CoverRepaintSettingsProps> = ({
     const showTempoAndPitch = ['cover', 'repaint', 'audio2audio'].includes(taskType);
     const showRepaintingRange = ['repaint', 'lego'].includes(taskType);
 
-    // Chromatic key transposition
+    // Chromatic key transposition (handles both sharps AND flats)
     const CHROMATIC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+    const FLAT_TO_SHARP: Record<string, string> = {
+        'Cb': 'B', 'Db': 'C#', 'Eb': 'D#', 'Fb': 'E', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#',
+    };
     const transposeKey = (keyStr: string, semitones: number): string => {
         if (!keyStr || semitones === 0) return keyStr;
         const parts = keyStr.split(' ');
         const note = parts[0];
         const scale = parts.slice(1).join(' ');
-        const idx = CHROMATIC.indexOf(note);
+        const normalizedNote = FLAT_TO_SHARP[note] || note;
+        const idx = CHROMATIC.indexOf(normalizedNote);
         if (idx === -1) return keyStr;
         const newIdx = ((idx + semitones) % 12 + 12) % 12;
         return `${CHROMATIC[newIdx]}${scale ? ' ' + scale : ''}`;

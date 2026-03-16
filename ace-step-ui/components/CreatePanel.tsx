@@ -1978,9 +1978,13 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     if (taskType === 'extract') return '';
     if (keyScale && pitchShift !== 0) {
       const CHROMATIC = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+      const FLAT_TO_SHARP: Record<string, string> = {
+        'Cb': 'B', 'Db': 'C#', 'Eb': 'D#', 'Fb': 'E', 'Gb': 'F#', 'Ab': 'G#', 'Bb': 'A#',
+      };
       const parts = keyScale.split(' ');
       const note = parts[0];
-      const idx = CHROMATIC.indexOf(note);
+      const normalizedNote = FLAT_TO_SHARP[note] || note;
+      const idx = CHROMATIC.indexOf(normalizedNote);
       if (idx !== -1) {
         const newIdx = ((idx + pitchShift) % 12 + 12) % 12;
         return `${CHROMATIC[newIdx]}${parts.length > 1 ? ' ' + parts.slice(1).join(' ') : ''}`;
