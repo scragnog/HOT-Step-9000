@@ -317,8 +317,8 @@
             </div>
             <div class="env-updated" id="envUpdated">✓ Models saved to .env</div>
             <div class="actions">
-                <button type="button" class="btn btn-secondary" id="btnUpdate">Update from GitHub</button>
-                <button type="button" class="btn btn-primary" id="btnLaunch">Start summoning bangers</button>
+                <button type="button" class="btn btn-secondary" id="btnUpdate" disabled>Waiting for backend...</button>
+                <button type="button" class="btn btn-primary" id="btnLaunch" disabled>Waiting for backend...</button>
             </div>
         </div>
 
@@ -433,6 +433,8 @@
                 // The `poll()` loop will pick up the startup state.
             } catch (e) {
                 btnLaunch.textContent = "Error: Couldn't reach backend";
+                btnLaunch.disabled = false;
+                btnUpdate.disabled = false;
             }
         });
 
@@ -463,10 +465,18 @@
             // Signal update and suicide
             try {
                 await fetch('http://localhost:3001/api/system/update', { method: 'POST' });
-            } catch (e) { }
-            
-            // Wait 5 seconds to guarantee windows die, then start polling for resurrection
-            setTimeout(pollRestart, 5000);
+                // Wait 5 seconds to guarantee windows die, then start polling for resurrection
+                setTimeout(pollRestart, 5000);
+            } catch (e) {
+                btnUpdate.textContent = "Error: Couldn't reach backend";
+                btnLaunch.disabled = false;
+                btnUpdate.disabled = false;
+                document.getElementById('s-api').style.display = '';
+                document.getElementById('s-backend').style.display = '';
+                document.getElementById('s-frontend').style.display = '';
+                document.getElementById('d-api').style.display = '';
+                document.getElementById('elapsed').textContent = `Elapsed: ${elapsed()}`;
+            }
         });
 
         // ---- Service polling ----
@@ -560,6 +570,14 @@
             if (!state.backend) {
                 setIcon('i-backend', 'running'); setRow('s-backend', 'running');
                 state.backend = await probeNoCors('http://localhost:3001/health');
+                
+                // Once backend is ready, enable actions (unless we are already booting API)
+                if (state.backend && !state.apiUp) {
+                    btnLaunch.disabled = false;
+                    btnUpdate.disabled = false;
+                    btnLaunch.textContent = "Start summoning bangers";
+                    btnUpdate.textContent = "Update from GitHub";
+                }
             }
             if (state.backend) { setIcon('i-backend', 'done'); setRow('s-backend', 'done'); }
 
