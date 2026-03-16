@@ -1,13 +1,12 @@
 """Server-side stem separation service using audio_separator.
 
-Models (lazy-downloaded on first use, ~1.8 GB total):
-  - BS-RoFormer  for vocals/instrumental  (SDR 12.97)
-  - htdemucs_6s  for 6-stem separation    (vocals, drums, bass, guitar, piano, other)
+Models (lazy-downloaded on first use):
+  - BS-RoFormer         for vocals/instrumental  (SDR 12.97)
+  - BS-Roformer-SW      for 6-stem separation    (vocals, drums, bass, guitar, piano, other)
 
-Two-pass pipeline (default, best quality):
-  1. BS-RoFormer  → vocals (high quality) + instrumental
-  2. htdemucs_6s  → instrumental → drums, bass, guitar, piano, other
-  → Result: RoFormer vocals + 5 Demucs instrumental stems
+Available modes:
+  - ``vocals``     : BS-RoFormer → 2 stems (vocals + instrumental)
+  - ``every-stem`` : BS-Roformer-SW → 6 stems (vocals, drums, bass, guitar, piano, other)
 """
 
 from __future__ import annotations

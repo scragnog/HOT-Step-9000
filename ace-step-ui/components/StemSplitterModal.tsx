@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import ReactDOM from 'react-dom';
-import { X, Download, Play, Pause, Layers, Loader2, Volume2, VolumeX } from 'lucide-react';
+import { X, Download, Play, Pause, Layers, Loader2, Volume2, VolumeX, Archive } from 'lucide-react';
 
 // ---- Types ----
 
@@ -42,10 +42,8 @@ const EXPRESS_API = (() => {
 })();
 
 const MODES = [
-    { id: 'vocals', label: 'Vocals Only', desc: 'Best quality vocal isolation (BS-RoFormer)', stems: 2 },
-    { id: 'multi-4', label: '4-Stem', desc: 'Vocals, Drums, Bass, Other', stems: 4 },
-    { id: 'multi-6', label: '6-Stem', desc: 'Vocals, Drums, Bass, Guitar, Piano, Other', stems: 6 },
-    { id: 'two-pass', label: 'Two-Pass (Best)', desc: 'RoFormer vocals + Demucs 6-stem instrumentals', stems: 7 },
+    { id: 'vocals', label: 'Vocals / Instrumental', desc: 'BS-RoFormer — best quality vocal isolation', stems: 2 },
+    { id: 'every-stem', label: '6-Stem Separation', desc: 'Vocals, Drums, Bass, Guitar, Piano, Other', stems: 6 },
 ];
 
 const STEM_ICONS: Record<string, string> = {
@@ -301,7 +299,7 @@ export const StemSplitterModal: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [audioUrl, setAudioUrl] = useState('');
     const [songTitle, setSongTitle] = useState('');
-    const [mode, setMode] = useState('two-pass');
+    const [mode, setMode] = useState('vocals');
     const [status, setStatus] = useState<'idle' | 'running' | 'complete' | 'error'>('idle');
     const [progress, setProgress] = useState(0);
     const [message, setMessage] = useState('');
@@ -506,6 +504,27 @@ export const StemSplitterModal: React.FC = () => {
                                 </button>
                             </div>
                             <StemMixer stems={stems} jobId={jobId} />
+                            {/* Download All as ZIP */}
+                            <button
+                                onClick={async () => {
+                                    try {
+                                        const resp = await fetch(`${PYTHON_API}/v1/stems/${jobId}/download_all`);
+                                        if (!resp.ok) throw new Error('Download failed');
+                                        const blob = await resp.blob();
+                                        const a = document.createElement('a');
+                                        a.href = URL.createObjectURL(blob);
+                                        a.download = `${songTitle || 'stems'}_all_stems.zip`;
+                                        document.body.appendChild(a);
+                                        a.click();
+                                        document.body.removeChild(a);
+                                        URL.revokeObjectURL(a.href);
+                                    } catch (err) { console.error('ZIP download failed:', err); }
+                                }}
+                                className="w-full py-2.5 px-4 rounded-xl border border-violet-500/30 bg-violet-50 dark:bg-violet-500/10 hover:bg-violet-100 dark:hover:bg-violet-500/20 flex items-center justify-center gap-2 transition-colors"
+                            >
+                                <Archive size={16} className="text-violet-600 dark:text-violet-400" />
+                                <span className="text-sm font-bold text-violet-700 dark:text-violet-300">Download All Stems as ZIP</span>
+                            </button>
                         </div>
                     )}
                 </div>
