@@ -2883,8 +2883,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           onTemporalSchedulePreset={handleTemporalSchedulePreset}
         />
 
-        {/* LM ADAPTER (visible only when CoT/Thinking is enabled) */}
-        {thinking && (
+        {/* LM ADAPTER — hidden: merge-based approach produces identical output (2026-03-16) */}
+        {false && thinking && (
           <div className="accordion-section lm-lora-section">
             <button
               className="accordion-header"
