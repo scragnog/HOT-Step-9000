@@ -201,6 +201,11 @@ class Qwen3ForCausalLM(nn.Module):
         self.lm_head = ParallelLMHead(config.vocab_size, config.hidden_size)
         if config.tie_word_embeddings:
             self.lm_head.weight.data = self.model.embed_tokens.weight.data
+        # Partial LM head: when set to (start_idx, end_idx), compute_logits
+        # only projects onto this token range, cutting the output GEMM.
+        # Used during Phase 2 (audio code generation) where only audio code
+        # tokens are valid. Set to None for full vocab projection (Phase 1/CoT).
+        self.audio_code_range: tuple[int, int] | None = None
 
     # Proxy attributes for weight loading compatibility
     # Some model weights use "embed_tokens" instead of "model.embed_tokens"
@@ -227,4 +232,42 @@ class Qwen3ForCausalLM(nn.Module):
         self,
         hidden_states: torch.Tensor,
     ) -> torch.Tensor:
+        if self.audio_code_range is not None and self.lm_head.tp_size == 1:
+            return self._compute_logits_partial(hidden_states)
         return self.lm_head(hidden_states)
+
+    def _compute_logits_partial(
+        self,
+        hidden_states: torch.Tensor,
+    ) -> torch.Tensor:
+        """Partial LM head projection for audio code generation.
+
+        Instead of projecting onto the full vocabulary (~217K tokens),
+        only projects onto the audio code subrange (~65K tokens).
+        This cuts the output GEMM by ~70%.
+
+        Returns a full-vocab-sized tensor with -inf outside the audio code
+        range so that downstream code (sampler, constrained decoder) works
+        unchanged.
+        """
+        start, end = self.audio_code_range
+        # Extract hidden states for last-token-per-sequence during prefill
+        from nanovllm.utils.context import get_context
+        context = get_context()
+        if context.is_prefill:
+            last_indices = context.cu_seqlens_q[1:] - 1
+            hidden_states = hidden_states[last_indices].contiguous()
+
+        # Partial matmul: only the audio code slice of the weight matrix
+        partial_weight = self.lm_head.weight[start:end]  # [num_audio_codes, hidden_size]
+        partial_logits = torch.nn.functional.linear(hidden_states, partial_weight)  # [batch, num_audio_codes]
+
+        # Build full-vocab logits with -inf outside audio code range
+        full_logits = torch.full(
+            (hidden_states.shape[0], self.lm_head.weight.shape[0]),
+            float('-inf'),
+            device=hidden_states.device,
+            dtype=partial_logits.dtype,
+        )
+        full_logits[:, start:end] = partial_logits
+        return full_logits

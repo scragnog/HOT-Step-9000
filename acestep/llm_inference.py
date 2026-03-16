@@ -1113,25 +1113,52 @@ class LLMHandler:
             logits_processor_update_state=constrained_processor.update_state if constrained_processor else None,
         )
 
-        if cfg_scale > 1.0:
-            # Build unconditional prompt based on generation phase
-            formatted_unconditional_prompt = self._build_unconditional_prompt(
-                caption=caption,
-                lyrics=lyrics,
-                cot_text=cot_text,
-                negative_prompt=negative_prompt,
-                generation_phase=generation_phase,
-                is_batch=is_batch,
-            )
-            unconditional_prompts = [formatted_unconditional_prompt] * batch_size
+        # Enable partial LM head for audio code generation (Phase 2).
+        # This cuts the output GEMM by ~70% by only projecting onto the
+        # audio code token subrange instead of the full ~217K vocabulary.
+        partial_lm_model = None
+        if generation_phase == "codes" and self.llm_backend == "vllm":
+            try:
+                qwen3_model = self.llm.model_runner.model
+                if self.constrained_processor and self.constrained_processor.audio_code_token_ids:
+                    audio_ids = sorted(self.constrained_processor.audio_code_token_ids)
+                    # Include EOS token in the range so generation can stop.
+                    # EOS (151643) is just 26 positions below audio codes (151669),
+                    # so this adds negligible overhead (0.04%).
+                    eos_id = self.constrained_processor.eos_token_id
+                    range_start = min(audio_ids[0], eos_id) if eos_id is not None else audio_ids[0]
+                    range_end = max(audio_ids[-1], eos_id if eos_id is not None else 0) + 1
+                    audio_code_range = (range_start, range_end)
+                    qwen3_model.audio_code_range = audio_code_range
+                    partial_lm_model = qwen3_model
+                    logger.info(f"[partial_lm_head] Enabled for Phase 2: projecting {range_end - range_start} tokens [{range_start}:{range_end}] instead of full vocab")
+            except (AttributeError, IndexError) as e:
+                logger.debug(f"[partial_lm_head] Could not enable: {e}")
 
-            outputs = self.llm.generate(
-                formatted_prompt_list,
-                sampling_params,
-                unconditional_prompts=unconditional_prompts,
-            )
-        else:
-            outputs = self.llm.generate(formatted_prompt_list, sampling_params)
+        try:
+            if cfg_scale > 1.0:
+                # Build unconditional prompt based on generation phase
+                formatted_unconditional_prompt = self._build_unconditional_prompt(
+                    caption=caption,
+                    lyrics=lyrics,
+                    cot_text=cot_text,
+                    negative_prompt=negative_prompt,
+                    generation_phase=generation_phase,
+                    is_batch=is_batch,
+                )
+                unconditional_prompts = [formatted_unconditional_prompt] * batch_size
+
+                outputs = self.llm.generate(
+                    formatted_prompt_list,
+                    sampling_params,
+                    unconditional_prompts=unconditional_prompts,
+                )
+            else:
+                outputs = self.llm.generate(formatted_prompt_list, sampling_params)
+        finally:
+            # Always clear partial LM head after generation
+            if partial_lm_model is not None:
+                partial_lm_model.audio_code_range = None
 
         # Extract text from outputs
         output_texts = []
