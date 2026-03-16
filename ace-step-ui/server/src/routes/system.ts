@@ -23,7 +23,7 @@ router.post('/update', async (_req: Request, res: Response) => {
         
         // Trigger self-shutdown shortly after responding
         setTimeout(() => {
-            fetch(`http://localhost:${process.env.PORT || 3001}/api/shutdown`, { method: 'POST' }).catch(() => {});
+            fetch(`http://localhost:${process.env.PORT || 3001}/api/shutdown?preserve_root=1`, { method: 'POST' }).catch(() => {});
         }, 500);
     } catch (error) {
         res.status(500).json({ error: String(error) });

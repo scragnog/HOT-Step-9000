@@ -395,8 +395,9 @@ app.get('/health', (_req, res) => {
 });
 
 // Shutdown endpoint - kills all ACE-Step processes
-app.post('/api/shutdown', async (_req, res) => {
-  console.log('[Shutdown] Shutdown requested — terminating ACE-Step processes...');
+app.post('/api/shutdown', async (req, res) => {
+  const preserveRoot = req.query.preserve_root === '1';
+  console.log(`[Shutdown] Shutdown requested (preserve_root=${preserveRoot}) — terminating ACE-Step processes...`);
   res.json({ success: true, message: 'Shutting down...' });
 
   // Give the response a moment to flush
@@ -442,8 +443,8 @@ app.post('/api/shutdown', async (_req, res) => {
           visited.add(pp);
           const parentInfo = procMap.get(pp);
           if (parentInfo && shellNames.has(parentInfo.name)) {
-            // Safety check: Don't kill the main launch.bat cmd.exe
-            if (parentInfo.name === 'cmd.exe') {
+            // Safety check: Don't kill the main launch.bat cmd.exe during updates
+            if (preserveRoot && parentInfo.name === 'cmd.exe') {
                const cmdLine = (parentInfo.cmdLine || '').toLowerCase();
                // We only want to kill cmd.exe wrappers created by npm, or our `cmd /k` windows.
                // launch.bat's cmd.exe lacks these signatures.
