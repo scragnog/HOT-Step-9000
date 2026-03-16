@@ -356,6 +356,7 @@
     <script>
         const start = Date.now();
         const state = { apiUp: false, apiReady: false, backend: false, frontend: false };
+        let userClickedStart = false;
 
         // Port comes from loading-config.js (written by LAUNCH.bat) or defaults to 3000
         if (typeof VITE_PORT === 'undefined') var VITE_PORT = '3000';
@@ -419,6 +420,9 @@
             btnLaunch.disabled = true;
             btnUpdate.disabled = true;
             btnLaunch.textContent = "Saving...";
+            
+            // Allow redirect logic to proceed
+            userClickedStart = true;
             
             // 1. Save .env choice first
             await updateEnvViaExpress(modelSelect.value, lmModelSelect.value);
@@ -590,7 +594,8 @@
 
             document.getElementById('elapsed').textContent = `Elapsed: ${elapsed()}`;
 
-            if (state.apiReady && state.backend && state.frontend) {
+            // Only redirect if everything is ready AND the user actively clicked Start
+            if (state.apiReady && state.backend && state.frontend && userClickedStart) {
                 document.getElementById('spinnerWrap').style.display = 'none';
                 document.getElementById('readyBanner').classList.add('show');
                 document.getElementById('elapsed').textContent = `All ready in ${elapsed()} — redirecting…`;
