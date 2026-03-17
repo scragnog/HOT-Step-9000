@@ -627,6 +627,12 @@ export const generateApi = {
     active_model: string;
     switched: boolean;
   }> => api('/api/models/switch', { method: 'POST', body: { model }, token }),
+
+  switchLmModel: (model: string, token: string): Promise<{
+    message: string;
+    lm_model: string;
+    switched: boolean;
+  }> => api('/api/model/lm/switch', { method: 'POST', body: { model }, token }),
 };
 
 // Activation Steering (TADA) API

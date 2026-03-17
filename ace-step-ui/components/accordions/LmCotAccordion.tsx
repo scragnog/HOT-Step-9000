@@ -16,6 +16,7 @@ interface LmCotAccordionProps {
     // LM Model
     lmModel: string;
     onLmModelChange: (val: string) => void;
+    isLmSwitching?: boolean;
     // LM Parameters sub-accordion
     showLmParams: boolean;
     onToggleLmParams: () => void;
@@ -67,7 +68,7 @@ export const LmCotAccordion: React.FC<LmCotAccordionProps> = ({
     isOpen, onToggle,
     thinking, onThinkingToggle, loraLoaded,
     lmBackend, onLmBackendChange,
-    lmModel, onLmModelChange,
+    lmModel, onLmModelChange, isLmSwitching,
     showLmParams, onToggleLmParams,
     lmTemperature, onLmTemperatureChange,
     lmCfgScale, onLmCfgScaleChange,
@@ -129,8 +130,13 @@ export const LmCotAccordion: React.FC<LmCotAccordionProps> = ({
 
                     {/* LM Model */}
                     <div className="space-y-1.5">
-                        <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{t('lmModelLabel')}</label>
-                        <select value={lmModel} onChange={(e) => onLmModelChange(e.target.value)} className={selectClass}>
+                        <div className="flex items-center gap-2">
+                            <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{t('lmModelLabel')}</label>
+                            {isLmSwitching && (
+                                <span className="text-[10px] text-pink-500 animate-pulse">switching…</span>
+                            )}
+                        </div>
+                        <select value={lmModel} onChange={(e) => onLmModelChange(e.target.value)} disabled={isLmSwitching} className={selectClass + (isLmSwitching ? ' opacity-50' : '')}>
                             <option value="acestep-5Hz-lm-0.6B">{t('lmModel06B')}</option>
                             <option value="acestep-5Hz-lm-1.7B">{t('lmModel17B')}</option>
                             <option value="acestep-5Hz-lm-4B">{t('lmModel4B')}</option>
