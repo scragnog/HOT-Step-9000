@@ -228,7 +228,14 @@ def run_blocking_generate(
                 except Exception as e:
                     logger.warning(f"[Duration] Could not probe audio duration: {e}")
 
-        lm_model_name = os.getenv("ACESTEP_LM_MODEL_PATH", "acestep-5Hz-lm-0.6B")
+        # Use the actual loaded model path (which may have been hot-switched)
+        # rather than the .env value which could be stale.
+        _llm_params = getattr(llm_handler, "last_init_params", None)
+        lm_model_name = (
+            (_llm_params or {}).get("lm_model_path", "")
+            if isinstance(_llm_params, dict)
+            else ""
+        ) or os.getenv("ACESTEP_LM_MODEL_PATH", "acestep-5Hz-lm-0.6B")
         return build_generation_success_response(
             result=result,
             params=params,

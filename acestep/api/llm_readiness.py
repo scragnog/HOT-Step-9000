@@ -33,6 +33,27 @@ def ensure_llm_ready_for_request(
     with app_state._llm_init_lock:
         initialized = getattr(app_state, "_llm_initialized", False)
         had_error = getattr(app_state, "_llm_init_error", None)
+
+        # Check if the user requested a different LM model than what's loaded
+        desired_model = (getattr(req, "lm_model_path", None) or "").strip()
+        if initialized and desired_model:
+            prev_params = getattr(llm_handler, "last_init_params", None)
+            current_model = (prev_params or {}).get("lm_model_path", "") if isinstance(prev_params, dict) else ""
+            if current_model and current_model.strip() != desired_model:
+                log_fn(
+                    f"[API Server] LM model switch requested: "
+                    f"{current_model} → {desired_model}"
+                )
+                # Unload the current model so we fall through to re-initialize
+                try:
+                    llm_handler.unload()
+                except Exception as exc:
+                    log_fn(f"[API Server] Warning: LM unload failed: {exc}")
+                app_state._llm_initialized = False
+                app_state._llm_init_error = None
+                initialized = False
+                # Fall through to initialization below
+
         if initialized or had_error is not None:
             return
         log_fn("[API Server] reloading.")
