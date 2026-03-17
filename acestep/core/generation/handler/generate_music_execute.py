@@ -30,8 +30,6 @@ class GenerateMusicExecuteMixin:
         pag_end: float = 0.80,
         pag_scale: float = 0.2,
         scheduler: str = "linear",
-        refine_passes: int = 0,
-        refine_strength: float = 0.3,
     ) -> Dict[str, Any]:
         """Invoke ``service_generate`` with real-time step progress from the DiT loop."""
         infer_steps_for_progress = len(timesteps) if timesteps else inference_steps
@@ -66,8 +64,6 @@ class GenerateMusicExecuteMixin:
             pag_end=pag_end,
             pag_scale=pag_scale,
             scheduler=scheduler,
-            refine_passes=refine_passes,
-            refine_strength=refine_strength,
             progress=progress,
         )
         return {"outputs": outputs, "infer_steps_for_progress": infer_steps_for_progress}

@@ -70,124 +70,134 @@ export const RefineModal: React.FC = () => {
         if (!song) return;
         setStatus('refining');
         setProgress(0);
-        setStage('Submitting refinement job...');
+        setStage('Initializing refinement...');
         setError('');
 
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
         try {
-            // Build generation request from original song params
             const gp = song.generationParams || {};
-            const body: Record<string, any> = {
-                customMode: true,
-                title: `${song.title} (Refined)`,
-                lyrics: gp.lyrics || song.lyrics || '',
-                style: gp.style || gp.prompt || song.style || '',
-                instrumental: gp.instrumental || false,
-                vocalLanguage: gp.vocalLanguage || 'en',
-                duration: gp.duration || undefined,
-                bpm: gp.bpm || undefined,
-                keyScale: gp.keyScale || '',
-                timeSignature: gp.timeSignature || '',
-                inferenceSteps: gp.inferenceSteps || 32,
-                guidanceScale: gp.guidanceScale || 7.0,
-                batchSize: 1,
-                randomSeed: true,
-                thinking: gp.thinking || false,
-                audioFormat: gp.audioFormat || 'flac',
-                inferMethod: gp.inferMethod || 'ode',
-                scheduler: gp.scheduler || 'linear',
-                shift: gp.shift,
-                taskType: gp.taskType || 'text2music',
-                // Refinement fields
-                refinePasses: passes,
-                refineStrength: strength,
-                // Preserve original generation settings
-                useAdg: gp.useAdg || false,
-                guidanceMode: gp.guidanceMode || '',
-                cfgIntervalStart: gp.cfgIntervalStart || 0.0,
-                cfgIntervalEnd: gp.cfgIntervalEnd || 1.0,
-                enableNormalization: gp.enableNormalization !== false,
-                normalizationDb: gp.normalizationDb ?? -1.0,
-                autoMaster: gp.autoMaster !== false,
-                latentShift: gp.latentShift || 0.0,
-                latentRescale: gp.latentRescale || 1.0,
-                // LM params
-                lmTemperature: gp.lmTemperature,
-                lmCfgScale: gp.lmCfgScale,
-                lmTopK: gp.lmTopK,
-                lmTopP: gp.lmTopP,
-                // Extra processing
-                getLrc: gp.getLrc ?? true,
-                getScores: gp.getScores,
-                // PAG
-                usePag: gp.usePag || false,
-                pagStart: gp.pagStart,
-                pagEnd: gp.pagEnd,
-                pagScale: gp.pagScale,
-                // Audio codes (reuse from original if available)
-                audioCodes: gp.audioCodes || '',
-                // Steering
-                steeringEnabled: gp.steeringEnabled || false,
-                steeringLoaded: gp.steeringLoaded || [],
-                steeringAlphas: gp.steeringAlphas || {},
-                // DiT model
-                ditModel: gp.ditModel || song.ditModel,
-            };
+            let currentSourceAudioUrl = song.audioUrl;
 
-            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-            if (token) headers['Authorization'] = `Bearer ${token}`;
+            for (let currentPass = 1; currentPass <= passes; currentPass++) {
+                setStage(`Pass ${currentPass} of ${passes}: Initializing...`);
+                setProgress(0);
 
-            const resp = await fetch('/api/generate', {
-                method: 'POST',
-                headers,
-                body: JSON.stringify(body),
-            });
+                const body: Record<string, any> = {
+                    customMode: true,
+                    title: `${song.title} (Refined)`,
+                    lyrics: gp.lyrics || song.lyrics || '',
+                    style: gp.style || gp.prompt || song.style || '',
+                    instrumental: gp.instrumental || false,
+                    vocalLanguage: gp.vocalLanguage || 'en',
+                    duration: gp.duration || undefined,
+                    bpm: gp.bpm || undefined,
+                    keyScale: gp.keyScale || '',
+                    timeSignature: gp.timeSignature || '',
+                    inferenceSteps: gp.inferenceSteps || 32,
+                    guidanceScale: gp.guidanceScale || 7.0,
+                    batchSize: 1,
+                    // Img2Img VAE Bounce requires cover mode
+                    taskType: 'cover',
+                    sourceAudioUrl: currentSourceAudioUrl,
+                    coverNoiseStrength: strength,
+                    audioCoverStrength: 0.0, // Minimal timbral strictness, use solely for semantic structure
+                    seed: gp.seed,           // Retain identical seed to perfectly follow source structure
+                    randomSeed: false,
+                    audioCodes: gp.audioCodes || '',
+                    // Preserve original settings
+                    thinking: gp.thinking || false,
+                    audioFormat: gp.audioFormat || 'flac',
+                    inferMethod: gp.inferMethod || 'ode',
+                    scheduler: gp.scheduler || 'linear',
+                    shift: gp.shift,
+                    useAdg: gp.useAdg || false,
+                    guidanceMode: gp.guidanceMode || '',
+                    cfgIntervalStart: gp.cfgIntervalStart || 0.0,
+                    cfgIntervalEnd: gp.cfgIntervalEnd || 1.0,
+                    enableNormalization: gp.enableNormalization !== false,
+                    normalizationDb: gp.normalizationDb ?? -1.0,
+                    autoMaster: gp.autoMaster !== false,
+                    latentShift: gp.latentShift || 0.0,
+                    latentRescale: gp.latentRescale || 1.0,
+                    lmTemperature: gp.lmTemperature,
+                    lmCfgScale: gp.lmCfgScale,
+                    lmTopK: gp.lmTopK,
+                    lmTopP: gp.lmTopP,
+                    getLrc: gp.getLrc ?? true,
+                    getScores: gp.getScores,
+                    usePag: gp.usePag || false,
+                    pagStart: gp.pagStart,
+                    pagEnd: gp.pagEnd,
+                    pagScale: gp.pagScale,
+                    steeringEnabled: gp.steeringEnabled || false,
+                    steeringLoaded: gp.steeringLoaded || [],
+                    steeringAlphas: gp.steeringAlphas || {},
+                    ditModel: gp.ditModel || song.ditModel,
+                };
 
-            if (!resp.ok) {
-                const errData = await resp.json().catch(() => ({ error: resp.statusText }));
-                throw new Error(errData.error || `Server error ${resp.status}`);
+                const resp = await fetch('/api/generate', {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify(body),
+                });
+
+                if (!resp.ok) {
+                    const errData = await resp.json().catch(() => ({ error: resp.statusText }));
+                    throw new Error(errData.error || `Server error ${resp.status}`);
+                }
+
+                const { jobId } = await resp.json();
+                setResultJobId(jobId);
+
+                // Wait for this specific pass to complete
+                await new Promise<void>((resolve, reject) => {
+                    const localPoll = setInterval(async () => {
+                        try {
+                            const statusHeaders: Record<string, string> = {};
+                            if (token) statusHeaders['Authorization'] = `Bearer ${token}`;
+                            
+                            const statusResp = await fetch(`/api/generate/status/${jobId}`, {
+                                headers: statusHeaders,
+                            });
+                            if (!statusResp.ok) return;
+                            const statusData = await statusResp.json();
+
+                            if (statusData.progress) {
+                                setProgress(statusData.progress);
+                            }
+                            if (statusData.stage) {
+                                setStage(`Pass ${currentPass}/${passes}: ${statusData.stage}`);
+                            }
+
+                            if (statusData.status === 'succeeded') {
+                                clearInterval(localPoll);
+                                if (statusData.audioUrl) {
+                                    currentSourceAudioUrl = statusData.audioUrl;
+                                }
+                                resolve();
+                            } else if (statusData.status === 'failed') {
+                                clearInterval(localPoll);
+                                reject(new Error(statusData.error || 'Refinement failed on this pass'));
+                            }
+                        } catch {
+                            // Ignore transient poll errors
+                        }
+                    }, 2000);
+                    // Save to ref to immediately clear if user closes modal
+                    pollRef.current = localPoll;
+                });
             }
 
-            const { jobId } = await resp.json();
-            setResultJobId(jobId);
-            setStage('Refinement in progress...');
+            // All passes completed successfully
+            setStatus('complete');
+            setProgress(1);
+            setStage('Refinement complete!');
+            setTimeout(() => {
+                window.location.reload();
+            }, 1500);
 
-            // Poll for completion
-            pollRef.current = setInterval(async () => {
-                try {
-                    const statusHeaders: Record<string, string> = {};
-                    if (token) statusHeaders['Authorization'] = `Bearer ${token}`;
-                    
-                    const statusResp = await fetch(`/api/generate/status/${jobId}`, {
-                        headers: statusHeaders,
-                    });
-                    if (!statusResp.ok) return;
-                    const statusData = await statusResp.json();
-
-                    if (statusData.progress) {
-                        setProgress(statusData.progress);
-                    }
-                    if (statusData.stage) {
-                        setStage(statusData.stage);
-                    }
-
-                    if (statusData.status === 'succeeded') {
-                        if (pollRef.current) clearInterval(pollRef.current);
-                        setStatus('complete');
-                        setProgress(1);
-                        setStage('Refinement complete!');
-                        // Reload the page to see the new song in the library
-                        setTimeout(() => {
-                            window.location.reload();
-                        }, 1500);
-                    } else if (statusData.status === 'failed') {
-                        if (pollRef.current) clearInterval(pollRef.current);
-                        setStatus('error');
-                        setError(statusData.error || 'Refinement failed');
-                    }
-                } catch {
-                    // Ignore transient poll errors
-                }
-            }, 2000);
         } catch (err) {
             setStatus('error');
             setError(err instanceof Error ? err.message : 'Failed to start refinement');

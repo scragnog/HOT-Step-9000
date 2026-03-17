@@ -50,8 +50,6 @@ class ServiceGenerateMixin:
         pag_end: float = 0.80,
         pag_scale: float = 0.2,
         scheduler: str = "linear",
-        refine_passes: int = 0,
-        refine_strength: float = 0.3,
         progress=None,
     ) -> Dict[str, Any]:
         """Generate music latents and metadata from text/audio conditioning inputs.
@@ -140,8 +138,6 @@ class ServiceGenerateMixin:
             pag_end=pag_end,
             pag_scale=pag_scale,
             scheduler=scheduler,
-            refine_passes=refine_passes,
-            refine_strength=refine_strength,
             progress=progress,
         )
         try:
