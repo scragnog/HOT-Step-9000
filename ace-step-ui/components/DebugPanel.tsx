@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Bug, ChevronLeft, ChevronRight, Cpu, MemoryStick, Monitor } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { Bug, ChevronLeft, ChevronRight, ChevronUp, ChevronDown, Cpu, MemoryStick, Monitor, Search, Trash2, X } from 'lucide-react';
 
 interface SystemMetrics {
     gpu: {
@@ -82,6 +82,34 @@ function getLogLevelColor(line: string): string {
     return 'text-green-400';
 }
 
+/** Render a log line with search matches highlighted */
+function HighlightedLine({ line, query, isCurrentMatch }: { line: string; query: string; isCurrentMatch: boolean }) {
+    if (!query) return <>{line}</>;
+
+    const lowerLine = line.toLowerCase();
+    const lowerQuery = query.toLowerCase();
+    const parts: React.ReactNode[] = [];
+    let lastIdx = 0;
+    let idx = lowerLine.indexOf(lowerQuery);
+
+    while (idx !== -1) {
+        if (idx > lastIdx) parts.push(line.slice(lastIdx, idx));
+        parts.push(
+            <mark
+                key={idx}
+                className={`${isCurrentMatch ? 'bg-amber-400 text-black' : 'bg-yellow-600/60 text-yellow-100'} rounded-sm px-px`}
+            >
+                {line.slice(idx, idx + query.length)}
+            </mark>
+        );
+        lastIdx = idx + query.length;
+        idx = lowerLine.indexOf(lowerQuery, lastIdx);
+    }
+    if (lastIdx < line.length) parts.push(line.slice(lastIdx));
+
+    return <>{parts}</>;
+}
+
 export default function DebugPanel({ isOpen, onToggle }: { isOpen: boolean; onToggle: () => void }) {
     const [metrics, setMetrics] = useState<SystemMetrics | null>(null);
     const [logLines, setLogLines] = useState<string[]>([]);
@@ -90,6 +118,76 @@ export default function DebugPanel({ isOpen, onToggle }: { isOpen: boolean; onTo
     const logContainerRef = useRef<HTMLDivElement>(null);
     const [autoScroll, setAutoScroll] = useState(true);
     const initialScrollDone = useRef(false);
+
+    // Search state
+    const [searchQuery, setSearchQuery] = useState('');
+    const [showSearch, setShowSearch] = useState(false);
+    const [currentMatchIdx, setCurrentMatchIdx] = useState(0);
+    const searchInputRef = useRef<HTMLInputElement>(null);
+    const lineRefs = useRef<Map<number, HTMLDivElement>>(new Map());
+
+    // Compute matching line indices
+    const matchingLineIndices = useMemo(() => {
+        if (!searchQuery.trim()) return [];
+        const q = searchQuery.toLowerCase();
+        const indices: number[] = [];
+        logLines.forEach((line, i) => {
+            if (line.toLowerCase().includes(q)) indices.push(i);
+        });
+        return indices;
+    }, [searchQuery, logLines]);
+
+    // Clamp currentMatchIdx when matches change
+    useEffect(() => {
+        if (matchingLineIndices.length === 0) {
+            setCurrentMatchIdx(0);
+        } else if (currentMatchIdx >= matchingLineIndices.length) {
+            setCurrentMatchIdx(matchingLineIndices.length - 1);
+        }
+    }, [matchingLineIndices.length, currentMatchIdx]);
+
+    // Scroll to current match
+    useEffect(() => {
+        if (matchingLineIndices.length === 0) return;
+        const lineIdx = matchingLineIndices[currentMatchIdx];
+        const el = lineRefs.current.get(lineIdx);
+        if (el) {
+            setAutoScroll(false);
+            el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+    }, [currentMatchIdx, matchingLineIndices]);
+
+    // Focus search input when opened
+    useEffect(() => {
+        if (showSearch) {
+            requestAnimationFrame(() => searchInputRef.current?.focus());
+        }
+    }, [showSearch]);
+
+    const navigateMatch = useCallback((dir: 'next' | 'prev') => {
+        if (matchingLineIndices.length === 0) return;
+        setCurrentMatchIdx(prev => {
+            if (dir === 'next') return (prev + 1) % matchingLineIndices.length;
+            return (prev - 1 + matchingLineIndices.length) % matchingLineIndices.length;
+        });
+    }, [matchingLineIndices.length]);
+
+    // Keyboard shortcut: Ctrl+F to open search, Escape to close, Enter/Shift+Enter to navigate
+    useEffect(() => {
+        if (!isOpen) return;
+        const handler = (e: KeyboardEvent) => {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+                e.preventDefault();
+                setShowSearch(true);
+            }
+            if (e.key === 'Escape' && showSearch) {
+                setShowSearch(false);
+                setSearchQuery('');
+            }
+        };
+        window.addEventListener('keydown', handler);
+        return () => window.removeEventListener('keydown', handler);
+    }, [isOpen, showSearch]);
 
     // Scroll the log container to the bottom
     const scrollToBottom = useCallback((instant = false) => {
@@ -106,7 +204,6 @@ export default function DebugPanel({ isOpen, onToggle }: { isOpen: boolean; onTo
     useEffect(() => {
         if (!autoScroll) return;
         if (!initialScrollDone.current && logLines.length > 0) {
-            // First batch: jump instantly, and again after panel animation (300ms)
             initialScrollDone.current = true;
             requestAnimationFrame(() => scrollToBottom(true));
             setTimeout(() => scrollToBottom(true), 350);
@@ -199,6 +296,9 @@ export default function DebugPanel({ isOpen, onToggle }: { isOpen: boolean; onTo
             eventSource?.close();
         };
     }, [isOpen]);
+
+    // Determine which line is the "current" match for highlighting
+    const currentMatchLineIdx = matchingLineIndices.length > 0 ? matchingLineIndices[currentMatchIdx] : -1;
 
     return (
         <>
@@ -321,6 +421,7 @@ export default function DebugPanel({ isOpen, onToggle }: { isOpen: boolean; onTo
 
                 {/* Log section — fills remaining */}
                 <div className="flex-1 flex flex-col min-h-0">
+                    {/* Log header with controls */}
                     <div className="flex items-center justify-between px-4 py-2 flex-shrink-0">
                         <h3 className="text-[11px] font-semibold text-zinc-500 uppercase tracking-wider">
                             API Log
@@ -334,14 +435,85 @@ export default function DebugPanel({ isOpen, onToggle }: { isOpen: boolean; onTo
                                     }}
                                     className="text-[10px] text-zinc-500 hover:text-zinc-300 transition-colors"
                                 >
-                                    ↓ Scroll to bottom
+                                    ↓ Bottom
                                 </button>
                             )}
+                            <button
+                                onClick={() => { setShowSearch(s => !s); if (showSearch) setSearchQuery(''); }}
+                                className={`p-1 rounded transition-colors ${showSearch ? 'text-amber-400 bg-amber-900/30' : 'text-zinc-500 hover:text-zinc-300'}`}
+                                title="Search log (Ctrl+F)"
+                            >
+                                <Search size={12} />
+                            </button>
+                            <button
+                                onClick={() => { setLogLines([]); setSearchQuery(''); setCurrentMatchIdx(0); }}
+                                className="p-1 rounded text-zinc-500 hover:text-red-400 transition-colors"
+                                title="Clear log"
+                            >
+                                <Trash2 size={12} />
+                            </button>
                             <span className="text-[10px] text-zinc-600 font-mono">
-                                {logLines.length} lines
+                                {logLines.length}
                             </span>
                         </div>
                     </div>
+
+                    {/* Search toolbar */}
+                    {showSearch && (
+                        <div className="flex items-center gap-1.5 px-3 pb-2 flex-shrink-0">
+                            <div className="flex-1 flex items-center bg-black border border-zinc-700 rounded-lg overflow-hidden">
+                                <Search size={12} className="text-zinc-500 ml-2 flex-shrink-0" />
+                                <input
+                                    ref={searchInputRef}
+                                    type="text"
+                                    value={searchQuery}
+                                    onChange={(e) => { setSearchQuery(e.target.value); setCurrentMatchIdx(0); }}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                            e.preventDefault();
+                                            navigateMatch(e.shiftKey ? 'prev' : 'next');
+                                        }
+                                        if (e.key === 'Escape') {
+                                            setShowSearch(false);
+                                            setSearchQuery('');
+                                        }
+                                    }}
+                                    placeholder="Search logs..."
+                                    className="flex-1 bg-transparent text-xs text-zinc-200 placeholder-zinc-600 px-2 py-1.5 outline-none"
+                                />
+                                {searchQuery && (
+                                    <span className="text-[10px] text-zinc-500 font-mono px-1 flex-shrink-0">
+                                        {matchingLineIndices.length > 0
+                                            ? `${currentMatchIdx + 1}/${matchingLineIndices.length}`
+                                            : '0/0'}
+                                    </span>
+                                )}
+                            </div>
+                            <button
+                                onClick={() => navigateMatch('prev')}
+                                disabled={matchingLineIndices.length === 0}
+                                className="p-1 rounded text-zinc-400 hover:text-zinc-200 disabled:text-zinc-700 disabled:cursor-not-allowed transition-colors"
+                                title="Previous match (Shift+Enter)"
+                            >
+                                <ChevronUp size={14} />
+                            </button>
+                            <button
+                                onClick={() => navigateMatch('next')}
+                                disabled={matchingLineIndices.length === 0}
+                                className="p-1 rounded text-zinc-400 hover:text-zinc-200 disabled:text-zinc-700 disabled:cursor-not-allowed transition-colors"
+                                title="Next match (Enter)"
+                            >
+                                <ChevronDown size={14} />
+                            </button>
+                            <button
+                                onClick={() => { setShowSearch(false); setSearchQuery(''); }}
+                                className="p-1 rounded text-zinc-500 hover:text-zinc-300 transition-colors"
+                                title="Close search (Esc)"
+                            >
+                                <X size={14} />
+                            </button>
+                        </div>
+                    )}
 
                     <div
                         ref={logContainerRef}
@@ -357,9 +529,14 @@ export default function DebugPanel({ isOpen, onToggle }: { isOpen: boolean; onTo
                             logLines.map((line, i) => (
                                 <div
                                     key={i}
-                                    className={`whitespace-pre-wrap break-all py-px ${getLogLevelColor(line)}`}
+                                    ref={(el) => { if (el) lineRefs.current.set(i, el); else lineRefs.current.delete(i); }}
+                                    className={`whitespace-pre-wrap break-all py-px ${getLogLevelColor(line)} ${i === currentMatchLineIdx ? 'bg-amber-900/20 rounded' : ''}`}
                                 >
-                                    {line}
+                                    <HighlightedLine
+                                        line={line}
+                                        query={searchQuery}
+                                        isCurrentMatch={i === currentMatchLineIdx}
+                                    />
                                 </div>
                             ))
                         )}
