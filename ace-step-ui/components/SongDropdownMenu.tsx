@@ -16,7 +16,6 @@ import {
 } from 'lucide-react';
 import { openStemSplitter } from './StemSplitterModal';
 import { openAudioEnhancer } from './AudioEnhancerModal';
-import { openRefineModal } from './RefineModal';
 
 interface SongDropdownMenuProps {
     song: Song;
@@ -184,15 +183,6 @@ export const SongDropdownMenu: React.FC<SongDropdownMenuProps> = ({
                     if (song.audioUrl) {
                         openAudioEnhancer(song.audioUrl, song.title, song.id);
                     }
-                    onClose();
-                }}
-                disabled={!song.audioUrl}
-            />
-            <MenuItem
-                icon={<Wand2 size={14} />}
-                label="Refine"
-                onClick={() => {
-                    openRefineModal(song);
                     onClose();
                 }}
                 disabled={!song.audioUrl}
