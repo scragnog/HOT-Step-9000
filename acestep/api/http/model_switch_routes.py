@@ -125,12 +125,11 @@ def register_model_switch_routes(
             raise HTTPException(status_code=500, detail="LLM handler not available")
 
         # Check current model
-        prev_params = getattr(llm, "last_init_params", None)
-        current_lm = (
-            (prev_params or {}).get("lm_model_path", "")
-            if isinstance(prev_params, dict) else ""
-        )
-        if current_lm and current_lm.strip() == target_model:
+        prev_params = getattr(llm, "last_init_params", None) or {}
+        if not isinstance(prev_params, dict):
+            prev_params = {}
+        current_lm = prev_params.get("lm_model_path", "").strip()
+        if current_lm == target_model:
             return wrap_response({
                 "message": f"LM model '{target_model}' is already active",
                 "lm_model": target_model,
@@ -141,8 +140,6 @@ def register_model_switch_routes(
         if lock is None:
             raise HTTPException(status_code=500, detail="LLM init lock not available")
 
-        from acestep.model_downloader import ensure_lm_model
-
         with lock:
             # Unload current model
             try:
@@ -152,34 +149,41 @@ def register_model_switch_routes(
             app.state._llm_initialized = False
             app.state._llm_init_error = None
 
-            # Resolve checkpoint dir and download if needed
-            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            checkpoint_dir = os.path.join(project_root, "checkpoints")
-            os.makedirs(checkpoint_dir, exist_ok=True)
+            # Resolve checkpoint_dir from previous params or project root
+            checkpoint_dir = prev_params.get("checkpoint_dir", "")
+            if not checkpoint_dir:
+                from acestep.model_downloader import get_checkpoints_dir
+                checkpoint_dir = str(get_checkpoints_dir())
 
-            lm_model_name = get_model_name(target_model)
-            if lm_model_name:
+            # Ensure model is downloaded (skip if already exists)
+            from acestep.model_downloader import check_model_exists, ensure_lm_model
+            if not check_model_exists(target_model, checkpoint_dir):
+                print(f"[LM Switch] Model '{target_model}' not found locally, downloading...")
                 try:
-                    ensure_lm_model(lm_model_name, checkpoint_dir)
+                    ensure_lm_model(target_model, checkpoint_dir)
                 except Exception as exc:
-                    print(f"[API Server] Warning: LM model download failed: {exc}")
+                    app.state._llm_init_error = str(exc)
+                    raise HTTPException(
+                        status_code=500,
+                        detail=f"LM model download failed: {exc}",
+                    )
+            else:
+                print(f"[LM Switch] Model '{target_model}' found locally, loading...")
 
-            # Build init params from previous or defaults
-            new_params = dict(prev_params) if isinstance(prev_params, dict) else {
+            # Build init params — only the 6 kwargs that initialize() accepts
+            init_kwargs = {
                 "checkpoint_dir": checkpoint_dir,
-                "backend": os.getenv("ACESTEP_LM_BACKEND", "vllm").strip().lower() or "vllm",
-                "device": os.getenv("ACESTEP_LM_DEVICE", os.getenv("ACESTEP_DEVICE", "auto")),
-                "offload_to_cpu": os.getenv("ACESTEP_LM_OFFLOAD_TO_CPU", "").lower() in {"1", "true", "yes"},
-                "dtype": None,
+                "lm_model_path": target_model,
+                "backend": prev_params.get("backend", os.getenv("ACESTEP_LM_BACKEND", "vllm").strip().lower() or "vllm"),
+                "device": prev_params.get("device", os.getenv("ACESTEP_LM_DEVICE", os.getenv("ACESTEP_DEVICE", "auto"))),
+                "offload_to_cpu": prev_params.get("offload_to_cpu", False),
+                "dtype": None,  # Let initialize() auto-detect
             }
-            new_params["checkpoint_dir"] = checkpoint_dir
-            new_params["lm_model_path"] = target_model
 
-            status_msg, ok = llm.initialize(**new_params)
+            status_msg, ok = llm.initialize(**init_kwargs)
             if ok:
                 app.state._llm_initialized = True
                 app.state._llm_init_error = None
-                # Also update env so status endpoint stays consistent
                 os.environ["ACESTEP_LM_MODEL_PATH"] = target_model
                 return wrap_response({
                     "message": f"LM model switched to {target_model}",
