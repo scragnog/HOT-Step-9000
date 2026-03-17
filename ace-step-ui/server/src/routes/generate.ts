@@ -434,11 +434,11 @@ router.get('/status/:jobId', authMiddleware, async (req: AuthenticatedRequest, r
         const jobAgeMs = Date.now() - createdAtMs;
 
         // Query 8001 API for task status
-        // Use an explicit 60s AbortController timeout so undici's default
+        // Use an explicit 120s AbortController timeout so undici's default
         // 30s headersTimeout doesn't fire on slow/busy backends running
         // long generation jobs (LM LoRA with CoT can take 20+ minutes).
         const _queryAbort = new AbortController();
-        const _queryTimeoutId = setTimeout(() => _queryAbort.abort(), 60_000);
+        const _queryTimeoutId = setTimeout(() => _queryAbort.abort(), 120_000);
         let queryResponse: globalThis.Response;
         try {
           queryResponse = await fetch(`${config.acestep.apiUrl}/query_result`, {
@@ -459,7 +459,7 @@ router.get('/status/:jobId', authMiddleware, async (req: AuthenticatedRequest, r
         if (!queryResponse.ok) {
           const raw = await queryResponse.text().catch(() => '');
           const msg = `ACE-Step status query failed (${queryResponse.status})` + (raw ? `: ${raw.slice(0, 200)}` : '');
-          const shouldFail = (queryResponse.status >= 400 && queryResponse.status < 500) || jobAgeMs > 2 * 60 * 1000;
+          const shouldFail = (queryResponse.status >= 400 && queryResponse.status < 500) || jobAgeMs > 60 * 60 * 1000;
           if (shouldFail) {
             try {
               await pool.query(
@@ -491,7 +491,7 @@ router.get('/status/:jobId', authMiddleware, async (req: AuthenticatedRequest, r
           console.error('Failed to parse task data. Full response:', JSON.stringify(queryResult, null, 2));
           console.error('Looking for task_id:', job.acestep_task_id);
           const msg = 'No task data in response';
-          if (jobAgeMs > 30 * 60 * 1000) {
+          if (jobAgeMs > 60 * 60 * 1000) {
             try {
               await pool.query(
                 `UPDATE generation_jobs SET status = 'failed', error = ?, updated_at = datetime('now') WHERE id = ?`,
@@ -911,7 +911,7 @@ router.get('/status/:jobId', authMiddleware, async (req: AuthenticatedRequest, r
           }
         })();
         const jobAgeMs = Date.now() - createdAtMs;
-        if (jobAgeMs > 30 * 60 * 1000) {
+        if (jobAgeMs > 60 * 60 * 1000) {
           const msg = aceError instanceof Error ? aceError.message : 'ACE-Step status check error';
           try {
             await pool.query(
