@@ -321,6 +321,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [fetchedModels, setFetchedModels] = useState<{ name: string; is_active: boolean; is_preloaded: boolean }[]>([]);
   const [activeBackendModel, setActiveBackendModel] = useState<string | null>(null);
   const [isSwitching, setIsSwitching] = useState(false);
+  const [isLmSwitching, setIsLmSwitching] = useState(false);
   const [backendUnavailable, setBackendUnavailable] = useState(false);
 
   // Fallback model list when backend is unavailable
@@ -1332,6 +1333,23 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       setIsSwitching(false);
     }
   }, [token, isSwitching, refreshModels, adapterSlots, loraLoaded, savedOverallScales, savedGroupScales]);
+
+  const handleLmModelChange = useCallback(async (targetModel: string) => {
+    // Always update local state immediately for visual feedback
+    setLmModel(targetModel);
+    if (!token || isLmSwitching) return;
+    setIsLmSwitching(true);
+    try {
+      const result = await generateApi.switchLmModel(targetModel, token);
+      if (result.switched) {
+        console.log(`[LM Switch] ${result.message}`);
+      }
+    } catch (err: any) {
+      console.error('LM model switch failed:', err.message);
+    } finally {
+      setIsLmSwitching(false);
+    }
+  }, [token, isLmSwitching]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -2809,7 +2827,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           lmBackend={lmBackend}
           onLmBackendChange={setLmBackend}
           lmModel={lmModel}
-          onLmModelChange={setLmModel}
+          onLmModelChange={handleLmModelChange}
+          isLmSwitching={isLmSwitching}
           lmTemperature={lmTemperature}
           onLmTemperatureChange={setLmTemperature}
           lmCfgScale={lmCfgScale}

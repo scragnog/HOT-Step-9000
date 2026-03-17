@@ -60,6 +60,7 @@ interface GenerationSettingsAccordionProps {
     onLmBackendChange: (val: 'pt' | 'vllm') => void;
     lmModel: string;
     onLmModelChange: (val: string) => void;
+    isLmSwitching?: boolean;
     lmTemperature: number;
     onLmTemperatureChange: (val: number) => void;
     lmCfgScale: number;
@@ -367,6 +368,7 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
                         onLmBackendChange={props.onLmBackendChange}
                         lmModel={props.lmModel}
                         onLmModelChange={props.onLmModelChange}
+                        isLmSwitching={props.isLmSwitching}
                         showLmParams={showLmParams}
                         onToggleLmParams={() => setShowLmParams(!showLmParams)}
                         lmTemperature={props.lmTemperature}

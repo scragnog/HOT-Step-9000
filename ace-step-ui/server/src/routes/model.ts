@@ -99,6 +99,16 @@ router.post('/init', authMiddleware, async (req: AuthenticatedRequest, res: Resp
   }
 });
 
+// Hot-switch LM model
+router.post('/lm/switch', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const result = await proxyToAceStep('/v1/models/lm/switch', 'POST', req.body);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Reinitialize after training
 router.post('/reinitialize', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
