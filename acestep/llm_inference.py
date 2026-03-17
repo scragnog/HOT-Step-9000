@@ -1136,6 +1136,9 @@ class LLMHandler:
                 logger.debug(f"[partial_lm_head] Could not enable: {e}")
 
         try:
+            logger.info(f"[_run_vllm] Generating with sampling_params.cfg_scale={sampling_params.cfg_scale}, "
+                        f"batch_size={batch_size}, max_tokens={max_tokens}, "
+                        f"phase={generation_phase}")
             if cfg_scale > 1.0:
                 # Build unconditional prompt based on generation phase
                 formatted_unconditional_prompt = self._build_unconditional_prompt(
