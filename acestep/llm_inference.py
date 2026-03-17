@@ -1653,6 +1653,8 @@ class LLMHandler:
             logger.info(f"Batch Phase 2: Generating audio codes for {actual_batch_size} items...")
         else:
             logger.info("Phase 2: Generating audio codes...")
+        logger.info(f"[LM Phase 2] cfg_scale={cfg_scale}, temperature={temperature}, "
+                    f"top_k={top_k}, top_p={top_p}, rep_penalty={repetition_penalty}")
         phase2_start = time.time()
 
         # Format metadata as CoT using YAML (matching training format)
