@@ -2622,34 +2622,165 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           />
         )}
 
-        {/* ─── DRAWERS: Track Setup + Advanced ─── */}
+        {/* ─── DRAWERS: Track Setup + Advanced (each card followed by its container for inline expansion) ─── */}
         {taskType !== 'extract' && (
           <div className="space-y-2">
-            {/* Track Setup drawer card — always available for non-extract */}
+            {/* ── Track Setup ── */}
             {taskType !== 'auto-write' && (
-              <DrawerCard
-                icon="🎵"
-                title="Track Setup"
-                description="Title, vocals, BPM, key, duration, reference audio, lyrics library"
-                summary={`${title || 'Untitled'} · ${duration}s · ${bpm} BPM`}
-                onClick={() => setActiveDrawer(activeDrawer === 'track-setup' ? null : 'track-setup')}
-              />
+              <>
+                <DrawerCard
+                  icon="🎵"
+                  title="Track Setup"
+                  description="Title, vocals, BPM, key, duration, reference audio, lyrics library"
+                  summary={`${title || 'Untitled'} · ${duration}s · ${bpm} BPM`}
+                  onClick={() => setActiveDrawer(activeDrawer === 'track-setup' ? null : 'track-setup')}
+                />
+                <DrawerContainer
+                  isOpen={activeDrawer === 'track-setup'}
+                  title="Track Setup"
+                  onClose={() => setActiveDrawer(null)}
+                >
+                  <LyricsLibrary
+                    setStyle={setStyle}
+                    setLyrics={setLyrics}
+                    setBpm={setBpm}
+                    setKeyScale={setKeyScale}
+                    setTitle={setTitle}
+                    setDuration={setDuration}
+                  />
+                  <AudioSelectionSection
+                    useReferenceAudio={useReferenceAudio}
+                    setUseReferenceAudio={setUseReferenceAudio}
+                    taskType={taskType}
+                    referenceAudioUrl={referenceAudioUrl}
+                    referenceAudioTitle={referenceAudioTitle}
+                    referencePlaying={referencePlaying}
+                    toggleAudio={toggleAudio}
+                    referenceDuration={referenceDuration}
+                    referenceTime={referenceTime}
+                    referenceAudioRef={referenceAudioRef}
+                    setReferenceAudioUrl={setReferenceAudioUrl}
+                    setReferenceAudioTitle={setReferenceAudioTitle}
+                    setReferencePlaying={setReferencePlaying}
+                    setReferenceTime={setReferenceTime}
+                    setReferenceDuration={setReferenceDuration}
+                    sourceAudioUrl={sourceAudioUrl}
+                    sourceAudioTitle={sourceAudioTitle}
+                    sourcePlaying={sourcePlaying}
+                    sourceDuration={sourceDuration}
+                    sourceTime={sourceTime}
+                    sourceAudioRef={sourceAudioRef}
+                    setSourceAudioUrl={setSourceAudioUrl}
+                    setSourceAudioTitle={setSourceAudioTitle}
+                    setSourcePlaying={setSourcePlaying}
+                    setSourceTime={setSourceTime}
+                    setSourceDuration={setSourceDuration}
+                    openAudioModal={openAudioModal}
+                    referenceInputRef={referenceInputRef}
+                    sourceInputRef={sourceInputRef}
+                    handleDrop={handleDrop}
+                    handleDragOver={handleDragOver}
+                    formatTime={formatTime}
+                    getAudioLabel={getAudioLabel}
+                    onAnalyzeSource={handleAnalyzeSource}
+                    isAnalyzing={isAnalyzing}
+                  />
+                  <TrackDetailsAccordion
+                    instrumental={instrumental}
+                    setInstrumental={setInstrumental}
+                    vocalLanguage={vocalLanguage}
+                    setVocalLanguage={setVocalLanguage}
+                    vocalGender={vocalGender}
+                    setVocalGender={setVocalGender}
+                    title={title}
+                    setTitle={setTitle}
+                    bpm={bpm}
+                    setBpm={setBpm}
+                    keyScale={keyScale}
+                    setKeyScale={setKeyScale}
+                    timeSignature={timeSignature}
+                    setTimeSignature={setTimeSignature}
+                    duration={duration}
+                    setDuration={setDuration}
+                    detectedBpm={detectedBpm}
+                    detectedKey={detectedKey}
+                    triggerWord={adapterTriggerWord}
+                    taskType={taskType}
+                    sourceDuration={sourceDuration}
+                    tempoScale={tempoScale}
+                    effectiveBpm={effectiveBpm}
+                    effectiveKeyScale={effectiveKeyScale}
+                  />
+                </DrawerContainer>
+              </>
             )}
 
             <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-wider px-1">Advanced</p>
 
-            {/* Cover / Repaint Settings drawer card */}
+            {/* ── Cover / Repaint ── */}
             {(taskType === 'cover' || taskType === 'repaint') && (
-              <DrawerCard
-                icon="🎸"
-                title="Cover & Repaint"
-                description="Source audio strength, noise, transform"
-                summary={coverSummary}
-                onClick={() => setActiveDrawer(activeDrawer === 'cover' ? null : 'cover')}
-              />
+              <>
+                <DrawerCard
+                  icon="🎸"
+                  title="Cover & Repaint"
+                  description="Source audio strength, noise, transform"
+                  summary={coverSummary}
+                  onClick={() => setActiveDrawer(activeDrawer === 'cover' ? null : 'cover')}
+                />
+                <DrawerContainer
+                  isOpen={activeDrawer === 'cover'}
+                  title="Cover & Repaint Settings"
+                  onClose={() => setActiveDrawer(null)}
+                >
+                  <CoverRepaintSettings
+                    taskType={taskType}
+                    audioCoverStrength={audioCoverStrength}
+                    setAudioCoverStrength={setAudioCoverStrength}
+                    coverNoiseStrength={coverNoiseStrength}
+                    setCoverNoiseStrength={setCoverNoiseStrength}
+                    tempoScale={tempoScale}
+                    setTempoScale={setTempoScale}
+                    pitchShift={pitchShift}
+                    setPitchShift={setPitchShift}
+                    bpm={bpm}
+                    keyScale={keyScale}
+                    detectedBpm={detectedBpm}
+                    detectedKey={detectedKey}
+                    autoMaster={autoMaster}
+                    setAutoMaster={setAutoMaster}
+                    enableNormalization={enableNormalization}
+                    setEnableNormalization={setEnableNormalization}
+                    normalizationDb={normalizationDb}
+                    setNormalizationDb={setNormalizationDb}
+                    latentShift={latentShift}
+                    setLatentShift={setLatentShift}
+                    latentRescale={latentRescale}
+                    setLatentRescale={setLatentRescale}
+                    repaintingStart={repaintingStart}
+                    setRepaintingStart={setRepaintingStart}
+                    repaintingEnd={repaintingEnd}
+                    setRepaintingEnd={setRepaintingEnd}
+                    showCoverSettings={showCoverSettings}
+                    setShowCoverSettings={setShowCoverSettings}
+                    showOutputProcessing={showOutputProcessing}
+                    setShowOutputProcessing={setShowOutputProcessing}
+                    onOpenMasteringConsole={() => setShowMasteringConsole(true)}
+                    masteringParams={masteringParams}
+                    setMasteringParams={setMasteringParams}
+                    onUploadMatcheringRef={uploadMatcheringReference}
+                    isUploadingMatchering={isUploadingMatchering}
+                  />
+                  <MasteringConsoleModal
+                    isOpen={showMasteringConsole}
+                    onClose={() => setShowMasteringConsole(false)}
+                    onParamsChange={setMasteringParams}
+                    currentParams={masteringParams}
+                  />
+                </DrawerContainer>
+              </>
             )}
 
-            {/* Generation Engine */}
+            {/* ── Generation Engine ── */}
             <DrawerCard
               icon="⚙️"
               title="Generation Engine"
@@ -2657,8 +2788,100 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
               summary={genEngineSummary}
               onClick={() => setActiveDrawer(activeDrawer === 'generation' ? null : 'generation')}
             />
+            <DrawerContainer
+              isOpen={activeDrawer === 'generation'}
+              title="Generation Engine"
+              onClose={() => setActiveDrawer(null)}
+            >
+              <GenerationSettingsAccordion
+                isOpen={true}
+                onToggle={() => {}}
+                isTurbo={isTurboModel(selectedModel)}
+                batchSize={batchSize}
+                onBatchSizeChange={setBatchSize}
+                bulkCount={bulkCount}
+                onBulkCountChange={setBulkCount}
+                seed={seed}
+                onSeedChange={setSeed}
+                randomSeed={randomSeed}
+                onRandomSeedToggle={() => setRandomSeed(!randomSeed)}
+                shift={shift}
+                onShiftChange={setShift}
+                inferenceSteps={inferenceSteps}
+                onInferenceStepsChange={setInferenceSteps}
+                inferMethod={inferMethod}
+                onInferMethodChange={setInferMethod}
+                scheduler={scheduler}
+                onSchedulerChange={setScheduler}
+                audioFormat={audioFormat}
+                onAudioFormatChange={setAudioFormat}
+                guidanceScale={guidanceScale}
+                onGuidanceScaleChange={setGuidanceScale}
+                guidanceMode={guidanceMode}
+                onGuidanceModeChange={(mode) => { setGuidanceMode(mode); setUseAdg(mode === 'adg'); setUsePag(mode === 'pag'); }}
+                pagStart={pagStart}
+                onPagStartChange={setPagStart}
+                pagEnd={pagEnd}
+                onPagEndChange={setPagEnd}
+                pagScale={pagScale}
+                onPagScaleChange={setPagScale}
+                cfgIntervalStart={cfgIntervalStart}
+                onCfgIntervalStartChange={setCfgIntervalStart}
+                cfgIntervalEnd={cfgIntervalEnd}
+                onCfgIntervalEndChange={setCfgIntervalEnd}
+                thinking={thinking}
+                onThinkingToggle={() => setThinking(!thinking)}
+                loraLoaded={loraLoaded}
+                lmBackend={lmBackend}
+                onLmBackendChange={setLmBackend}
+                lmModel={lmModel}
+                onLmModelChange={handleLmModelChange}
+                isLmSwitching={isLmSwitching}
+                lmTemperature={lmTemperature}
+                onLmTemperatureChange={setLmTemperature}
+                lmCfgScale={lmCfgScale}
+                onLmCfgScaleChange={setLmCfgScale}
+                lmTopK={lmTopK}
+                onLmTopKChange={setLmTopK}
+                lmTopP={lmTopP}
+                onLmTopPChange={setLmTopP}
+                lmRepetitionPenalty={lmRepetitionPenalty}
+                onLmRepetitionPenaltyChange={setLmRepetitionPenalty}
+                lmNegativePrompt={lmNegativePrompt}
+                onLmNegativePromptChange={setLmNegativePrompt}
+                allowLmBatch={allowLmBatch}
+                onAllowLmBatchToggle={() => setAllowLmBatch(!allowLmBatch)}
+                useCotMetas={useCotMetas}
+                onUseCotMetasToggle={() => setUseCotMetas(!useCotMetas)}
+                useCotCaption={useCotCaption}
+                onUseCotCaptionToggle={() => setUseCotCaption(!useCotCaption)}
+                useCotLanguage={useCotLanguage}
+                onUseCotLanguageToggle={() => setUseCotLanguage(!useCotLanguage)}
+                lmBatchChunkSize={lmBatchChunkSize}
+                onLmBatchChunkSizeChange={setLmBatchChunkSize}
+                constrainedDecodingDebug={constrainedDecodingDebug}
+                onConstrainedDecodingDebugToggle={() => setConstrainedDecodingDebug(!constrainedDecodingDebug)}
+                isFormatCaption={isFormatCaption}
+                onIsFormatCaptionToggle={() => setIsFormatCaption(!isFormatCaption)}
+                uploadError={uploadError}
+                audioCodes={audioCodes}
+                onAudioCodesChange={setAudioCodes}
+                instruction={instruction}
+                onInstructionChange={setInstruction}
+                customTimesteps={customTimesteps}
+                onCustomTimestepsChange={setCustomTimesteps}
+                trackName={trackName}
+                onTrackNameChange={setTrackName}
+                completeTrackClasses={completeTrackClasses}
+                onCompleteTrackClassesChange={setCompleteTrackClasses}
+                autogen={autogen}
+                onToggleAutogen={() => setAutogen(!autogen)}
+                getLrc={getLrc}
+                onToggleGetLrc={() => setGetLrc(!getLrc)}
+              />
+            </DrawerContainer>
 
-            {/* Adapters */}
+            {/* ── Adapters & LoRA ── */}
             <DrawerCard
               icon="🧩"
               title="Adapters & LoRA"
@@ -2666,8 +2889,72 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
               summary={adapterSummary}
               onClick={() => setActiveDrawer(activeDrawer === 'adapters' ? null : 'adapters')}
             />
+            <DrawerContainer
+              isOpen={activeDrawer === 'adapters'}
+              title="Adapters & LoRA"
+              onClose={() => setActiveDrawer(null)}
+            >
+              <AdaptersAccordion
+                customMode={true}
+                isOpen={true}
+                onToggle={() => {}}
+                advancedAdapters={advancedAdapters}
+                onAdvancedAdaptersChange={setAdvancedAdapters}
+                loraPath={loraPath}
+                onLoraPathChange={setLoraPath}
+                loraLoaded={loraLoaded}
+                isLoraLoading={isLoraLoading}
+                onLoraToggle={handleLoraToggle}
+                loraError={loraError}
+                loraScale={loraScale}
+                onLoraScaleChange={handleLoraScaleChange}
+                adapterFolder={adapterFolder}
+                onAdapterFolderChange={setAdapterFolder}
+                onScanFolder={handleScanFolder}
+                adapterFiles={adapterFiles}
+                adapterSlots={adapterSlots}
+                loadingAdapterPath={loadingAdapterPath}
+                adapterLoadingMessage={adapterLoadingMessage}
+                expandedSlots={expandedSlots}
+                setExpandedSlots={setExpandedSlots}
+                onLoadSlot={handleLoadSlot}
+                onUnloadSlot={handleUnloadSlot}
+                onSlotScaleChange={handleSlotScaleChange}
+                onSlotGroupScaleChange={handleSlotGroupScaleChange}
+                onSlotLayerScaleChange={handleSlotLayerScaleChange}
+                temporalScheduleActive={temporalScheduleActive}
+                onTemporalSchedulePreset={handleTemporalSchedulePreset}
+                globalScaleOverrideEnabled={globalScaleOverrideEnabled}
+                onGlobalOverrideToggle={handleGlobalOverrideToggle}
+                globalOverallScale={globalOverallScale}
+                onGlobalOverallScaleChange={handleGlobalOverallScaleChange}
+                globalGroupScales={globalGroupScales}
+                onGlobalGroupScaleChange={handleGlobalGroupScaleChange}
+              />
+              <LayerAblationPanel
+                customMode={true}
+                hasLoadedAdapters={advancedAdapters && adapterSlots.length > 0}
+                onLayerScaleChange={handleSlotLayerScaleChange}
+                onBulkLayerScalesChange={handleBulkLayerScalesChange}
+                onRunSweep={handleStartSweep}
+                isSweepRunning={sweepRunning}
+                sweepProgress={sweepProgress}
+                onCancelSweep={handleCancelSweep}
+                isGenerating={isGenerating}
+                diffPinnedA={diffPinnedA}
+                diffPinnedB={diffPinnedB}
+                onClearDiffA={onClearDiffA}
+                onClearDiffB={onClearDiffB}
+              />
+              <ActivationSteeringSection
+                customMode={true}
+                isOpen={showSteeringPanel}
+                onToggle={() => setShowSteeringPanel(!showSteeringPanel)}
+                onSteeringChange={handleSteeringChange}
+              />
+            </DrawerContainer>
 
-            {/* Output Processing */}
+            {/* ── Output Processing ── */}
             <DrawerCard
               icon="🎛️"
               title="Output Processing"
@@ -2675,8 +2962,58 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
               summary={outputSummary}
               onClick={() => setActiveDrawer(activeDrawer === 'output' ? null : 'output')}
             />
+            <DrawerContainer
+              isOpen={activeDrawer === 'output'}
+              title="Output Processing"
+              onClose={() => setActiveDrawer(null)}
+            >
+              <CoverRepaintSettings
+                taskType={taskType}
+                audioCoverStrength={audioCoverStrength}
+                setAudioCoverStrength={setAudioCoverStrength}
+                coverNoiseStrength={coverNoiseStrength}
+                setCoverNoiseStrength={setCoverNoiseStrength}
+                tempoScale={tempoScale}
+                setTempoScale={setTempoScale}
+                pitchShift={pitchShift}
+                setPitchShift={setPitchShift}
+                bpm={bpm}
+                keyScale={keyScale}
+                detectedBpm={detectedBpm}
+                detectedKey={detectedKey}
+                autoMaster={autoMaster}
+                setAutoMaster={setAutoMaster}
+                enableNormalization={enableNormalization}
+                setEnableNormalization={setEnableNormalization}
+                normalizationDb={normalizationDb}
+                setNormalizationDb={setNormalizationDb}
+                latentShift={latentShift}
+                setLatentShift={setLatentShift}
+                latentRescale={latentRescale}
+                setLatentRescale={setLatentRescale}
+                repaintingStart={repaintingStart}
+                setRepaintingStart={setRepaintingStart}
+                repaintingEnd={repaintingEnd}
+                setRepaintingEnd={setRepaintingEnd}
+                showCoverSettings={showCoverSettings}
+                setShowCoverSettings={setShowCoverSettings}
+                showOutputProcessing={showOutputProcessing}
+                setShowOutputProcessing={setShowOutputProcessing}
+                onOpenMasteringConsole={() => setShowMasteringConsole(true)}
+                masteringParams={masteringParams}
+                setMasteringParams={setMasteringParams}
+                onUploadMatcheringRef={uploadMatcheringReference}
+                isUploadingMatchering={isUploadingMatchering}
+              />
+              <MasteringConsoleModal
+                isOpen={showMasteringConsole}
+                onClose={() => setShowMasteringConsole(false)}
+                onParamsChange={setMasteringParams}
+                currentParams={masteringParams}
+              />
+            </DrawerContainer>
 
-            {/* Score System */}
+            {/* ── Score System ── */}
             <DrawerCard
               icon="📊"
               title="Score System"
@@ -2684,329 +3021,22 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
               summary={getScores ? 'Active' : 'Off'}
               onClick={() => setActiveDrawer(activeDrawer === 'score' ? null : 'score')}
             />
+            <DrawerContainer
+              isOpen={activeDrawer === 'score'}
+              title="Score System"
+              onClose={() => setActiveDrawer(null)}
+            >
+              <ScoreSystemAccordion
+                isOpen={true}
+                onToggle={() => {}}
+                getScores={getScores}
+                onToggleGetScores={() => setGetScores(!getScores)}
+                scoreScale={scoreScale}
+                onScoreScaleChange={setScoreScale}
+              />
+            </DrawerContainer>
           </div>
         )}
-
-        {/* ─── DRAWER PANELS (conditionally render based on activeDrawer) ─── */}
-
-        {/* Track Setup Drawer */}
-        <DrawerContainer
-          isOpen={activeDrawer === 'track-setup'}
-          title="Track Setup"
-          onClose={() => setActiveDrawer(null)}
-        >
-          {/* Lyrics Library */}
-          <LyricsLibrary
-            setStyle={setStyle}
-            setLyrics={setLyrics}
-            setBpm={setBpm}
-            setKeyScale={setKeyScale}
-            setTitle={setTitle}
-            setDuration={setDuration}
-          />
-
-          {/* Reference / Source Audio */}
-          <AudioSelectionSection
-            useReferenceAudio={useReferenceAudio}
-            setUseReferenceAudio={setUseReferenceAudio}
-            taskType={taskType}
-            referenceAudioUrl={referenceAudioUrl}
-            referenceAudioTitle={referenceAudioTitle}
-            referencePlaying={referencePlaying}
-            toggleAudio={toggleAudio}
-            referenceDuration={referenceDuration}
-            referenceTime={referenceTime}
-            referenceAudioRef={referenceAudioRef}
-            setReferenceAudioUrl={setReferenceAudioUrl}
-            setReferenceAudioTitle={setReferenceAudioTitle}
-            setReferencePlaying={setReferencePlaying}
-            setReferenceTime={setReferenceTime}
-            setReferenceDuration={setReferenceDuration}
-            sourceAudioUrl={sourceAudioUrl}
-            sourceAudioTitle={sourceAudioTitle}
-            sourcePlaying={sourcePlaying}
-            sourceDuration={sourceDuration}
-            sourceTime={sourceTime}
-            sourceAudioRef={sourceAudioRef}
-            setSourceAudioUrl={setSourceAudioUrl}
-            setSourceAudioTitle={setSourceAudioTitle}
-            setSourcePlaying={setSourcePlaying}
-            setSourceTime={setSourceTime}
-            setSourceDuration={setSourceDuration}
-            openAudioModal={openAudioModal}
-            referenceInputRef={referenceInputRef}
-            sourceInputRef={sourceInputRef}
-            handleDrop={handleDrop}
-            handleDragOver={handleDragOver}
-            formatTime={formatTime}
-            getAudioLabel={getAudioLabel}
-            onAnalyzeSource={handleAnalyzeSource}
-            isAnalyzing={isAnalyzing}
-          />
-
-          {/* Track Details (title, instrumental, vocal, BPM, key, duration) */}
-          <TrackDetailsAccordion
-            instrumental={instrumental}
-            setInstrumental={setInstrumental}
-            vocalLanguage={vocalLanguage}
-            setVocalLanguage={setVocalLanguage}
-            vocalGender={vocalGender}
-            setVocalGender={setVocalGender}
-            title={title}
-            setTitle={setTitle}
-            bpm={bpm}
-            setBpm={setBpm}
-            keyScale={keyScale}
-            setKeyScale={setKeyScale}
-            timeSignature={timeSignature}
-            setTimeSignature={setTimeSignature}
-            duration={duration}
-            setDuration={setDuration}
-            detectedBpm={detectedBpm}
-            detectedKey={detectedKey}
-            triggerWord={adapterTriggerWord}
-            taskType={taskType}
-            sourceDuration={sourceDuration}
-            tempoScale={tempoScale}
-            effectiveBpm={effectiveBpm}
-            effectiveKeyScale={effectiveKeyScale}
-          />
-        </DrawerContainer>
-
-        {/* Cover/Repaint Drawer */}
-        <DrawerContainer
-          isOpen={activeDrawer === 'cover'}
-          title="Cover & Repaint Settings"
-          onClose={() => setActiveDrawer(null)}
-        >
-          <CoverRepaintSettings
-          taskType={taskType}
-          audioCoverStrength={audioCoverStrength}
-          setAudioCoverStrength={setAudioCoverStrength}
-          coverNoiseStrength={coverNoiseStrength}
-          setCoverNoiseStrength={setCoverNoiseStrength}
-          tempoScale={tempoScale}
-          setTempoScale={setTempoScale}
-          pitchShift={pitchShift}
-          setPitchShift={setPitchShift}
-          bpm={bpm}
-          keyScale={keyScale}
-          detectedBpm={detectedBpm}
-          detectedKey={detectedKey}
-          autoMaster={autoMaster}
-          setAutoMaster={setAutoMaster}
-          enableNormalization={enableNormalization}
-          setEnableNormalization={setEnableNormalization}
-          normalizationDb={normalizationDb}
-          setNormalizationDb={setNormalizationDb}
-          latentShift={latentShift}
-          setLatentShift={setLatentShift}
-          latentRescale={latentRescale}
-          setLatentRescale={setLatentRescale}
-          repaintingStart={repaintingStart}
-          setRepaintingStart={setRepaintingStart}
-          repaintingEnd={repaintingEnd}
-          setRepaintingEnd={setRepaintingEnd}
-          showCoverSettings={showCoverSettings}
-          setShowCoverSettings={setShowCoverSettings}
-          showOutputProcessing={showOutputProcessing}
-          setShowOutputProcessing={setShowOutputProcessing}
-          onOpenMasteringConsole={() => setShowMasteringConsole(true)}
-          masteringParams={masteringParams}
-          setMasteringParams={setMasteringParams}
-          onUploadMatcheringRef={uploadMatcheringReference}
-          isUploadingMatchering={isUploadingMatchering}
-        />
-
-        {/* Mastering Console Modal */}
-        <MasteringConsoleModal
-          isOpen={showMasteringConsole}
-          onClose={() => setShowMasteringConsole(false)}
-          onParamsChange={setMasteringParams}
-          currentParams={masteringParams}
-        />
-        </DrawerContainer>
-
-        {/* Generation Engine Drawer */}
-        <DrawerContainer
-          isOpen={activeDrawer === 'generation'}
-          title="Generation Engine"
-          onClose={() => setActiveDrawer(null)}
-        >
-          <GenerationSettingsAccordion
-            isOpen={true}
-            onToggle={() => {}}
-            isTurbo={isTurboModel(selectedModel)}
-            batchSize={batchSize}
-            onBatchSizeChange={setBatchSize}
-            bulkCount={bulkCount}
-            onBulkCountChange={setBulkCount}
-            seed={seed}
-            onSeedChange={setSeed}
-            randomSeed={randomSeed}
-            onRandomSeedToggle={() => setRandomSeed(!randomSeed)}
-            shift={shift}
-            onShiftChange={setShift}
-            inferenceSteps={inferenceSteps}
-            onInferenceStepsChange={setInferenceSteps}
-            inferMethod={inferMethod}
-            onInferMethodChange={setInferMethod}
-            scheduler={scheduler}
-            onSchedulerChange={setScheduler}
-            audioFormat={audioFormat}
-            onAudioFormatChange={setAudioFormat}
-            guidanceScale={guidanceScale}
-            onGuidanceScaleChange={setGuidanceScale}
-            guidanceMode={guidanceMode}
-            onGuidanceModeChange={(mode) => { setGuidanceMode(mode); setUseAdg(mode === 'adg'); setUsePag(mode === 'pag'); }}
-            pagStart={pagStart}
-            onPagStartChange={setPagStart}
-            pagEnd={pagEnd}
-            onPagEndChange={setPagEnd}
-            pagScale={pagScale}
-            onPagScaleChange={setPagScale}
-            cfgIntervalStart={cfgIntervalStart}
-            onCfgIntervalStartChange={setCfgIntervalStart}
-            cfgIntervalEnd={cfgIntervalEnd}
-            onCfgIntervalEndChange={setCfgIntervalEnd}
-            thinking={thinking}
-            onThinkingToggle={() => setThinking(!thinking)}
-            loraLoaded={loraLoaded}
-            lmBackend={lmBackend}
-            onLmBackendChange={setLmBackend}
-            lmModel={lmModel}
-            onLmModelChange={handleLmModelChange}
-            isLmSwitching={isLmSwitching}
-            lmTemperature={lmTemperature}
-            onLmTemperatureChange={setLmTemperature}
-            lmCfgScale={lmCfgScale}
-            onLmCfgScaleChange={setLmCfgScale}
-            lmTopK={lmTopK}
-            onLmTopKChange={setLmTopK}
-            lmTopP={lmTopP}
-            onLmTopPChange={setLmTopP}
-            lmRepetitionPenalty={lmRepetitionPenalty}
-            onLmRepetitionPenaltyChange={setLmRepetitionPenalty}
-            lmNegativePrompt={lmNegativePrompt}
-            onLmNegativePromptChange={setLmNegativePrompt}
-            allowLmBatch={allowLmBatch}
-            onAllowLmBatchToggle={() => setAllowLmBatch(!allowLmBatch)}
-            useCotMetas={useCotMetas}
-            onUseCotMetasToggle={() => setUseCotMetas(!useCotMetas)}
-            useCotCaption={useCotCaption}
-            onUseCotCaptionToggle={() => setUseCotCaption(!useCotCaption)}
-            useCotLanguage={useCotLanguage}
-            onUseCotLanguageToggle={() => setUseCotLanguage(!useCotLanguage)}
-            lmBatchChunkSize={lmBatchChunkSize}
-            onLmBatchChunkSizeChange={setLmBatchChunkSize}
-            constrainedDecodingDebug={constrainedDecodingDebug}
-            onConstrainedDecodingDebugToggle={() => setConstrainedDecodingDebug(!constrainedDecodingDebug)}
-            isFormatCaption={isFormatCaption}
-            onIsFormatCaptionToggle={() => setIsFormatCaption(!isFormatCaption)}
-
-            uploadError={uploadError}
-            audioCodes={audioCodes}
-            onAudioCodesChange={setAudioCodes}
-            instruction={instruction}
-            onInstructionChange={setInstruction}
-            customTimesteps={customTimesteps}
-            onCustomTimestepsChange={setCustomTimesteps}
-            trackName={trackName}
-            onTrackNameChange={setTrackName}
-            completeTrackClasses={completeTrackClasses}
-            onCompleteTrackClassesChange={setCompleteTrackClasses}
-            autogen={autogen}
-            onToggleAutogen={() => setAutogen(!autogen)}
-            getLrc={getLrc}
-            onToggleGetLrc={() => setGetLrc(!getLrc)}
-          />
-        </DrawerContainer>
-
-        {/* Adapters Drawer */}
-        <DrawerContainer
-          isOpen={activeDrawer === 'adapters'}
-          title="Adapters & LoRA"
-          onClose={() => setActiveDrawer(null)}
-        >
-          <AdaptersAccordion
-            customMode={true}
-            isOpen={true}
-            onToggle={() => {}}
-            advancedAdapters={advancedAdapters}
-            onAdvancedAdaptersChange={setAdvancedAdapters}
-            loraPath={loraPath}
-            onLoraPathChange={setLoraPath}
-            loraLoaded={loraLoaded}
-            isLoraLoading={isLoraLoading}
-            onLoraToggle={handleLoraToggle}
-            loraError={loraError}
-            loraScale={loraScale}
-            onLoraScaleChange={handleLoraScaleChange}
-            adapterFolder={adapterFolder}
-            onAdapterFolderChange={setAdapterFolder}
-            onScanFolder={handleScanFolder}
-            adapterFiles={adapterFiles}
-            adapterSlots={adapterSlots}
-            loadingAdapterPath={loadingAdapterPath}
-            adapterLoadingMessage={adapterLoadingMessage}
-            expandedSlots={expandedSlots}
-            setExpandedSlots={setExpandedSlots}
-            onLoadSlot={handleLoadSlot}
-            onUnloadSlot={handleUnloadSlot}
-            onSlotScaleChange={handleSlotScaleChange}
-            onSlotGroupScaleChange={handleSlotGroupScaleChange}
-            onSlotLayerScaleChange={handleSlotLayerScaleChange}
-            temporalScheduleActive={temporalScheduleActive}
-            onTemporalSchedulePreset={handleTemporalSchedulePreset}
-            globalScaleOverrideEnabled={globalScaleOverrideEnabled}
-            onGlobalOverrideToggle={handleGlobalOverrideToggle}
-            globalOverallScale={globalOverallScale}
-            onGlobalOverallScaleChange={handleGlobalOverallScaleChange}
-            globalGroupScales={globalGroupScales}
-            onGlobalGroupScaleChange={handleGlobalGroupScaleChange}
-          />
-
-          {/* LAYER ABLATION LAB (Developer Mode) */}
-          <LayerAblationPanel
-            customMode={true}
-            hasLoadedAdapters={advancedAdapters && adapterSlots.length > 0}
-            onLayerScaleChange={handleSlotLayerScaleChange}
-            onBulkLayerScalesChange={handleBulkLayerScalesChange}
-            onRunSweep={handleStartSweep}
-            isSweepRunning={sweepRunning}
-            sweepProgress={sweepProgress}
-            onCancelSweep={handleCancelSweep}
-            isGenerating={isGenerating}
-            diffPinnedA={diffPinnedA}
-            diffPinnedB={diffPinnedB}
-            onClearDiffA={onClearDiffA}
-            onClearDiffB={onClearDiffB}
-          />
-
-          {/* ACTIVATION STEERING */}
-          <ActivationSteeringSection
-            customMode={true}
-            isOpen={showSteeringPanel}
-            onToggle={() => setShowSteeringPanel(!showSteeringPanel)}
-            onSteeringChange={handleSteeringChange}
-          />
-        </DrawerContainer>
-
-        {/* Score System Drawer */}
-        <DrawerContainer
-          isOpen={activeDrawer === 'score'}
-          title="Score System"
-          onClose={() => setActiveDrawer(null)}
-        >
-          <ScoreSystemAccordion
-            isOpen={true}
-            onToggle={() => {}}
-            getScores={getScores}
-            onToggleGetScores={() => setGetScores(!getScores)}
-            scoreScale={scoreScale}
-            onScoreScaleChange={setScoreScale}
-          />
-        </DrawerContainer>
 
       </div>
 
