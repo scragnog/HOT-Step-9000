@@ -22,6 +22,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
         const saved = localStorage.getItem('hq_upscale_steps');
         return saved !== null ? parseInt(saved, 10) : 160;
     });
+    const [quickPresetSteps, setQuickPresetSteps] = useState(() => {
+        const saved = localStorage.getItem('quick_preset_steps');
+        return saved !== null ? parseInt(saved, 10) : 12;
+    });
+    const [hqPresetSteps, setHqPresetSteps] = useState(() => {
+        const saved = localStorage.getItem('hq_preset_steps');
+        return saved !== null ? parseInt(saved, 10) : 60;
+    });
     const [visualizerBg, setVisualizerBg] = useState(() => localStorage.getItem('visualizer_songlist_bg') === 'true');
     const [bounceIntensity, setBounceIntensity] = useState(() => {
         const saved = localStorage.getItem('waveform-bounce-intensity');
@@ -384,6 +392,46 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
                                 />
                             </div>
                         </div>
+                            {/* Quick Preset Steps */}
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-zinc-900 dark:text-white font-medium">Quick Preset Steps</p>
+                                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Inference steps for the ⚡ Quick preset button</p>
+                                </div>
+                                <input
+                                    type="number"
+                                    min={4}
+                                    max={200}
+                                    step={4}
+                                    value={quickPresetSteps}
+                                    onChange={(e) => {
+                                        const val = Math.max(4, Math.min(200, parseInt(e.target.value, 10) || 12));
+                                        setQuickPresetSteps(val);
+                                        localStorage.setItem('quick_preset_steps', String(val));
+                                    }}
+                                    className="w-20 px-2 py-1.5 text-sm font-mono text-center rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:border-indigo-500"
+                                />
+                            </div>
+                            {/* HQ Preset Steps */}
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-zinc-900 dark:text-white font-medium">HQ Preset Steps</p>
+                                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Inference steps for the 🔥 HQ preset button</p>
+                                </div>
+                                <input
+                                    type="number"
+                                    min={20}
+                                    max={500}
+                                    step={10}
+                                    value={hqPresetSteps}
+                                    onChange={(e) => {
+                                        const val = Math.max(20, Math.min(500, parseInt(e.target.value, 10) || 60));
+                                        setHqPresetSteps(val);
+                                        localStorage.setItem('hq_preset_steps', String(val));
+                                    }}
+                                    className="w-20 px-2 py-1.5 text-sm font-mono text-center rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:border-indigo-500"
+                                />
+                            </div>
                     </div>
 
                     {/* Audio Export Section */}
