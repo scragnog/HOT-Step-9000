@@ -67,6 +67,8 @@ interface AdaptersAccordionProps {
     onGlobalOverallScaleChange?: (scale: number) => void;
     globalGroupScales?: { self_attn: number; cross_attn: number; mlp: number };
     onGlobalGroupScaleChange?: (group: string, value: number) => void;
+    /** When true, skip the accordion header — used inside DrawerContainers */
+    embedded?: boolean;
 }
 
 export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
@@ -105,6 +107,7 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
     onGlobalOverallScaleChange,
     globalGroupScales,
     onGlobalGroupScaleChange,
+    embedded = false,
 }) => {
     const { t } = useI18n();
     const { token } = useAuth();
@@ -142,21 +145,8 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
 
     if (!customMode) return null;
 
-    return (
-        <div>
-            <button
-                onClick={onToggle}
-                className={`w-full flex items-center justify-between px-4 py-3 bg-white dark:bg-suno-card border border-zinc-200 dark:border-white/5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors ${isOpen ? 'rounded-t-xl rounded-b-none border-b-0' : 'rounded-xl'}`}
-            >
-                <div className="flex items-center gap-2">
-                    <Sliders size={16} className="text-zinc-500" />
-                    <span>Adapters (LoRA / LoKR)</span>
-                </div>
-                <ChevronDown size={18} className={`text-pink-500 chevron-icon ${isOpen ? 'rotated' : ''}`} />
-            </button>
-
-            {isOpen && (
-                <div className="bg-white dark:bg-suno-card rounded-b-xl rounded-t-none border border-t-0 border-zinc-200 dark:border-white/5 p-4 space-y-4">
+    const content = (
+                <div className={embedded ? "space-y-4" : "bg-white dark:bg-suno-card rounded-b-xl rounded-t-none border border-t-0 border-zinc-200 dark:border-white/5 p-4 space-y-4"}>
                     {/* Advanced Toggle */}
                     <div className="flex items-center justify-between py-1">
                         <div>
@@ -738,9 +728,25 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                         </>
                     )}
                 </div>
-            )}
+    );
+
+    if (embedded) return content;
+
+    return (
+        <div>
+            <button
+                onClick={onToggle}
+                className={`w-full flex items-center justify-between px-4 py-3 bg-white dark:bg-suno-card border border-zinc-200 dark:border-white/5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors ${isOpen ? 'rounded-t-xl rounded-b-none border-b-0' : 'rounded-xl'}`}
+            >
+                <div className="flex items-center gap-2">
+                    <Sliders size={16} className="text-zinc-500" />
+                    <span>Adapters (LoRA / LoKR)</span>
+                </div>
+                <ChevronDown size={18} className={`text-pink-500 chevron-icon ${isOpen ? 'rotated' : ''}`} />
+            </button>
+
+            {isOpen && content}
         </div>
     );
 };
-
 export default AdaptersAccordion;

@@ -40,6 +40,8 @@ interface CoverRepaintSettingsProps {
     setMasteringParams?: (params: any) => void;
     onUploadMatcheringRef?: (file: File) => Promise<string>;
     isUploadingMatchering?: boolean;
+    /** When true, skip accordion headers — used inside DrawerContainers */
+    embedded?: boolean;
 }
 
 export const CoverRepaintSettings: React.FC<CoverRepaintSettingsProps> = ({
@@ -78,7 +80,8 @@ export const CoverRepaintSettings: React.FC<CoverRepaintSettingsProps> = ({
     masteringParams,
     setMasteringParams,
     onUploadMatcheringRef,
-    isUploadingMatchering
+    isUploadingMatchering,
+    embedded = false,
 }) => {
     const { t } = useI18n();
 
@@ -114,6 +117,7 @@ export const CoverRepaintSettings: React.FC<CoverRepaintSettingsProps> = ({
             {/* COVER / REPAINT CONTROLS — accordion */}
             {showCoverSection && (
                 <div>
+                    {!embedded && (
                     <button
                         type="button"
                         onClick={() => setShowCoverSettings(!showCoverSettings)}
@@ -122,8 +126,9 @@ export const CoverRepaintSettings: React.FC<CoverRepaintSettingsProps> = ({
                         <span className="flex items-center gap-2"><Music size={16} className="text-pink-500" />{coverTitle}</span>
                         <ChevronDown size={18} className={`text-pink-500 chevron-icon ${showCoverSettings ? 'rotated' : ''}`} />
                     </button>
-                    {showCoverSettings && (
-                        <div className="bg-white dark:bg-suno-card rounded-b-xl rounded-t-none border border-t-0 border-zinc-200 dark:border-white/5 p-4 space-y-4">
+                    )}
+                    {(embedded || showCoverSettings) && (
+                        <div className={embedded ? "space-y-4" : "bg-white dark:bg-suno-card rounded-b-xl rounded-t-none border border-t-0 border-zinc-200 dark:border-white/5 p-4 space-y-4"}>
                             {/* Audio Cover Strength & Cover Noise Strength side-by-side */}
                             {showCoverStrength && (
                                 <div className={`grid ${showCoverNoise ? 'grid-cols-2' : 'grid-cols-1'} gap-3`}>
@@ -236,6 +241,7 @@ export const CoverRepaintSettings: React.FC<CoverRepaintSettingsProps> = ({
 
             {/* OUTPUT PROCESSING — accordion, visible for ALL task types */}
             <div>
+                {!embedded && (
                 <button
                     type="button"
                     onClick={() => setShowOutputProcessing(!showOutputProcessing)}
@@ -244,8 +250,9 @@ export const CoverRepaintSettings: React.FC<CoverRepaintSettingsProps> = ({
                     <span className="flex items-center gap-2"><SlidersHorizontal size={16} className="text-pink-500" />{t('outputProcessing')}</span>
                     <ChevronDown size={18} className={`text-pink-500 chevron-icon ${showOutputProcessing ? 'rotated' : ''}`} />
                 </button>
-                {showOutputProcessing && (
-                    <div className="bg-white dark:bg-suno-card rounded-b-xl rounded-t-none border border-t-0 border-zinc-200 dark:border-white/5 p-4 space-y-4">
+                )}
+                {(embedded || showOutputProcessing) && (
+                    <div className={embedded ? "space-y-4" : "bg-white dark:bg-suno-card rounded-b-xl rounded-t-none border border-t-0 border-zinc-200 dark:border-white/5 p-4 space-y-4"}>
                         {/* Auto-Master toggle */}
                         <div className="flex items-center justify-between py-1">
                             <div className="flex-1">
