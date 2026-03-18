@@ -103,7 +103,7 @@ function AppContent() {
   const [debugPanelOpen, setDebugPanelOpen] = usePersistedState('ace-debugPanelOpen', false);
 
   // Create panel resizable width (persisted)
-  const [createPanelWidth, setCreatePanelWidth] = usePersistedState('ace-createPanelWidth', 360);
+  const [createPanelWidth, setCreatePanelWidth] = usePersistedState('ace-createPanelWidth', 490);
 
   // Right sidebar resizable width (persisted)
   const [rightSidebarWidth, setRightSidebarWidth] = usePersistedState('ace-rightSidebarWidth', 360);
@@ -1978,7 +1978,7 @@ function AppContent() {
                 const startX = e.clientX;
                 const startW = createPanelWidth;
                 const onMove = (ev: MouseEvent) => {
-                  const newW = Math.min(600, Math.max(280, startW + ev.clientX - startX));
+                  const newW = Math.min(700, Math.max(490, startW + ev.clientX - startX));
                   setCreatePanelWidth(newW);
                 };
                 const onUp = () => {
