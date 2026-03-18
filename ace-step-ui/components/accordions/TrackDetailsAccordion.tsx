@@ -1,7 +1,7 @@
 import React from 'react';
 import { ChevronDown, FileText } from 'lucide-react';
 import { useI18n } from '../../context/I18nContext';
-import { VOCAL_LANGUAGE_KEYS } from '../CreatePanel';
+import { VOCAL_LANGUAGE_KEYS } from '../../utils/constants';
 import { LyricsSection } from '../sections/LyricsSection';
 import { StyleSection } from '../sections/StyleSection';
 import { MusicParametersSection } from '../sections/MusicParametersSection';

@@ -1,5 +1,5 @@
 import React from 'react';
-import { KEY_SIGNATURES, TIME_SIGNATURES } from '../CreatePanel';
+import { KEY_SIGNATURES, TIME_SIGNATURES } from '../../utils/constants';
 import { useI18n } from '../../context/I18nContext';
 import { EditableSlider } from '../EditableSlider';
 

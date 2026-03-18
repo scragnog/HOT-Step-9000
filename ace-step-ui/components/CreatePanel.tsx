@@ -6,6 +6,9 @@ import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
 import { generateApi } from '../services/api';
 import { MAIN_STYLES, SUB_STYLES, ALL_STYLES } from '../data/genres';
+import { KEY_SIGNATURES, TIME_SIGNATURES, VOCAL_LANGUAGE_KEYS } from '../utils/constants';
+import { getModelDisplayName, isTurboModel, isBaseModel, isBaseOnlyTask } from '../utils/modelUtils';
+import { getAudioLabel, formatTime, computeEffectiveBpm, computeEffectiveKeyScale } from '../utils/audioUtils';
 import { EditableSlider } from './EditableSlider';
 import GenerationSettingsAccordion from './accordions/GenerationSettingsAccordion';
 import { AudioSelectionSection } from './sections/AudioSelectionSection';
@@ -54,82 +57,8 @@ interface CreatePanelProps {
   onClearDiffB?: () => void;
 }
 
-export const KEY_SIGNATURES = [
-  '',
-  'C major', 'C minor',
-  'C# major', 'C# minor',
-  'Db major', 'Db minor',
-  'D major', 'D minor',
-  'D# major', 'D# minor',
-  'Eb major', 'Eb minor',
-  'E major', 'E minor',
-  'F major', 'F minor',
-  'F# major', 'F# minor',
-  'Gb major', 'Gb minor',
-  'G major', 'G minor',
-  'G# major', 'G# minor',
-  'Ab major', 'Ab minor',
-  'A major', 'A minor',
-  'A# major', 'A# minor',
-  'Bb major', 'Bb minor',
-  'B major', 'B minor'
-];
-
-export const TIME_SIGNATURES = ['', '2/4', '3/4', '4/4', '6/8'];
-
-export const VOCAL_LANGUAGE_KEYS = [
-  { value: 'unknown', key: 'autoInstrumental' as const },
-  { value: 'ar', key: 'vocalArabic' as const },
-  { value: 'az', key: 'vocalAzerbaijani' as const },
-  { value: 'bg', key: 'vocalBulgarian' as const },
-  { value: 'bn', key: 'vocalBengali' as const },
-  { value: 'ca', key: 'vocalCatalan' as const },
-  { value: 'cs', key: 'vocalCzech' as const },
-  { value: 'da', key: 'vocalDanish' as const },
-  { value: 'de', key: 'vocalGerman' as const },
-  { value: 'el', key: 'vocalGreek' as const },
-  { value: 'en', key: 'vocalEnglish' as const },
-  { value: 'es', key: 'vocalSpanish' as const },
-  { value: 'fa', key: 'vocalPersian' as const },
-  { value: 'fi', key: 'vocalFinnish' as const },
-  { value: 'fr', key: 'vocalFrench' as const },
-  { value: 'he', key: 'vocalHebrew' as const },
-  { value: 'hi', key: 'vocalHindi' as const },
-  { value: 'hr', key: 'vocalCroatian' as const },
-  { value: 'ht', key: 'vocalHaitianCreole' as const },
-  { value: 'hu', key: 'vocalHungarian' as const },
-  { value: 'id', key: 'vocalIndonesian' as const },
-  { value: 'is', key: 'vocalIcelandic' as const },
-  { value: 'it', key: 'vocalItalian' as const },
-  { value: 'ja', key: 'vocalJapanese' as const },
-  { value: 'ko', key: 'vocalKorean' as const },
-  { value: 'la', key: 'vocalLatin' as const },
-  { value: 'lt', key: 'vocalLithuanian' as const },
-  { value: 'ms', key: 'vocalMalay' as const },
-  { value: 'ne', key: 'vocalNepali' as const },
-  { value: 'nl', key: 'vocalDutch' as const },
-  { value: 'no', key: 'vocalNorwegian' as const },
-  { value: 'pa', key: 'vocalPunjabi' as const },
-  { value: 'pl', key: 'vocalPolish' as const },
-  { value: 'pt', key: 'vocalPortuguese' as const },
-  { value: 'ro', key: 'vocalRomanian' as const },
-  { value: 'ru', key: 'vocalRussian' as const },
-  { value: 'sa', key: 'vocalSanskrit' as const },
-  { value: 'sk', key: 'vocalSlovak' as const },
-  { value: 'sr', key: 'vocalSerbian' as const },
-  { value: 'sv', key: 'vocalSwedish' as const },
-  { value: 'sw', key: 'vocalSwahili' as const },
-  { value: 'ta', key: 'vocalTamil' as const },
-  { value: 'te', key: 'vocalTelugu' as const },
-  { value: 'th', key: 'vocalThai' as const },
-  { value: 'tl', key: 'vocalTagalog' as const },
-  { value: 'tr', key: 'vocalTurkish' as const },
-  { value: 'uk', key: 'vocalUkrainian' as const },
-  { value: 'ur', key: 'vocalUrdu' as const },
-  { value: 'vi', key: 'vocalVietnamese' as const },
-  { value: 'yue', key: 'vocalCantonese' as const },
-  { value: 'zh', key: 'vocalChineseMandarin' as const },
-];
+// Re-export constants for backward compatibility (consumers should import from utils/constants directly)
+export { KEY_SIGNATURES, TIME_SIGNATURES, VOCAL_LANGUAGE_KEYS } from '../utils/constants';
 
 export const CreatePanel: React.FC<CreatePanelProps> = ({
   onGenerate,
@@ -345,38 +274,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     ];
   }, [fetchedModels]);
 
-  // Map model ID to short display name
-  const getModelDisplayName = (modelId: string): string => {
-    const mapping: Record<string, string> = {
-      'acestep-v15-base': '1.5B',
-      'acestep-v15-sft': '1.5S',
-      'acestep-v15-turbo-shift1': '1.5TS1',
-      'acestep-v15-turbo-shift3': '1.5TS3',
-      'acestep-v15-turbo-continuous': '1.5TC',
-      'acestep-v15-turbo': '1.5T',
-      'acestep-v15-merge-sft-turbo-0.5': 'ST.5',
-      'acestep-v15-merge-sft-turbo-0.4': 'ST.4',
-      'acestep-v15-merge-sft-turbo-0.3': 'ST.3',
-      'acestep-v15-merge-base-turbo-0.5': 'BT.5',
-      'acestep-v15-merge-base-sft-0.5': 'BS.5',
-    };
-    return mapping[modelId] || modelId;
-  };
-
-  // Check if model is a turbo variant (excluding merged models —
-  // SFT+Turbo merges are weight averages, NOT pure distillation checkpoints)
-  const isTurboModel = (modelId: string): boolean => {
-    return modelId.includes('turbo') && !modelId.includes('merge');
-  };
-
-  // Check if model is a pure base model (only base supports extract/lego/complete)
-  const isBaseModel = (modelId: string): boolean => {
-    return modelId.includes('base');
-  };
-
-  const isBaseOnlyTask = (task: string): boolean => {
-    return ['extract', 'lego', 'complete'].includes(task);
-  };
+  // Model utility functions now imported from ../utils/modelUtils
 
   // Genre selection state (cascading)
   // Two-level genre cascade states
