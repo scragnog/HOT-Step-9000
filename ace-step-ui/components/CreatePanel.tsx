@@ -2566,61 +2566,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           </>
         )}
 
-        {/* ALWAYS-VISIBLE: Lyrics editor (non-extract, non-auto-write) */}
-        {taskType !== 'extract' && taskType !== 'auto-write' && (
-          <LyricsSection
-            showLyricsSub={showLyricsSub}
-            setShowLyricsSub={setShowLyricsSub}
-            instrumental={instrumental}
-            setInstrumental={setInstrumental}
-            lyrics={lyrics}
-            setLyrics={setLyrics}
-            lyricsRef={lyricsRef}
-            lyricsHeight={lyricsHeight}
-            startResizing={startResizing}
-            isFormattingLyrics={isFormattingLyrics}
-            handleFormat={handleFormat}
-            duration={duration > 0 ? duration : undefined}
-          />
-        )}
 
-        {/* ALWAYS-VISIBLE: Style tags (non-extract, non-auto-write) */}
-        {taskType !== 'extract' && taskType !== 'auto-write' && (
-          <StyleSection
-            showStyleSub={showStyleSub}
-            setShowStyleSub={setShowStyleSub}
-            style={style}
-            setStyle={setStyle}
-            refreshMusicTags={refreshMusicTags}
-            isFormattingStyle={isFormattingStyle}
-            handleFormat={handleFormat}
-            styleRef={styleRef}
-            styleHeight={styleHeight}
-            startResizingStyle={startResizingStyle}
-            genreDropdownRef={genreDropdownRef}
-            showGenreDropdown={showGenreDropdown}
-            setShowGenreDropdown={setShowGenreDropdown}
-            selectedMainGenre={selectedMainGenre}
-            setSelectedMainGenre={setSelectedMainGenre}
-            selectedSubGenre={selectedSubGenre}
-            setSelectedSubGenre={setSelectedSubGenre}
-            getSubGenreCount={getSubGenreCount}
-            genreSearch={genreSearch}
-            setGenreSearch={setGenreSearch}
-            filteredCombinedGenres={filteredCombinedGenres}
-            subGenreDropdownRef={subGenreDropdownRef}
-            showSubGenreDropdown={showSubGenreDropdown}
-            setShowSubGenreDropdown={setShowSubGenreDropdown}
-            filteredSubGenres={filteredSubGenres}
-            musicTags={musicTags}
-            bpm={bpm}
-            keyScale={keyScale}
-            timeSignature={timeSignature}
-            effectiveBpm={effectiveBpm}
-            effectiveKeyScale={effectiveKeyScale}
-            triggerWord={adapterTriggerWord}
-          />
-        )}
 
         {/* ─── DRAWERS: Track Setup + Advanced (each card followed by its container for inline expansion) ─── */}
         {taskType !== 'extract' && (
@@ -2634,12 +2580,61 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                   description="Title, vocals, BPM, key, duration, reference audio, lyrics library"
                   summary={`${title || 'Untitled'} · ${duration}s · ${bpm} BPM`}
                   onClick={() => setActiveDrawer(activeDrawer === 'track-setup' ? null : 'track-setup')}
+                  hidden={activeDrawer === 'track-setup'}
                 />
                 <DrawerContainer
                   isOpen={activeDrawer === 'track-setup'}
                   title="Track Setup"
                   onClose={() => setActiveDrawer(null)}
                 >
+                  <LyricsSection
+                    showLyricsSub={showLyricsSub}
+                    setShowLyricsSub={setShowLyricsSub}
+                    instrumental={instrumental}
+                    setInstrumental={setInstrumental}
+                    lyrics={lyrics}
+                    setLyrics={setLyrics}
+                    lyricsRef={lyricsRef}
+                    lyricsHeight={lyricsHeight}
+                    startResizing={startResizing}
+                    isFormattingLyrics={isFormattingLyrics}
+                    handleFormat={handleFormat}
+                    duration={duration > 0 ? duration : undefined}
+                  />
+                  <StyleSection
+                    showStyleSub={showStyleSub}
+                    setShowStyleSub={setShowStyleSub}
+                    style={style}
+                    setStyle={setStyle}
+                    refreshMusicTags={refreshMusicTags}
+                    isFormattingStyle={isFormattingStyle}
+                    handleFormat={handleFormat}
+                    styleRef={styleRef}
+                    styleHeight={styleHeight}
+                    startResizingStyle={startResizingStyle}
+                    genreDropdownRef={genreDropdownRef}
+                    showGenreDropdown={showGenreDropdown}
+                    setShowGenreDropdown={setShowGenreDropdown}
+                    selectedMainGenre={selectedMainGenre}
+                    setSelectedMainGenre={setSelectedMainGenre}
+                    selectedSubGenre={selectedSubGenre}
+                    setSelectedSubGenre={setSelectedSubGenre}
+                    getSubGenreCount={getSubGenreCount}
+                    genreSearch={genreSearch}
+                    setGenreSearch={setGenreSearch}
+                    filteredCombinedGenres={filteredCombinedGenres}
+                    subGenreDropdownRef={subGenreDropdownRef}
+                    showSubGenreDropdown={showSubGenreDropdown}
+                    setShowSubGenreDropdown={setShowSubGenreDropdown}
+                    filteredSubGenres={filteredSubGenres}
+                    musicTags={musicTags}
+                    bpm={bpm}
+                    keyScale={keyScale}
+                    timeSignature={timeSignature}
+                    effectiveBpm={effectiveBpm}
+                    effectiveKeyScale={effectiveKeyScale}
+                    triggerWord={adapterTriggerWord}
+                  />
                   <LyricsLibrary
                     setStyle={setStyle}
                     setLyrics={setLyrics}
@@ -2715,7 +2710,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
               </>
             )}
 
-            <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-wider px-1">Advanced</p>
+
 
             {/* ── Cover / Repaint ── */}
             {(taskType === 'cover' || taskType === 'repaint') && (
@@ -2726,6 +2721,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                   description="Source audio strength, noise, transform"
                   summary={coverSummary}
                   onClick={() => setActiveDrawer(activeDrawer === 'cover' ? null : 'cover')}
+                  hidden={activeDrawer === 'cover'}
                 />
                 <DrawerContainer
                   isOpen={activeDrawer === 'cover'}
@@ -2787,6 +2783,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
               description="Steps, solver, scheduler, guidance"
               summary={genEngineSummary}
               onClick={() => setActiveDrawer(activeDrawer === 'generation' ? null : 'generation')}
+              hidden={activeDrawer === 'generation'}
             />
             <DrawerContainer
               isOpen={activeDrawer === 'generation'}
@@ -2888,6 +2885,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
               description="Load and configure model adapters"
               summary={adapterSummary}
               onClick={() => setActiveDrawer(activeDrawer === 'adapters' ? null : 'adapters')}
+              hidden={activeDrawer === 'adapters'}
             />
             <DrawerContainer
               isOpen={activeDrawer === 'adapters'}
@@ -2961,6 +2959,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
               description="Mastering, normalization, latent tuning"
               summary={outputSummary}
               onClick={() => setActiveDrawer(activeDrawer === 'output' ? null : 'output')}
+              hidden={activeDrawer === 'output'}
             />
             <DrawerContainer
               isOpen={activeDrawer === 'output'}
@@ -3020,6 +3019,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
               description="Quality scoring and diagnostics"
               summary={getScores ? 'Active' : 'Off'}
               onClick={() => setActiveDrawer(activeDrawer === 'score' ? null : 'score')}
+              hidden={activeDrawer === 'score'}
             />
             <DrawerContainer
               isOpen={activeDrawer === 'score'}
