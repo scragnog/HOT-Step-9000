@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { usePersistedState } from '../hooks/usePersistedState';
-import { Sparkles, ChevronDown, Settings2, Trash2, Music2, Sliders, Dices, Hash, RefreshCw, Plus, Upload, Play, Pause, Loader2, Brain, Crosshair, BarChart3, FileText, Download } from 'lucide-react';
+import { ChevronDown, Settings2, Trash2, Music2, Sliders, Dices, Hash, RefreshCw, Plus, Upload, Play, Pause, Loader2, Brain, Crosshair, BarChart3, FileText, Download } from 'lucide-react';
 import { GenerationParams, Song } from '../types';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
@@ -19,11 +19,11 @@ import { CoverRepaintSettings } from './sections/CoverRepaintSettings';
 import { CreatePanelHeader } from './sections/CreatePanelHeader';
 import { TaskTypeSelector } from './sections/TaskTypeSelector';
 import { ExtractTrackSelector } from './sections/ExtractTrackSelector';
-import { SimpleModeSettings } from './sections/SimpleModeSettings';
+
 import { AutoWriteSection } from './sections/AutoWriteSection';
 import { TrackDetailsAccordion } from './accordions/TrackDetailsAccordion';
 import { AudioLibraryModal } from './sections/AudioLibraryModal';
-import { CreateButtonFooter } from './sections/CreateButtonFooter';
+
 import { DrawerCard } from './sections/DrawerCard';
 import { DrawerContainer } from './sections/DrawerContainer';
 import { GenerateFooter } from './GenerateFooter';
@@ -92,8 +92,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     setMusicTags(shuffled.slice(0, 6));
   }, []);
 
-  // Mode
-  const [customMode, setCustomMode] = usePersistedState('ace-customMode', true);
+  // customMode is always true now (Simple Mode removed in favour of Auto-Write)
+  const customMode = true;
 
   // Drawer state for Tier-2 sections
   const [activeDrawer, setActiveDrawer] = useState<string | null>(null);
@@ -1026,7 +1026,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   // Reuse Effect - must be after all state declarations
   useEffect(() => {
     if (initialData) {
-      setCustomMode(true);
+      // customMode is always true now — no-op removed
       setStyle(initialData.song.style);
       setTitle(initialData.song.title);
 
@@ -2005,7 +2005,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
 
         onGenerate({
           customMode,
-          songDescription: taskType === 'extract' ? undefined : (customMode ? undefined : songDescription),
+          songDescription: undefined,
           prompt: taskType === 'extract'
             ? (isVocalTrack ? lyrics : '')
             : lyrics,
@@ -2156,7 +2156,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     const data = {
       model: selectedModel,
       customMode,
-      songDescription: customMode ? undefined : songDescription,
+      songDescription: undefined,
       prompt: lyrics,
       style,
       title,
@@ -2249,7 +2249,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       try {
         const json = JSON.parse(event.target?.result as string);
         if (json.model !== undefined) setSelectedModel(json.model);
-        if (json.customMode !== undefined) setCustomMode(json.customMode);
+        // customMode is always true now — ignoring imported value
         if (json.songDescription !== undefined) setSongDescription(json.songDescription);
         if (json.prompt !== undefined) setLyrics(json.prompt);
         if (json.style !== undefined) setStyle(json.style);
@@ -2409,7 +2409,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
         {/* Header - Mode Toggle & Model Selection */}
         <CreatePanelHeader
           customMode={customMode}
-          setCustomMode={setCustomMode}
+          setCustomMode={() => {}} // no-op — customMode is always true
           modelMenuRef={modelMenuRef}
           showModelMenu={showModelMenu}
           setShowModelMenu={setShowModelMenu}
