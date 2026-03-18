@@ -4,8 +4,8 @@ import { useI18n } from '../context/I18nContext';
 import { usePersistedState } from '../hooks/usePersistedState';
 
 interface GenerateFooterProps {
-  /** Called with optional step/thinking overrides. Undefined = use current panel values. */
-  onGenerate: (overrides?: { inferenceSteps?: number; thinking?: boolean }) => void;
+  /** Called with optional step/thinking/mastering overrides. Undefined = use current panel values. */
+  onGenerate: (overrides?: { inferenceSteps?: number; thinking?: boolean; autoMaster?: boolean }) => void;
   isGenerating: boolean;
   isAuthenticated: boolean;
   activeJobCount: number;
@@ -24,7 +24,6 @@ interface PresetButton {
 /**
  * Sticky footer with the primary "Summon Bangers" button and a collapsible
  * "Advanced Summoning Modes" accordion containing preset generation buttons.
- * Replaces CreateButtonFooter.
  */
 export const GenerateFooter: React.FC<GenerateFooterProps> = ({
   onGenerate,
@@ -36,6 +35,7 @@ export const GenerateFooter: React.FC<GenerateFooterProps> = ({
   const { t } = useI18n();
   const [elapsedSecs, setElapsedSecs] = useState(0);
   const [showPresets, setShowPresets] = usePersistedState('ace-showPresets', false);
+  const [advancedMastering, setAdvancedMastering] = usePersistedState('ace-advancedMastering', false);
 
   // Read configurable step counts from localStorage (set in SettingsModal)
   const quickSteps = (() => {
@@ -95,13 +95,17 @@ export const GenerateFooter: React.FC<GenerateFooterProps> = ({
           </button>
 
           {showPresets && (
-            <div className="px-3 pb-3 pt-1">
+            <div className="px-3 pb-3 pt-1 space-y-3">
               <div className="grid grid-cols-2 gap-2">
                 {presets.map(preset => (
                   <button
                     key={preset.id}
                     type="button"
-                    onClick={() => onGenerate({ inferenceSteps: preset.steps, thinking: preset.thinking })}
+                    onClick={() => onGenerate({
+                      inferenceSteps: preset.steps,
+                      thinking: preset.thinking,
+                      autoMaster: advancedMastering,
+                    })}
                     disabled={!isAuthenticated || isGenerating}
                     className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all
                       bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300
@@ -115,7 +119,23 @@ export const GenerateFooter: React.FC<GenerateFooterProps> = ({
                   </button>
                 ))}
               </div>
-              <p className="text-[10px] text-zinc-400 dark:text-zinc-600 mt-2 text-center">
+
+              {/* Auto-Master toggle — only applies to advanced preset buttons */}
+              <div className="flex items-center justify-between py-1 border-t border-zinc-200 dark:border-white/5 pt-2">
+                <div>
+                  <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Auto-Master</span>
+                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500">Apply mastering to preset generations</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAdvancedMastering(!advancedMastering)}
+                  className={`w-10 h-5 rounded-full flex items-center transition-colors duration-200 px-0.5 border border-zinc-200 dark:border-white/5 cursor-pointer ${advancedMastering ? 'bg-pink-600' : 'bg-zinc-300 dark:bg-black/40'}`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white transform transition-transform duration-200 shadow-sm ${advancedMastering ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
+              </div>
+
+              <p className="text-[10px] text-zinc-400 dark:text-zinc-600 text-center">
                 These override your current step count and thinking settings for one generation only
               </p>
             </div>

@@ -1978,7 +1978,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     return keyScale;
   })();
 
-  const handleGenerate = () => {
+  const handleGenerate = (overrides?: { inferenceSteps?: number; thinking?: boolean; autoMaster?: boolean }) => {
     const styleWithGender = (() => {
       if (!vocalGender) return style;
       const genderHint = vocalGender === 'male' ? t('maleVocals') : t('femaleVocals');
@@ -2025,12 +2025,12 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           keyScale: effectiveKeyScale,
           timeSignature: taskType === 'extract' ? '' : timeSignature,
           duration,
-          inferenceSteps,
+          inferenceSteps: overrides?.inferenceSteps ?? inferenceSteps,
           guidanceScale,
           batchSize,
           randomSeed: randomSeed || i > 0 || currentTrack !== tracksToExtract[0],
           seed: jobSeed,
-          thinking,
+          thinking: overrides?.thinking ?? thinking,
           audioFormat,
           inferMethod,
           scheduler,
@@ -2060,8 +2060,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           coverNoiseStrength,
           tempoScale,
           pitchShift,
-          autoMaster,
-          masteringParams: autoMaster && masteringParams ? masteringParams : undefined,
+          autoMaster: overrides?.autoMaster ?? autoMaster,
+          masteringParams: (overrides?.autoMaster ?? autoMaster) && masteringParams ? masteringParams : undefined,
           enableNormalization,
           normalizationDb,
           latentShift,
@@ -2106,24 +2106,9 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   };
 
   // Override-aware generate handler for GenerateFooter presets
-  const handleGenerateWithOverrides = useCallback((overrides?: { inferenceSteps?: number; thinking?: boolean }) => {
-    if (!overrides) {
-      handleGenerate();
-      return;
-    }
-    // Temporarily apply overrides, call generate, then restore
-    const prevSteps = inferenceSteps;
-    const prevThinking = thinking;
-    if (overrides.inferenceSteps !== undefined) setInferenceSteps(overrides.inferenceSteps);
-    if (overrides.thinking !== undefined) setThinking(overrides.thinking);
-    // Use setTimeout to let state settle before generating
-    setTimeout(() => {
-      handleGenerate();
-      // Restore after generation is queued
-      setInferenceSteps(prevSteps);
-      setThinking(prevThinking);
-    }, 0);
-  }, [handleGenerate, inferenceSteps, thinking, setInferenceSteps, setThinking]);
+  const handleGenerateWithOverrides = useCallback((overrides?: { inferenceSteps?: number; thinking?: boolean; autoMaster?: boolean }) => {
+    handleGenerate(overrides);
+  }, [handleGenerate]);
 
   // Summary badge strings for Tier-2 DrawerCard components
   const genEngineSummary = useMemo(() => {
