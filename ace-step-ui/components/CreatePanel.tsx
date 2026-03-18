@@ -119,7 +119,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   // Accordion open/close state
   const [showGenerationSettings, setShowGenerationSettings] = usePersistedState('acestep-showGenerationSettings', false);
   const [showScorePanel, setShowScorePanel] = usePersistedState('ace-showScorePanel', false);
-  const [showTrackDetails, setShowTrackDetails] = usePersistedState('ace-showTrackDetails', true);
+  // showTrackDetails removed — now rendered inside Track Setup DrawerContainer
   const [showLyricsSub, setShowLyricsSub] = usePersistedState('ace-showLyricsSub', true);
   const [showStyleSub, setShowStyleSub] = usePersistedState('ace-showStyleSub', true);
   const [showMusicParamsSub, setShowMusicParamsSub] = usePersistedState('ace-showMusicParamsSub', false);
@@ -2566,82 +2566,27 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           </>
         )}
 
-        {/* TIER 1: Core inputs — always visible (non-extract, non-auto-write) */}
+        {/* ALWAYS-VISIBLE: Lyrics editor (non-extract, non-auto-write) */}
         {taskType !== 'extract' && taskType !== 'auto-write' && (
-          <div className="space-y-5">
-            {/* Lyrics Library */}
-            <LyricsLibrary
-              setStyle={setStyle}
-              setLyrics={setLyrics}
-              setBpm={setBpm}
-              setKeyScale={setKeyScale}
-              setTitle={setTitle}
-              setDuration={setDuration}
-            />
-
-            {/* Audio Section */}
-            <AudioSelectionSection
-              useReferenceAudio={useReferenceAudio}
-              setUseReferenceAudio={setUseReferenceAudio}
-              taskType={taskType}
-
-              referenceAudioUrl={referenceAudioUrl}
-              referenceAudioTitle={referenceAudioTitle}
-              referencePlaying={referencePlaying}
-              toggleAudio={toggleAudio}
-              referenceDuration={referenceDuration}
-              referenceTime={referenceTime}
-              referenceAudioRef={referenceAudioRef}
-              setReferenceAudioUrl={setReferenceAudioUrl}
-              setReferenceAudioTitle={setReferenceAudioTitle}
-              setReferencePlaying={setReferencePlaying}
-              setReferenceTime={setReferenceTime}
-              setReferenceDuration={setReferenceDuration}
-              sourceAudioUrl={sourceAudioUrl}
-              sourceAudioTitle={sourceAudioTitle}
-              sourcePlaying={sourcePlaying}
-              sourceDuration={sourceDuration}
-              sourceTime={sourceTime}
-              sourceAudioRef={sourceAudioRef}
-              setSourceAudioUrl={setSourceAudioUrl}
-              setSourceAudioTitle={setSourceAudioTitle}
-              setSourcePlaying={setSourcePlaying}
-              setSourceTime={setSourceTime}
-              setSourceDuration={setSourceDuration}
-              openAudioModal={openAudioModal}
-              referenceInputRef={referenceInputRef}
-              sourceInputRef={sourceInputRef}
-              handleDrop={handleDrop}
-              handleDragOver={handleDragOver}
-              formatTime={formatTime}
-              getAudioLabel={getAudioLabel}
-              onAnalyzeSource={handleAnalyzeSource}
-              isAnalyzing={isAnalyzing}
-            />
-          </div>
-        )}
-
-        {/* TRACK DETAILS — always visible (non-extract, non-auto-write) */}
-        {taskType !== 'extract' && taskType !== 'auto-write' && (
-          <TrackDetailsAccordion
-            showTrackDetails={showTrackDetails}
-            setShowTrackDetails={setShowTrackDetails}
-            instrumental={instrumental}
-            setInstrumental={setInstrumental}
-            vocalLanguage={vocalLanguage}
-            setVocalLanguage={setVocalLanguage}
-            vocalGender={vocalGender}
-            setVocalGender={setVocalGender}
-            title={title}
-            setTitle={setTitle}
+          <LyricsSection
             showLyricsSub={showLyricsSub}
             setShowLyricsSub={setShowLyricsSub}
+            instrumental={instrumental}
+            setInstrumental={setInstrumental}
             lyrics={lyrics}
             setLyrics={setLyrics}
             lyricsRef={lyricsRef}
             lyricsHeight={lyricsHeight}
             startResizing={startResizing}
             isFormattingLyrics={isFormattingLyrics}
+            handleFormat={handleFormat}
+            duration={duration > 0 ? duration : undefined}
+          />
+        )}
+
+        {/* ALWAYS-VISIBLE: Style tags (non-extract, non-auto-write) */}
+        {taskType !== 'extract' && taskType !== 'auto-write' && (
+          <StyleSection
             showStyleSub={showStyleSub}
             setShowStyleSub={setShowStyleSub}
             style={style}
@@ -2669,27 +2614,28 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
             filteredSubGenres={filteredSubGenres}
             musicTags={musicTags}
             bpm={bpm}
-            setBpm={setBpm}
             keyScale={keyScale}
-            setKeyScale={setKeyScale}
+            timeSignature={timeSignature}
             effectiveBpm={effectiveBpm}
             effectiveKeyScale={effectiveKeyScale}
-            timeSignature={timeSignature}
-            setTimeSignature={setTimeSignature}
-            duration={duration}
-            setDuration={setDuration}
-            detectedBpm={detectedBpm}
-            detectedKey={detectedKey}
             triggerWord={adapterTriggerWord}
-            taskType={taskType}
-            sourceDuration={sourceDuration}
-            tempoScale={tempoScale}
           />
         )}
 
-        {/* ─── TIER 2: Advanced drawers ─── */}
+        {/* ─── DRAWERS: Track Setup + Advanced ─── */}
         {taskType !== 'extract' && (
           <div className="space-y-2">
+            {/* Track Setup drawer card — always available for non-extract */}
+            {taskType !== 'auto-write' && (
+              <DrawerCard
+                icon="🎵"
+                title="Track Setup"
+                description="Title, vocals, BPM, key, duration, reference audio, lyrics library"
+                summary={`${title || 'Untitled'} · ${duration}s · ${bpm} BPM`}
+                onClick={() => setActiveDrawer(activeDrawer === 'track-setup' ? null : 'track-setup')}
+              />
+            )}
+
             <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-wider px-1">Advanced</p>
 
             {/* Cover / Repaint Settings drawer card */}
@@ -2742,6 +2688,90 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
         )}
 
         {/* ─── DRAWER PANELS (conditionally render based on activeDrawer) ─── */}
+
+        {/* Track Setup Drawer */}
+        <DrawerContainer
+          isOpen={activeDrawer === 'track-setup'}
+          title="Track Setup"
+          onClose={() => setActiveDrawer(null)}
+        >
+          {/* Lyrics Library */}
+          <LyricsLibrary
+            setStyle={setStyle}
+            setLyrics={setLyrics}
+            setBpm={setBpm}
+            setKeyScale={setKeyScale}
+            setTitle={setTitle}
+            setDuration={setDuration}
+          />
+
+          {/* Reference / Source Audio */}
+          <AudioSelectionSection
+            useReferenceAudio={useReferenceAudio}
+            setUseReferenceAudio={setUseReferenceAudio}
+            taskType={taskType}
+            referenceAudioUrl={referenceAudioUrl}
+            referenceAudioTitle={referenceAudioTitle}
+            referencePlaying={referencePlaying}
+            toggleAudio={toggleAudio}
+            referenceDuration={referenceDuration}
+            referenceTime={referenceTime}
+            referenceAudioRef={referenceAudioRef}
+            setReferenceAudioUrl={setReferenceAudioUrl}
+            setReferenceAudioTitle={setReferenceAudioTitle}
+            setReferencePlaying={setReferencePlaying}
+            setReferenceTime={setReferenceTime}
+            setReferenceDuration={setReferenceDuration}
+            sourceAudioUrl={sourceAudioUrl}
+            sourceAudioTitle={sourceAudioTitle}
+            sourcePlaying={sourcePlaying}
+            sourceDuration={sourceDuration}
+            sourceTime={sourceTime}
+            sourceAudioRef={sourceAudioRef}
+            setSourceAudioUrl={setSourceAudioUrl}
+            setSourceAudioTitle={setSourceAudioTitle}
+            setSourcePlaying={setSourcePlaying}
+            setSourceTime={setSourceTime}
+            setSourceDuration={setSourceDuration}
+            openAudioModal={openAudioModal}
+            referenceInputRef={referenceInputRef}
+            sourceInputRef={sourceInputRef}
+            handleDrop={handleDrop}
+            handleDragOver={handleDragOver}
+            formatTime={formatTime}
+            getAudioLabel={getAudioLabel}
+            onAnalyzeSource={handleAnalyzeSource}
+            isAnalyzing={isAnalyzing}
+          />
+
+          {/* Track Details (title, instrumental, vocal, BPM, key, duration) */}
+          <TrackDetailsAccordion
+            instrumental={instrumental}
+            setInstrumental={setInstrumental}
+            vocalLanguage={vocalLanguage}
+            setVocalLanguage={setVocalLanguage}
+            vocalGender={vocalGender}
+            setVocalGender={setVocalGender}
+            title={title}
+            setTitle={setTitle}
+            bpm={bpm}
+            setBpm={setBpm}
+            keyScale={keyScale}
+            setKeyScale={setKeyScale}
+            timeSignature={timeSignature}
+            setTimeSignature={setTimeSignature}
+            duration={duration}
+            setDuration={setDuration}
+            detectedBpm={detectedBpm}
+            detectedKey={detectedKey}
+            triggerWord={adapterTriggerWord}
+            taskType={taskType}
+            sourceDuration={sourceDuration}
+            tempoScale={tempoScale}
+            effectiveBpm={effectiveBpm}
+            effectiveKeyScale={effectiveKeyScale}
+          />
+        </DrawerContainer>
 
         {/* Cover/Repaint Drawer */}
         <DrawerContainer
