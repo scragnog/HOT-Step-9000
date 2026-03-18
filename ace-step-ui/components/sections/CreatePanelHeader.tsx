@@ -65,21 +65,6 @@ export const CreatePanelHeader: React.FC<CreatePanelHeaderProps> = ({
                 </div>
 
                 <div className="flex items-center gap-2">
-                    {/* Mode Toggle */}
-                    <div className="flex items-center bg-zinc-200 dark:bg-black/40 rounded-lg p-1 border border-zinc-300 dark:border-white/5">
-                        <button
-                            onClick={() => setCustomMode(false)}
-                            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${!customMode ? 'bg-white dark:bg-zinc-800 text-black dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300'}`}
-                        >
-                            {t('simple')}
-                        </button>
-                        <button
-                            onClick={() => setCustomMode(true)}
-                            className={`px-3 py-1.5 rounded-md text-xs font-semibold transition-all ${customMode ? 'bg-white dark:bg-zinc-800 text-black dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-300'}`}
-                        >
-                            {t('custom')}
-                        </button>
-                    </div>
 
                     {/* Model Selection */}
                     <div className="relative" ref={modelMenuRef}>
