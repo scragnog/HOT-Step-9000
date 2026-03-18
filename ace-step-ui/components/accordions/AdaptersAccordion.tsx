@@ -59,6 +59,14 @@ interface AdaptersAccordionProps {
     onSlotLayerScaleChange?: (slotNum: number, layer: number, scale: number) => void;
     temporalScheduleActive?: boolean;
     onTemporalSchedulePreset?: (preset: 'switch' | 'verse-chorus' | null) => void;
+
+    // Global Scale Overrides
+    globalScaleOverrideEnabled?: boolean;
+    onGlobalOverrideToggle?: (enabled: boolean) => void;
+    globalOverallScale?: number;
+    onGlobalOverallScaleChange?: (scale: number) => void;
+    globalGroupScales?: { self_attn: number; cross_attn: number; mlp: number };
+    onGlobalGroupScaleChange?: (group: string, value: number) => void;
 }
 
 export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
@@ -91,6 +99,12 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
     onSlotLayerScaleChange,
     temporalScheduleActive,
     onTemporalSchedulePreset,
+    globalScaleOverrideEnabled,
+    onGlobalOverrideToggle,
+    globalOverallScale,
+    onGlobalOverallScaleChange,
+    globalGroupScales,
+    onGlobalGroupScaleChange,
 }) => {
     const { t } = useI18n();
     const { token } = useAuth();
@@ -448,6 +462,7 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                             </div>
 
                                             {/* Overall scale slider */}
+                                            <div className={globalScaleOverrideEnabled ? 'opacity-40 pointer-events-none' : ''}>
                                             <EditableSlider
                                                 label={`Scale`}
                                                 value={slot.scale}
@@ -457,10 +472,11 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                                 onChange={(v) => onSlotScaleChange(slot.slot, v)}
                                                 formatDisplay={(v) => v.toFixed(2)}
                                             />
+                                            </div>
 
                                             {/* Per-group sliders (expandable) */}
                                             {expandedSlots.has(slot.slot) && (
-                                                <div className="space-y-1 pl-2 border-l-2 border-pink-500/20">
+                                                <div className={`space-y-1 pl-2 border-l-2 border-pink-500/20 ${globalScaleOverrideEnabled ? 'opacity-40 pointer-events-none' : ''}`}>
                                                     {(['self_attn', 'cross_attn', 'mlp'] as const).map((group) => {
                                                         const groupInfo = {
                                                             self_attn: {
@@ -615,6 +631,76 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                             )}
                                         </div>
                                     ))}
+                                </div>
+                            )}
+
+                            {/* ── Global Scale Overrides ─────────────────────────────── */}
+                            {adapterSlots.length > 0 && (
+                                <div className="space-y-3 pt-3 border-t border-zinc-200 dark:border-white/5">
+                                    <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 flex items-center gap-2">
+                                        <input
+                                            type="checkbox"
+                                            checked={globalScaleOverrideEnabled || false}
+                                            onChange={(e) => onGlobalOverrideToggle?.(e.target.checked)}
+                                            className="rounded border-zinc-300 dark:border-zinc-600 text-amber-500 focus:ring-amber-500"
+                                        />
+                                        <span className="flex items-center gap-1.5">
+                                            🌐 Global Scale Overrides
+                                            {globalScaleOverrideEnabled && (
+                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 animate-pulse">
+                                                    ACTIVE
+                                                </span>
+                                            )}
+                                        </span>
+                                    </label>
+                                    {globalScaleOverrideEnabled && (
+                                        <div className="space-y-2 pl-2 border-l-2 border-amber-500/30 bg-amber-50/50 dark:bg-amber-900/10 rounded-r-lg p-3">
+                                            <p className="text-[10px] text-amber-600 dark:text-amber-400/70 leading-tight mb-2">
+                                                These values override all per-adapter scales. Individual adapter settings are preserved and restored when this is disabled.
+                                            </p>
+                                            <EditableSlider
+                                                label="Overall Scale"
+                                                value={globalOverallScale ?? 1.0}
+                                                min={0}
+                                                max={2}
+                                                step={0.05}
+                                                onChange={(v) => onGlobalOverallScaleChange?.(v)}
+                                                formatDisplay={(v) => v.toFixed(2)}
+                                            />
+                                            <div className="space-y-1">
+                                                {(['self_attn', 'cross_attn', 'mlp'] as const).map((group) => {
+                                                    const groupInfo = {
+                                                        self_attn: {
+                                                            label: 'Self-Attn',
+                                                            helpText: 'Controls how audio frames relate to each other over time.',
+                                                        },
+                                                        cross_attn: {
+                                                            label: 'Cross-Attn',
+                                                            helpText: 'How strongly your text prompt shapes the output vs. the adapter\'s baked-in character.',
+                                                        },
+                                                        mlp: {
+                                                            label: 'MLP',
+                                                            helpText: 'Controls the adapter\'s stored timbre, tonal texture, and sonic character.',
+                                                        },
+                                                    };
+                                                    const info = groupInfo[group];
+                                                    return (
+                                                        <EditableSlider
+                                                            key={group}
+                                                            label={info.label}
+                                                            value={globalGroupScales?.[group] ?? 1.0}
+                                                            min={0}
+                                                            max={2}
+                                                            step={0.05}
+                                                            onChange={(v) => onGlobalGroupScaleChange?.(group, v)}
+                                                            formatDisplay={(v) => v.toFixed(2)}
+                                                            helpText={info.helpText}
+                                                        />
+                                                    );
+                                                })}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
