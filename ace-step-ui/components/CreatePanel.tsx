@@ -20,9 +20,13 @@ import { CreatePanelHeader } from './sections/CreatePanelHeader';
 import { TaskTypeSelector } from './sections/TaskTypeSelector';
 import { ExtractTrackSelector } from './sections/ExtractTrackSelector';
 import { SimpleModeSettings } from './sections/SimpleModeSettings';
+import { AutoWriteSection } from './sections/AutoWriteSection';
 import { TrackDetailsAccordion } from './accordions/TrackDetailsAccordion';
 import { AudioLibraryModal } from './sections/AudioLibraryModal';
 import { CreateButtonFooter } from './sections/CreateButtonFooter';
+import { DrawerCard } from './sections/DrawerCard';
+import { DrawerContainer } from './sections/DrawerContainer';
+import { GenerateFooter } from './GenerateFooter';
 import { LyricsLibrary } from './LyricsLibrary';
 import { MasteringConsoleModal, MasteringParams as MasteringParamsType } from './MasteringConsoleModal';
 
@@ -90,6 +94,9 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
 
   // Mode
   const [customMode, setCustomMode] = usePersistedState('ace-customMode', true);
+
+  // Drawer state for Tier-2 sections
+  const [activeDrawer, setActiveDrawer] = useState<string | null>(null);
 
   // Simple Mode
   const [songDescription, setSongDescription] = usePersistedState('ace-songDescription', '');
@@ -2098,6 +2105,53 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     }
   };
 
+  // Override-aware generate handler for GenerateFooter presets
+  const handleGenerateWithOverrides = useCallback((overrides?: { inferenceSteps?: number; thinking?: boolean }) => {
+    if (!overrides) {
+      handleGenerate();
+      return;
+    }
+    // Temporarily apply overrides, call generate, then restore
+    const prevSteps = inferenceSteps;
+    const prevThinking = thinking;
+    if (overrides.inferenceSteps !== undefined) setInferenceSteps(overrides.inferenceSteps);
+    if (overrides.thinking !== undefined) setThinking(overrides.thinking);
+    // Use setTimeout to let state settle before generating
+    setTimeout(() => {
+      handleGenerate();
+      // Restore after generation is queued
+      setInferenceSteps(prevSteps);
+      setThinking(prevThinking);
+    }, 0);
+  }, [handleGenerate, inferenceSteps, thinking, setInferenceSteps, setThinking]);
+
+  // Summary badge strings for Tier-2 DrawerCard components
+  const genEngineSummary = useMemo(() => {
+    const method = inferMethod.charAt(0).toUpperCase() + inferMethod.slice(1);
+    return `${method} · ${inferenceSteps} steps · CFG ${guidanceScale}`;
+  }, [inferMethod, inferenceSteps, guidanceScale]);
+
+  const lmSummary = useMemo(() => {
+    const modelShort = lmModel.split('-').pop() || lmModel;
+    return `${modelShort} · Temp ${lmTemperature}${thinking ? ' · CoT' : ''}`;
+  }, [lmModel, lmTemperature, thinking]);
+
+  const adapterSummary = useMemo(() => {
+    const loadedCount = adapterSlots.length;
+    if (!advancedAdapters) return loraLoaded ? 'LoRA loaded' : 'None loaded';
+    return loadedCount > 0 ? `${loadedCount} adapter${loadedCount > 1 ? 's' : ''} loaded` : 'None loaded';
+  }, [adapterSlots, advancedAdapters, loraLoaded]);
+
+  const outputSummary = useMemo(() => {
+    const parts: string[] = [];
+    if (autoMaster) parts.push('Master');
+    if (enableNormalization) parts.push(`Norm ${normalizationDb}dB`);
+    return parts.length > 0 ? parts.join(' · ') : 'Off';
+  }, [autoMaster, enableNormalization, normalizationDb]);
+
+  const coverSummary = useMemo(() => {
+    return `Strength ${audioCoverStrength} · Noise ${coverNoiseStrength}`;
+  }, [audioCoverStrength, coverNoiseStrength]);
   const handleExportJson = () => {
     const data = {
       model: selectedModel,
@@ -2410,9 +2464,9 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           </button>
         </div>
 
-        {/* SIMPLE MODE — hidden in extract mode */}
-        {!customMode && taskType !== 'extract' && (
-          <SimpleModeSettings
+        {/* AUTO-WRITE SECTION — only when auto-write task type is selected */}
+        {taskType === 'auto-write' && (
+          <AutoWriteSection
             songDescription={songDescription}
             setSongDescription={setSongDescription}
             vocalLanguage={vocalLanguage}
@@ -2423,12 +2477,6 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
             setDuration={setDuration}
             bpm={bpm}
             setBpm={setBpm}
-            keyScale={keyScale}
-            setKeyScale={setKeyScale}
-            timeSignature={timeSignature}
-            setTimeSignature={setTimeSignature}
-            batchSize={batchSize}
-            setBatchSize={setBatchSize}
           />
         )}
 
@@ -2550,10 +2598,10 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           </>
         )}
 
-        {/* CUSTOM MODE */}
-        {customMode && taskType !== 'extract' && (
+        {/* TIER 1: Core inputs — always visible (non-extract, non-auto-write) */}
+        {taskType !== 'extract' && taskType !== 'auto-write' && (
           <div className="space-y-5">
-            {/* Lyrics Library — folder scanner for imported lyrics */}
+            {/* Lyrics Library */}
             <LyricsLibrary
               setStyle={setStyle}
               setLyrics={setLyrics}
@@ -2563,8 +2611,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
               setDuration={setDuration}
             />
 
-            {/* Audio Section - Conditionally rendered */}
-
+            {/* Audio Section */}
             <AudioSelectionSection
               useReferenceAudio={useReferenceAudio}
               setUseReferenceAudio={setUseReferenceAudio}
@@ -2606,8 +2653,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           </div>
         )}
 
-        {/* TRACK DETAILS ACCORDION (Custom mode only, hidden in extract mode) */}
-        {customMode && taskType !== 'extract' && (
+        {/* TRACK DETAILS — always visible (non-extract, non-auto-write) */}
+        {taskType !== 'extract' && taskType !== 'auto-write' && (
           <TrackDetailsAccordion
             showTrackDetails={showTrackDetails}
             setShowTrackDetails={setShowTrackDetails}
@@ -2672,27 +2719,69 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           />
         )}
 
-        {/* COMMON SETTINGS (Simple mode only, hidden in extract mode) */}
-        <div className="space-y-4">
-          {/* Instrumental Toggle (Simple Mode) */}
-          {!customMode && taskType !== 'extract' && (
-            <div className="flex items-center justify-between px-1 py-2">
-              <div className="flex items-center gap-2">
-                <Music2 size={14} className="text-zinc-500" />
-                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">{t('instrumental')}</span>
-              </div>
-              <button
-                onClick={() => setInstrumental(!instrumental)}
-                className={`w-11 h-6 rounded-full flex items-center transition-colors duration-200 px-1 border border-zinc-200 dark:border-white/5 ${instrumental ? 'bg-pink-600' : 'bg-zinc-300 dark:bg-black/40'}`}
-              >
-                <div className={`w-4 h-4 rounded-full bg-white transform transition-transform duration-200 shadow-sm ${instrumental ? 'translate-x-5' : 'translate-x-0'}`} />
-              </button>
-            </div>
-          )}
-        </div>
+        {/* ─── TIER 2: Advanced drawers ─── */}
+        {taskType !== 'extract' && (
+          <div className="space-y-2">
+            <p className="text-[10px] font-bold text-zinc-400 dark:text-zinc-600 uppercase tracking-wider px-1">Advanced</p>
 
-        {/* COVER / REPAINT SETTINGS (conditional on task type) */}
-        <CoverRepaintSettings
+            {/* Cover / Repaint Settings drawer card */}
+            {(taskType === 'cover' || taskType === 'repaint') && (
+              <DrawerCard
+                icon="🎸"
+                title="Cover & Repaint"
+                description="Source audio strength, noise, transform"
+                summary={coverSummary}
+                onClick={() => setActiveDrawer(activeDrawer === 'cover' ? null : 'cover')}
+              />
+            )}
+
+            {/* Generation Engine */}
+            <DrawerCard
+              icon="⚙️"
+              title="Generation Engine"
+              description="Steps, solver, scheduler, guidance"
+              summary={genEngineSummary}
+              onClick={() => setActiveDrawer(activeDrawer === 'generation' ? null : 'generation')}
+            />
+
+            {/* Adapters */}
+            <DrawerCard
+              icon="🧩"
+              title="Adapters & LoRA"
+              description="Load and configure model adapters"
+              summary={adapterSummary}
+              onClick={() => setActiveDrawer(activeDrawer === 'adapters' ? null : 'adapters')}
+            />
+
+            {/* Output Processing */}
+            <DrawerCard
+              icon="🎛️"
+              title="Output Processing"
+              description="Mastering, normalization, latent tuning"
+              summary={outputSummary}
+              onClick={() => setActiveDrawer(activeDrawer === 'output' ? null : 'output')}
+            />
+
+            {/* Score System */}
+            <DrawerCard
+              icon="📊"
+              title="Score System"
+              description="Quality scoring and diagnostics"
+              summary={getScores ? 'Active' : 'Off'}
+              onClick={() => setActiveDrawer(activeDrawer === 'score' ? null : 'score')}
+            />
+          </div>
+        )}
+
+        {/* ─── DRAWER PANELS (conditionally render based on activeDrawer) ─── */}
+
+        {/* Cover/Repaint Drawer */}
+        <DrawerContainer
+          isOpen={activeDrawer === 'cover'}
+          title="Cover & Repaint Settings"
+          onClose={() => setActiveDrawer(null)}
+        >
+          <CoverRepaintSettings
           taskType={taskType}
           audioCoverStrength={audioCoverStrength}
           setAudioCoverStrength={setAudioCoverStrength}
@@ -2738,246 +2827,188 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           onParamsChange={setMasteringParams}
           currentParams={masteringParams}
         />
+        </DrawerContainer>
 
-        {/* GENERATION SETTINGS */}
-        <GenerationSettingsAccordion
-          isOpen={showGenerationSettings}
-          onToggle={() => setShowGenerationSettings(!showGenerationSettings)}
-          isTurbo={isTurboModel(selectedModel)}
-          batchSize={batchSize}
-          onBatchSizeChange={setBatchSize}
-          bulkCount={bulkCount}
-          onBulkCountChange={setBulkCount}
-          seed={seed}
-          onSeedChange={setSeed}
-          randomSeed={randomSeed}
-          onRandomSeedToggle={() => setRandomSeed(!randomSeed)}
-          shift={shift}
-          onShiftChange={setShift}
-          inferenceSteps={inferenceSteps}
-          onInferenceStepsChange={setInferenceSteps}
-          inferMethod={inferMethod}
-          onInferMethodChange={setInferMethod}
-          scheduler={scheduler}
-          onSchedulerChange={setScheduler}
-          audioFormat={audioFormat}
-          onAudioFormatChange={setAudioFormat}
-          guidanceScale={guidanceScale}
-          onGuidanceScaleChange={setGuidanceScale}
-          guidanceMode={guidanceMode}
-          onGuidanceModeChange={(mode) => { setGuidanceMode(mode); setUseAdg(mode === 'adg'); setUsePag(mode === 'pag'); }}
-          pagStart={pagStart}
-          onPagStartChange={setPagStart}
-          pagEnd={pagEnd}
-          onPagEndChange={setPagEnd}
-          pagScale={pagScale}
-          onPagScaleChange={setPagScale}
-          cfgIntervalStart={cfgIntervalStart}
-          onCfgIntervalStartChange={setCfgIntervalStart}
-          cfgIntervalEnd={cfgIntervalEnd}
-          onCfgIntervalEndChange={setCfgIntervalEnd}
-          thinking={thinking}
-          onThinkingToggle={() => setThinking(!thinking)}
-          loraLoaded={loraLoaded}
-          lmBackend={lmBackend}
-          onLmBackendChange={setLmBackend}
-          lmModel={lmModel}
-          onLmModelChange={handleLmModelChange}
-          isLmSwitching={isLmSwitching}
-          lmTemperature={lmTemperature}
-          onLmTemperatureChange={setLmTemperature}
-          lmCfgScale={lmCfgScale}
-          onLmCfgScaleChange={setLmCfgScale}
-          lmTopK={lmTopK}
-          onLmTopKChange={setLmTopK}
-          lmTopP={lmTopP}
-          onLmTopPChange={setLmTopP}
-          lmRepetitionPenalty={lmRepetitionPenalty}
-          onLmRepetitionPenaltyChange={setLmRepetitionPenalty}
-          lmNegativePrompt={lmNegativePrompt}
-          onLmNegativePromptChange={setLmNegativePrompt}
-          allowLmBatch={allowLmBatch}
-          onAllowLmBatchToggle={() => setAllowLmBatch(!allowLmBatch)}
-          useCotMetas={useCotMetas}
-          onUseCotMetasToggle={() => setUseCotMetas(!useCotMetas)}
-          useCotCaption={useCotCaption}
-          onUseCotCaptionToggle={() => setUseCotCaption(!useCotCaption)}
-          useCotLanguage={useCotLanguage}
-          onUseCotLanguageToggle={() => setUseCotLanguage(!useCotLanguage)}
-          lmBatchChunkSize={lmBatchChunkSize}
-          onLmBatchChunkSizeChange={setLmBatchChunkSize}
-          constrainedDecodingDebug={constrainedDecodingDebug}
-          onConstrainedDecodingDebugToggle={() => setConstrainedDecodingDebug(!constrainedDecodingDebug)}
-          isFormatCaption={isFormatCaption}
-          onIsFormatCaptionToggle={() => setIsFormatCaption(!isFormatCaption)}
+        {/* Generation Engine Drawer */}
+        <DrawerContainer
+          isOpen={activeDrawer === 'generation'}
+          title="Generation Engine"
+          onClose={() => setActiveDrawer(null)}
+        >
+          <GenerationSettingsAccordion
+            isOpen={true}
+            onToggle={() => {}}
+            isTurbo={isTurboModel(selectedModel)}
+            batchSize={batchSize}
+            onBatchSizeChange={setBatchSize}
+            bulkCount={bulkCount}
+            onBulkCountChange={setBulkCount}
+            seed={seed}
+            onSeedChange={setSeed}
+            randomSeed={randomSeed}
+            onRandomSeedToggle={() => setRandomSeed(!randomSeed)}
+            shift={shift}
+            onShiftChange={setShift}
+            inferenceSteps={inferenceSteps}
+            onInferenceStepsChange={setInferenceSteps}
+            inferMethod={inferMethod}
+            onInferMethodChange={setInferMethod}
+            scheduler={scheduler}
+            onSchedulerChange={setScheduler}
+            audioFormat={audioFormat}
+            onAudioFormatChange={setAudioFormat}
+            guidanceScale={guidanceScale}
+            onGuidanceScaleChange={setGuidanceScale}
+            guidanceMode={guidanceMode}
+            onGuidanceModeChange={(mode) => { setGuidanceMode(mode); setUseAdg(mode === 'adg'); setUsePag(mode === 'pag'); }}
+            pagStart={pagStart}
+            onPagStartChange={setPagStart}
+            pagEnd={pagEnd}
+            onPagEndChange={setPagEnd}
+            pagScale={pagScale}
+            onPagScaleChange={setPagScale}
+            cfgIntervalStart={cfgIntervalStart}
+            onCfgIntervalStartChange={setCfgIntervalStart}
+            cfgIntervalEnd={cfgIntervalEnd}
+            onCfgIntervalEndChange={setCfgIntervalEnd}
+            thinking={thinking}
+            onThinkingToggle={() => setThinking(!thinking)}
+            loraLoaded={loraLoaded}
+            lmBackend={lmBackend}
+            onLmBackendChange={setLmBackend}
+            lmModel={lmModel}
+            onLmModelChange={handleLmModelChange}
+            isLmSwitching={isLmSwitching}
+            lmTemperature={lmTemperature}
+            onLmTemperatureChange={setLmTemperature}
+            lmCfgScale={lmCfgScale}
+            onLmCfgScaleChange={setLmCfgScale}
+            lmTopK={lmTopK}
+            onLmTopKChange={setLmTopK}
+            lmTopP={lmTopP}
+            onLmTopPChange={setLmTopP}
+            lmRepetitionPenalty={lmRepetitionPenalty}
+            onLmRepetitionPenaltyChange={setLmRepetitionPenalty}
+            lmNegativePrompt={lmNegativePrompt}
+            onLmNegativePromptChange={setLmNegativePrompt}
+            allowLmBatch={allowLmBatch}
+            onAllowLmBatchToggle={() => setAllowLmBatch(!allowLmBatch)}
+            useCotMetas={useCotMetas}
+            onUseCotMetasToggle={() => setUseCotMetas(!useCotMetas)}
+            useCotCaption={useCotCaption}
+            onUseCotCaptionToggle={() => setUseCotCaption(!useCotCaption)}
+            useCotLanguage={useCotLanguage}
+            onUseCotLanguageToggle={() => setUseCotLanguage(!useCotLanguage)}
+            lmBatchChunkSize={lmBatchChunkSize}
+            onLmBatchChunkSizeChange={setLmBatchChunkSize}
+            constrainedDecodingDebug={constrainedDecodingDebug}
+            onConstrainedDecodingDebugToggle={() => setConstrainedDecodingDebug(!constrainedDecodingDebug)}
+            isFormatCaption={isFormatCaption}
+            onIsFormatCaptionToggle={() => setIsFormatCaption(!isFormatCaption)}
 
-          uploadError={uploadError}
-          audioCodes={audioCodes}
-          onAudioCodesChange={setAudioCodes}
-          instruction={instruction}
-          onInstructionChange={setInstruction}
-          customTimesteps={customTimesteps}
-          onCustomTimestepsChange={setCustomTimesteps}
-          trackName={trackName}
-          onTrackNameChange={setTrackName}
-          completeTrackClasses={completeTrackClasses}
-          onCompleteTrackClassesChange={setCompleteTrackClasses}
-          autogen={autogen}
-          onToggleAutogen={() => setAutogen(!autogen)}
-          getLrc={getLrc}
-          onToggleGetLrc={() => setGetLrc(!getLrc)}
-        />
+            uploadError={uploadError}
+            audioCodes={audioCodes}
+            onAudioCodesChange={setAudioCodes}
+            instruction={instruction}
+            onInstructionChange={setInstruction}
+            customTimesteps={customTimesteps}
+            onCustomTimestepsChange={setCustomTimesteps}
+            trackName={trackName}
+            onTrackNameChange={setTrackName}
+            completeTrackClasses={completeTrackClasses}
+            onCompleteTrackClassesChange={setCompleteTrackClasses}
+            autogen={autogen}
+            onToggleAutogen={() => setAutogen(!autogen)}
+            getLrc={getLrc}
+            onToggleGetLrc={() => setGetLrc(!getLrc)}
+          />
+        </DrawerContainer>
 
+        {/* Adapters Drawer */}
+        <DrawerContainer
+          isOpen={activeDrawer === 'adapters'}
+          title="Adapters & LoRA"
+          onClose={() => setActiveDrawer(null)}
+        >
+          <AdaptersAccordion
+            customMode={true}
+            isOpen={true}
+            onToggle={() => {}}
+            advancedAdapters={advancedAdapters}
+            onAdvancedAdaptersChange={setAdvancedAdapters}
+            loraPath={loraPath}
+            onLoraPathChange={setLoraPath}
+            loraLoaded={loraLoaded}
+            isLoraLoading={isLoraLoading}
+            onLoraToggle={handleLoraToggle}
+            loraError={loraError}
+            loraScale={loraScale}
+            onLoraScaleChange={handleLoraScaleChange}
+            adapterFolder={adapterFolder}
+            onAdapterFolderChange={setAdapterFolder}
+            onScanFolder={handleScanFolder}
+            adapterFiles={adapterFiles}
+            adapterSlots={adapterSlots}
+            loadingAdapterPath={loadingAdapterPath}
+            adapterLoadingMessage={adapterLoadingMessage}
+            expandedSlots={expandedSlots}
+            setExpandedSlots={setExpandedSlots}
+            onLoadSlot={handleLoadSlot}
+            onUnloadSlot={handleUnloadSlot}
+            onSlotScaleChange={handleSlotScaleChange}
+            onSlotGroupScaleChange={handleSlotGroupScaleChange}
+            onSlotLayerScaleChange={handleSlotLayerScaleChange}
+            temporalScheduleActive={temporalScheduleActive}
+            onTemporalSchedulePreset={handleTemporalSchedulePreset}
+            globalScaleOverrideEnabled={globalScaleOverrideEnabled}
+            onGlobalOverrideToggle={handleGlobalOverrideToggle}
+            globalOverallScale={globalOverallScale}
+            onGlobalOverallScaleChange={handleGlobalOverallScaleChange}
+            globalGroupScales={globalGroupScales}
+            onGlobalGroupScaleChange={handleGlobalGroupScaleChange}
+          />
 
-        {/* ADAPTERS */}
-        <AdaptersAccordion
-          customMode={customMode}
-          isOpen={showLoraPanel}
-          onToggle={() => setShowLoraPanel(!showLoraPanel)}
-          advancedAdapters={advancedAdapters}
-          onAdvancedAdaptersChange={setAdvancedAdapters}
-          loraPath={loraPath}
-          onLoraPathChange={setLoraPath}
-          loraLoaded={loraLoaded}
-          isLoraLoading={isLoraLoading}
-          onLoraToggle={handleLoraToggle}
-          loraError={loraError}
-          loraScale={loraScale}
-          onLoraScaleChange={handleLoraScaleChange}
-          adapterFolder={adapterFolder}
-          onAdapterFolderChange={setAdapterFolder}
-          onScanFolder={handleScanFolder}
-          adapterFiles={adapterFiles}
-          adapterSlots={adapterSlots}
-          loadingAdapterPath={loadingAdapterPath}
-          adapterLoadingMessage={adapterLoadingMessage}
-          expandedSlots={expandedSlots}
-          setExpandedSlots={setExpandedSlots}
-          onLoadSlot={handleLoadSlot}
-          onUnloadSlot={handleUnloadSlot}
-          onSlotScaleChange={handleSlotScaleChange}
-          onSlotGroupScaleChange={handleSlotGroupScaleChange}
-          onSlotLayerScaleChange={handleSlotLayerScaleChange}
-          temporalScheduleActive={temporalScheduleActive}
-          onTemporalSchedulePreset={handleTemporalSchedulePreset}
-          globalScaleOverrideEnabled={globalScaleOverrideEnabled}
-          onGlobalOverrideToggle={handleGlobalOverrideToggle}
-          globalOverallScale={globalOverallScale}
-          onGlobalOverallScaleChange={handleGlobalOverallScaleChange}
-          globalGroupScales={globalGroupScales}
-          onGlobalGroupScaleChange={handleGlobalGroupScaleChange}
-        />
+          {/* LAYER ABLATION LAB (Developer Mode) */}
+          <LayerAblationPanel
+            customMode={true}
+            hasLoadedAdapters={advancedAdapters && adapterSlots.length > 0}
+            onLayerScaleChange={handleSlotLayerScaleChange}
+            onBulkLayerScalesChange={handleBulkLayerScalesChange}
+            onRunSweep={handleStartSweep}
+            isSweepRunning={sweepRunning}
+            sweepProgress={sweepProgress}
+            onCancelSweep={handleCancelSweep}
+            isGenerating={isGenerating}
+            diffPinnedA={diffPinnedA}
+            diffPinnedB={diffPinnedB}
+            onClearDiffA={onClearDiffA}
+            onClearDiffB={onClearDiffB}
+          />
 
-        {/* LM ADAPTER — hidden: merge-based approach produces identical output (2026-03-16) */}
-        {false && thinking && (
-          <div className="accordion-section lm-lora-section">
-            <button
-              className="accordion-header"
-              onClick={() => {}}
-              style={{ cursor: 'default' }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <Brain size={16} />
-                <span>LM Adapter</span>
-                {lmLoraLoaded && (
-                  <span style={{
-                    fontSize: '10px', padding: '1px 6px', borderRadius: '4px',
-                    background: 'var(--accent-primary)', color: 'var(--bg-primary)',
-                    fontWeight: 600,
-                  }}>MERGED</span>
-                )}
-              </div>
-            </button>
-            <div className="accordion-content" style={{ padding: '8px 12px' }}>
-              {/* Adapter path input + load button */}
-              <div style={{ display: 'flex', gap: '6px', marginBottom: '8px' }}>
-                <input
-                  type="text"
-                  value={lmLoraPath}
-                  onChange={(e) => setLmLoraPath(e.target.value)}
-                  placeholder="Path to PEFT adapter directory..."
-                  className="text-input"
-                  style={{ flex: 1, fontSize: '12px' }}
-                  disabled={isLmLoraLoading || lmLoraLoaded}
-                />
-                <button
-                  className={`btn btn-sm ${lmLoraLoaded ? 'btn-danger' : 'btn-primary'}`}
-                  onClick={handleLmLoraToggle}
-                  disabled={isLmLoraLoading}
-                  style={{ fontSize: '11px', padding: '4px 10px', whiteSpace: 'nowrap' }}
-                >
-                  {isLmLoraLoading ? (
-                    <Loader2 size={12} className="spin" />
-                  ) : lmLoraLoaded ? 'Unload' : 'Merge & Load'}
-                </button>
-              </div>
+          {/* ACTIVATION STEERING */}
+          <ActivationSteeringSection
+            customMode={true}
+            isOpen={showSteeringPanel}
+            onToggle={() => setShowSteeringPanel(!showSteeringPanel)}
+            onSteeringChange={handleSteeringChange}
+          />
+        </DrawerContainer>
 
-              {/* Scale slider (always visible — set before loading, locked after) */}
-              <div style={{ marginBottom: '6px' }}>
-                <EditableSlider
-                  label={`Scale${lmLoraLoaded ? ' (locked — unload to change)' : ''}`}
-                  value={lmLoraScale}
-                  onChange={handleLmLoraScaleChange}
-                  min={0}
-                  max={10}
-                  step={0.1}
-                  disabled={lmLoraLoaded}
-                />
-              </div>
-
-              {isLmLoraLoading && (
-                <div style={{
-                  fontSize: '11px', color: 'var(--text-secondary)',
-                  padding: '4px 8px', fontStyle: 'italic',
-                }}>Merging adapter into model... this takes ~2 min</div>
-              )}
-
-              {/* Error message */}
-              {lmLoraError && (
-                <div style={{
-                  fontSize: '11px', color: 'var(--error, #ef4444)',
-                  padding: '4px 8px', borderRadius: '4px',
-                  background: 'rgba(239,68,68,0.1)',
-                }}>{lmLoraError}</div>
-              )}
-            </div>
-          </div>
-        )}
-
-        {/* LAYER ABLATION LAB (Developer Mode) */}
-        <LayerAblationPanel
-          customMode={customMode}
-          hasLoadedAdapters={advancedAdapters && adapterSlots.length > 0}
-          onLayerScaleChange={handleSlotLayerScaleChange}
-          onBulkLayerScalesChange={handleBulkLayerScalesChange}
-          onRunSweep={handleStartSweep}
-          isSweepRunning={sweepRunning}
-          sweepProgress={sweepProgress}
-          onCancelSweep={handleCancelSweep}
-          isGenerating={isGenerating}
-          diffPinnedA={diffPinnedA}
-          diffPinnedB={diffPinnedB}
-          onClearDiffA={onClearDiffA}
-          onClearDiffB={onClearDiffB}
-        />
-
-        {/* ACTIVATION STEERING */}
-        <ActivationSteeringSection
-          customMode={customMode}
-          isOpen={showSteeringPanel}
-          onToggle={() => setShowSteeringPanel(!showSteeringPanel)}
-          onSteeringChange={handleSteeringChange}
-        />
-
-        {/* SCORE SYSTEM */}
-        <ScoreSystemAccordion
-          isOpen={showScorePanel}
-          onToggle={() => setShowScorePanel(!showScorePanel)}
-          getScores={getScores}
-          onToggleGetScores={() => setGetScores(!getScores)}
-          scoreScale={scoreScale}
-          onScoreScaleChange={setScoreScale}
-        />
+        {/* Score System Drawer */}
+        <DrawerContainer
+          isOpen={activeDrawer === 'score'}
+          title="Score System"
+          onClose={() => setActiveDrawer(null)}
+        >
+          <ScoreSystemAccordion
+            isOpen={true}
+            onToggle={() => {}}
+            getScores={getScores}
+            onToggleGetScores={() => setGetScores(!getScores)}
+            scoreScale={scoreScale}
+            onScoreScaleChange={setScoreScale}
+          />
+        </DrawerContainer>
 
       </div>
 
@@ -3012,49 +3043,17 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
         token={token}
       />
 
-      {/* Footer Create Button */}
-      <div className="p-4 mt-auto sticky bottom-0 bg-zinc-50/95 dark:bg-suno-panel/95 backdrop-blur-sm z-10 border-t border-zinc-200 dark:border-white/5 space-y-3">
-        <button
-          onClick={handleGenerate}
-          className={`w-full h-12 rounded-xl font-bold text-base flex items-center justify-center gap-2 transition-all transform active:scale-[0.98] shadow-lg ${
-            isAnalyzing 
-              ? 'bg-zinc-400 dark:bg-zinc-600 text-white cursor-wait opacity-80 hover:brightness-100'
-              : isGenerating
-                ? 'bg-gradient-to-r from-orange-400/80 to-pink-500/80 text-white hover:brightness-110'
-                : 'bg-gradient-to-r from-orange-500 to-pink-600 text-white hover:brightness-110'
-            }`}
-          disabled={!isAuthenticated || isAnalyzing}
-        >
-          {isAnalyzing ? (
-            <>
-              <span className="inline-block w-4 h-4 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
-              <span>Please wait, analysing source audio...</span>
-            </>
-          ) : isGenerating ? (
-            <>
-              <span className="inline-block w-4 h-4 border-2 border-white/60 border-t-transparent rounded-full animate-spin" />
-              <span>
-                {activeJobCount > 0
-                  ? `${t('queueNext')} (${activeJobCount} active)`
-                  : 'Sending…'
-                }
-              </span>
-            </>
-          ) : (
-            <>
-              <Sparkles size={18} />
-              <span>
-                {bulkCount > 1
-                  ? `${t('createButton')} ${bulkCount} ${t('jobs')} (${bulkCount * batchSize} ${t('variations')})`
-                  : `${t('createButton')}${batchSize > 1 ? ` (${batchSize} ${t('variations')})` : ''}`
-                }
-              </span>
-            </>
-          )}
-        </button>
-      </div>
-    </div >
+      {/* Generate Footer with Presets */}
+      <GenerateFooter
+        onGenerate={handleGenerateWithOverrides}
+        isGenerating={isGenerating}
+        isAuthenticated={isAuthenticated}
+        activeJobCount={activeJobCount}
+        isTurboModel={isTurboModel(selectedModel)}
+      />
+    </div>
   );
 };
 
 export default CreatePanel;
+
