@@ -6,7 +6,7 @@ interface DrawerCardProps {
   icon: React.ReactNode;
   /** Card title */
   title: string;
-  /** Brief description */
+  /** Brief description — shown as tooltip on hover */
   description: string;
   /** Summary badge text */
   summary: string;
@@ -19,6 +19,7 @@ interface DrawerCardProps {
 /**
  * A compact clickable card for opening a drawer panel.
  * Compact single-line design with icon, title, summary badge, and chevron.
+ * Description appears as a native tooltip on hover.
  */
 export const DrawerCard: React.FC<DrawerCardProps> = ({
   icon,
@@ -34,6 +35,7 @@ export const DrawerCard: React.FC<DrawerCardProps> = ({
     <button
       type="button"
       onClick={onClick}
+      title={description}
       className="w-full text-left group bg-zinc-50 dark:bg-zinc-800/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-white/5 rounded-lg px-3 py-2 transition-all duration-150 hover:shadow-sm"
     >
       <div className="flex items-center gap-2.5">

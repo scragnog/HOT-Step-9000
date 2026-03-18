@@ -148,16 +148,9 @@ export const GenerateFooter: React.FC<GenerateFooterProps> = ({
             )}
           </>
         ) : (
-          <span>{t('createSong')}</span>
+          <span>{t('createButton')}</span>
         )}
       </button>
-
-      {/* Keyboard shortcut hint */}
-      {!isGenerating && (
-        <p className="text-center text-[10px] text-zinc-400 dark:text-zinc-600">
-          <kbd className="font-mono">Ctrl</kbd>+<kbd className="font-mono">Enter</kbd> to generate
-        </p>
-      )}
 
       {!isAuthenticated && (
         <p className="text-center text-xs text-rose-500 font-medium">{t('loginRequired')}</p>

@@ -6,7 +6,7 @@ interface DrawerContainerProps {
   title: string;
   /** Whether this drawer is currently visible */
   isOpen: boolean;
-  /** Called when the user clicks the back/close button */
+  /** Called when the user clicks the header to close */
   onClose: () => void;
   /** The drawer's content */
   children: React.ReactNode;
@@ -14,7 +14,7 @@ interface DrawerContainerProps {
 
 /**
  * An inline expandable drawer that renders in-place when open.
- * Shows a back-button header and the drawer's content below it.
+ * The entire header bar is clickable to close the drawer.
  */
 export const DrawerContainer: React.FC<DrawerContainerProps> = ({
   title,
@@ -38,24 +38,24 @@ export const DrawerContainer: React.FC<DrawerContainerProps> = ({
       ref={containerRef}
       className="rounded-xl border border-indigo-200 dark:border-indigo-500/20 bg-white dark:bg-zinc-900/80 overflow-hidden animate-in fade-in duration-150"
     >
-      {/* Header with back button */}
-      <div className="flex items-center gap-2 px-3 py-2 bg-indigo-50/50 dark:bg-indigo-500/5 border-b border-indigo-200 dark:border-indigo-500/10">
-        <button
-          type="button"
-          onClick={onClose}
-          className="flex items-center gap-1.5 text-xs font-medium text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors group"
-        >
-          <ArrowLeft
-            size={14}
-            className="group-hover:-translate-x-0.5 transition-transform"
-          />
+      {/* Header — entire bar is clickable to close */}
+      <button
+        type="button"
+        onClick={onClose}
+        className="w-full flex items-center gap-2 px-3 py-2 bg-indigo-50/50 dark:bg-indigo-500/5 border-b border-indigo-200 dark:border-indigo-500/10 hover:bg-indigo-100/50 dark:hover:bg-indigo-500/10 transition-colors group cursor-pointer"
+      >
+        <ArrowLeft
+          size={14}
+          className="flex-shrink-0 text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-white group-hover:-translate-x-0.5 transition-all"
+        />
+        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 group-hover:text-zinc-900 dark:group-hover:text-white transition-colors">
           Back
-        </button>
+        </span>
         <span className="text-zinc-300 dark:text-zinc-600">|</span>
         <h3 className="text-xs font-semibold text-zinc-900 dark:text-white truncate">
           {title}
         </h3>
-      </div>
+      </button>
 
       {/* Drawer content */}
       <div className="p-3 space-y-3">
