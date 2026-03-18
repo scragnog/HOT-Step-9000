@@ -113,17 +113,17 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
     const [isBrowsing, setIsBrowsing] = useState(false);
     const [expandedLayers, setExpandedLayers] = useState<Set<number>>(new Set());
 
-    // Open native folder picker dialog
-    const handleBrowse = async () => {
+    // Open native file picker for a .safetensors file (basic mode)
+    const handleBrowseFile = async () => {
         if (!token) return;
         setIsBrowsing(true);
         try {
-            const result = await generateApi.browseLoraFolder(token);
-            if (result.folder) {
-                onLoraPathChange(result.folder);
+            const result = await generateApi.browseLoraFile(token);
+            if (result.file) {
+                onLoraPathChange(result.file);
             }
         } catch (err) {
-            console.warn('Browse error:', err);
+            console.warn('Browse file error:', err);
         } finally {
             setIsBrowsing(false);
         }
@@ -162,70 +162,47 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                     {!advancedAdapters ? (
                         /* BASIC MODE */
                         <>
-                            {/* LoRA Path Input + Browse */}
+                            {/* Adapter file selection */}
                             <div className="space-y-2">
-                                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{t('loraPath')}</label>
-                                <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        value={loraPath}
-                                        onChange={(e) => onLoraPathChange(e.target.value)}
-                                        placeholder={t('loraPathPlaceholder')}
-                                        className="flex-1 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none focus:border-pink-500 dark:focus:border-pink-500 transition-colors"
-                                    />
-                                    <button
-                                        onClick={handleBrowse}
-                                        disabled={isBrowsing}
-                                        title="Browse for adapter files"
-                                        className="px-3 py-2 rounded-lg text-xs font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40 transition-colors flex items-center gap-1.5"
-                                    >
-                                        <FolderSearch size={14} />
-                                        {isBrowsing ? '...' : 'Browse'}
-                                    </button>
-                                </div>
-                            </div>
-
-                            {/* Browsed files dropdown */}
-                            {showBrowse && browsedFiles.length > 0 && (
-                                <div className="space-y-1">
-                                    <div className="flex items-center justify-between">
-                                        <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                                            Available ({browsedFiles.length})
-                                        </label>
+                                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Adapter File</label>
+                                {loraPath ? (
+                                    <div className="flex items-center gap-2">
+                                        <div className="flex-1 flex items-center gap-2 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg px-3 py-2">
+                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400">
+                                                {loraPath.toLowerCase().includes('lokr') ? 'LOKR' : 'LORA'}
+                                            </span>
+                                            <span className="text-xs text-zinc-700 dark:text-zinc-300 truncate" title={loraPath}>
+                                                {loraPath.split(/[\\/]/).pop()}
+                                            </span>
+                                        </div>
                                         <button
-                                            onClick={() => setShowBrowse(false)}
-                                            className="text-[10px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                                            onClick={() => onLoraPathChange('')}
+                                            className="px-2 py-2 rounded-lg text-xs text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                                            title="Clear selection"
                                         >
-                                            Hide
+                                            ✕
+                                        </button>
+                                        <button
+                                            onClick={handleBrowseFile}
+                                            disabled={isBrowsing}
+                                            title="Browse for adapter files"
+                                            className="px-3 py-2 rounded-lg text-xs font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40 transition-colors flex items-center gap-1.5"
+                                        >
+                                            <FolderSearch size={14} />
+                                            {isBrowsing ? '...' : 'Change'}
                                         </button>
                                     </div>
-                                    <div className="max-h-28 overflow-y-auto space-y-1">
-                                        {browsedFiles.map((file) => (
-                                            <button
-                                                key={file.path}
-                                                onClick={() => {
-                                                    onLoraPathChange(file.path);
-                                                    setShowBrowse(false);
-                                                }}
-                                                className={`w-full flex items-center justify-between bg-zinc-50 dark:bg-black/20 rounded-lg px-3 py-2 text-left hover:bg-pink-50 dark:hover:bg-pink-900/10 transition-colors ${file.path === loraPath ? 'ring-1 ring-pink-500' : ''}`}
-                                            >
-                                                <div className="flex items-center gap-2 min-w-0">
-                                                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${file.type === 'lora' ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' : 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'}`}>
-                                                        {file.type.toUpperCase()}
-                                                    </span>
-                                                    <span className="text-xs text-zinc-700 dark:text-zinc-300 truncate">{file.name}</span>
-                                                </div>
-                                                <span className="text-[10px] text-zinc-400 flex-shrink-0 ml-2">{(file.size / 1024 / 1024).toFixed(1)}MB</span>
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                            {showBrowse && browsedFiles.length === 0 && !isBrowsing && (
-                                <div className="text-xs text-zinc-400 dark:text-zinc-600 text-center py-1">
-                                    No adapter files found in folder
-                                </div>
-                            )}
+                                ) : (
+                                    <button
+                                        onClick={handleBrowseFile}
+                                        disabled={isBrowsing}
+                                        className="w-full flex items-center justify-center gap-2 bg-zinc-50 dark:bg-black/20 border border-dashed border-zinc-300 dark:border-white/10 rounded-lg px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400 hover:bg-pink-50 dark:hover:bg-pink-900/10 hover:border-pink-400 dark:hover:border-pink-500/30 disabled:opacity-40 transition-colors cursor-pointer"
+                                    >
+                                        <FolderSearch size={16} />
+                                        {isBrowsing ? 'Opening file picker...' : 'Select .safetensors file'}
+                                    </button>
+                                )}
+                            </div>
 
                             {/* LoRA Load/Unload Toggle */}
                             <div className="space-y-2">

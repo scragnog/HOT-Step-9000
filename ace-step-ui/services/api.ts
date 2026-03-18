@@ -539,6 +539,11 @@ export const generateApi = {
     folder: string;
   }> => api('/api/lora/browse-folder', { token }),
 
+  // Open native file picker dialog (.safetensors)
+  browseLoraFile: (token: string): Promise<{
+    file: string;
+  }> => api('/api/lora/browse-file', { token }),
+
   // Advanced adapter: group scales
   setGroupScales: (params: {
     self_attn: number;

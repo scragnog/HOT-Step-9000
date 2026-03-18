@@ -1,6 +1,7 @@
 import { Router, Response } from 'express';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
 import { config } from '../config/index.js';
+import { exec } from 'child_process';
 
 const router = Router();
 
@@ -56,6 +57,26 @@ async function proxyToAceStep(endpoint: string, method: string, data?: any) {
   }
 }
 
+/**
+ * Spawn a PowerShell native file/folder dialog and return the selected path.
+ * Returns empty string if the user cancels.
+ */
+function showNativeDialog(psScript: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    exec(
+      `powershell -NoProfile -Command "${psScript}"`,
+      { timeout: 300_000 }, // 5 min for user to interact with dialog
+      (err, stdout) => {
+        if (err) {
+          // timeout or exec error — treat as cancel
+          return resolve('');
+        }
+        resolve(stdout.trim());
+      },
+    );
+  });
+}
+
 router.post('/load', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const result = await proxyToAceStep('/v1/lora/load', 'POST', req.body);
@@ -96,6 +117,30 @@ router.get('/status', authMiddleware, async (_req: AuthenticatedRequest, res: Re
   try {
     const result = await proxyToAceStep('/v1/lora/status', 'GET');
     res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ── Native file/folder browser dialogs (Windows) ─────────────────────
+
+/** Open a native file picker filtered to .safetensors files */
+router.get('/browse-file', authMiddleware, async (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    const ps = `Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.OpenFileDialog; $d.Filter = 'SafeTensors (*.safetensors)|*.safetensors|All files (*.*)|*.*'; $d.Title = 'Select Adapter File'; if ($d.ShowDialog() -eq 'OK') { $d.FileName } else { '' }`;
+    const file = await showNativeDialog(ps);
+    res.json({ file });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+/** Open a native folder picker dialog */
+router.get('/browse-folder', authMiddleware, async (_req: AuthenticatedRequest, res: Response) => {
+  try {
+    const ps = `Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description = 'Select Adapter Folder'; if ($d.ShowDialog() -eq 'OK') { $d.SelectedPath } else { '' }`;
+    const folder = await showNativeDialog(ps);
+    res.json({ folder });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
