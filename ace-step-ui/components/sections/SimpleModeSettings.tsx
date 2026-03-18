@@ -2,7 +2,7 @@ import React from 'react';
 import { Sliders } from 'lucide-react';
 import { useI18n } from '../../context/I18nContext';
 import { EditableSlider } from '../EditableSlider';
-import { VOCAL_LANGUAGE_KEYS, KEY_SIGNATURES, TIME_SIGNATURES } from '../CreatePanel';
+import { VOCAL_LANGUAGE_KEYS, KEY_SIGNATURES, TIME_SIGNATURES } from '../../utils/constants';
 
 interface SimpleModeSettingsProps {
     songDescription: string;
