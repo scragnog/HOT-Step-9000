@@ -131,20 +131,29 @@ export const LayerAblationPanel: React.FC<LayerAblationPanelProps> = ({
 
     const sweepDisabled = !hasLoadedAdapters || !!isGenerating || !!isSweepRunning;
 
+    const Toggle: React.FC<{ on: boolean; onClick: () => void; disabled?: boolean }> = ({ on, onClick, disabled }) => (
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            className={`w-10 h-5 rounded-full flex items-center transition-colors duration-200 px-0.5 border border-zinc-200 dark:border-white/5 ${on ? 'bg-purple-600' : 'bg-zinc-300 dark:bg-black/40'} ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+        >
+            <div className={`w-4 h-4 rounded-full bg-white transform transition-transform duration-200 shadow-sm ${on ? 'translate-x-5' : 'translate-x-0'}`} />
+        </button>
+    );
+
     return (
         <div>
             {/* Dev Mode Toggle */}
-            <div className="flex items-center gap-2 px-1 py-1">
-                <label className="text-[10px] font-medium text-zinc-500 dark:text-zinc-500 flex items-center gap-1.5 cursor-pointer">
-                    <input
-                        type="checkbox"
-                        checked={devMode}
-                        onChange={(e) => setDevMode(e.target.checked)}
-                        className="rounded border-zinc-300 dark:border-zinc-600 text-purple-500 focus:ring-purple-500"
-                    />
-                    <FlaskConical size={12} />
-                    Developer Mode
-                </label>
+            <div className="flex items-center justify-between px-1 py-1">
+                <div>
+                    <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5">
+                        <FlaskConical size={12} />
+                        Developer Mode
+                    </span>
+                    <p className="text-[10px] text-zinc-500">Layer ablation lab and audio diff tools for adapter analysis</p>
+                </div>
+                <Toggle on={devMode} onClick={() => setDevMode(!devMode)} />
             </div>
 
             {devMode && (

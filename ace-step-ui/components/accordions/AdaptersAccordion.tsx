@@ -113,6 +113,17 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
     const [isBrowsing, setIsBrowsing] = useState(false);
     const [expandedLayers, setExpandedLayers] = useState<Set<number>>(new Set());
 
+    const Toggle: React.FC<{ on: boolean; onClick: () => void; disabled?: boolean }> = ({ on, onClick, disabled }) => (
+        <button
+            type="button"
+            onClick={onClick}
+            disabled={disabled}
+            className={`w-10 h-5 rounded-full flex items-center transition-colors duration-200 px-0.5 border border-zinc-200 dark:border-white/5 ${on ? 'bg-pink-600' : 'bg-zinc-300 dark:bg-black/40'} ${disabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
+        >
+            <div className={`w-4 h-4 rounded-full bg-white transform transition-transform duration-200 shadow-sm ${on ? 'translate-x-5' : 'translate-x-0'}`} />
+        </button>
+    );
+
     // Open native file picker for a .safetensors file (basic mode)
     const handleBrowseFile = async () => {
         if (!token) return;
@@ -147,16 +158,12 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
             {isOpen && (
                 <div className="bg-white dark:bg-suno-card rounded-b-xl rounded-t-none border border-t-0 border-zinc-200 dark:border-white/5 p-4 space-y-4">
                     {/* Advanced Toggle */}
-                    <div className="flex items-center justify-between">
-                        <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 flex items-center gap-2">
-                            <input
-                                type="checkbox"
-                                checked={advancedAdapters}
-                                onChange={(e) => onAdvancedAdaptersChange(e.target.checked)}
-                                className="rounded border-zinc-300 dark:border-zinc-600 text-pink-500 focus:ring-pink-500"
-                            />
-                            Advanced (Multi-Adapter)
-                        </label>
+                    <div className="flex items-center justify-between py-1">
+                        <div>
+                            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Advanced (Multi-Adapter)</span>
+                            <p className="text-[10px] text-zinc-500">Multi-slot adapter loading with per-slot and per-layer scale control</p>
+                        </div>
+                        <Toggle on={advancedAdapters} onClick={() => onAdvancedAdaptersChange(!advancedAdapters)} />
                     </div>
 
                     {!advancedAdapters ? (
@@ -614,22 +621,20 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                             {/* ── Global Scale Overrides ─────────────────────────────── */}
                             {adapterSlots.length > 0 && (
                                 <div className="space-y-3 pt-3 border-t border-zinc-200 dark:border-white/5">
-                                    <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400 flex items-center gap-2">
-                                        <input
-                                            type="checkbox"
-                                            checked={globalScaleOverrideEnabled || false}
-                                            onChange={(e) => onGlobalOverrideToggle?.(e.target.checked)}
-                                            className="rounded border-zinc-300 dark:border-zinc-600 text-amber-500 focus:ring-amber-500"
-                                        />
-                                        <span className="flex items-center gap-1.5">
-                                            🌐 Global Scale Overrides
-                                            {globalScaleOverrideEnabled && (
-                                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 animate-pulse">
-                                                    ACTIVE
-                                                </span>
-                                            )}
-                                        </span>
-                                    </label>
+                                    <div className="flex items-center justify-between py-1">
+                                        <div>
+                                            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5">
+                                                🌐 Global Scale Overrides
+                                                {globalScaleOverrideEnabled && (
+                                                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 animate-pulse">
+                                                        ACTIVE
+                                                    </span>
+                                                )}
+                                            </span>
+                                            <p className="text-[10px] text-zinc-500">Override all per-adapter scales with a single set of global values</p>
+                                        </div>
+                                        <Toggle on={globalScaleOverrideEnabled || false} onClick={() => onGlobalOverrideToggle?.(!globalScaleOverrideEnabled)} />
+                                    </div>
                                     {globalScaleOverrideEnabled && (
                                         <div className="space-y-2 pl-2 border-l-2 border-amber-500/30 bg-amber-50/50 dark:bg-amber-900/10 rounded-r-lg p-3">
                                             <p className="text-[10px] text-amber-600 dark:text-amber-400/70 leading-tight mb-2">
