@@ -17,7 +17,7 @@ import { StyleSection } from './sections/StyleSection';
 import { MusicParametersSection } from './sections/MusicParametersSection';
 import { CoverRepaintSettings } from './sections/CoverRepaintSettings';
 import { CreatePanelHeader } from './sections/CreatePanelHeader';
-import { TaskTypeSelector } from './sections/TaskTypeSelector';
+
 import { ExtractTrackSelector } from './sections/ExtractTrackSelector';
 
 import { AutoWriteSection } from './sections/AutoWriteSection';
@@ -2406,10 +2406,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           onLoadedMetadata={(e) => setSourceDuration(e.currentTarget.duration || 0)}
         />
 
-        {/* Header - Mode Toggle & Model Selection */}
+        {/* Header - Logo, Model, Task Type, JSON Import/Export */}
         <CreatePanelHeader
-          customMode={customMode}
-          setCustomMode={() => {}} // no-op — customMode is always true
           modelMenuRef={modelMenuRef}
           showModelMenu={showModelMenu}
           setShowModelMenu={setShowModelMenu}
@@ -2426,43 +2424,13 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           isSwitching={isSwitching}
           isGenerating={isGenerating}
           handleSwitchModel={handleSwitchModel}
-        />
-
-        {/* TASK TYPE SELECTOR */}
-        <TaskTypeSelector
           taskType={taskType}
           setTaskType={setTaskType}
-
           useReferenceAudio={useReferenceAudio}
-          selectedModel={selectedModel}
+          fileInputRef={fileInputRef}
+          onImportJson={handleImportJson}
+          onExportJson={handleExportJson}
         />
-
-        {/* JSON Import/Export Actions */}
-        <div className="flex items-center gap-2 px-1">
-          <input
-            type="file"
-            accept=".json"
-            className="hidden"
-            ref={fileInputRef}
-            onChange={handleImportJson}
-          />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/10 hover:border-indigo-300 dark:hover:border-indigo-500/50 rounded-xl text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all shadow-sm group"
-            title="Import Settings from JSON"
-          >
-            <Download size={14} className="group-hover:-translate-y-0.5 transition-transform" />
-            {t('Import')}
-          </button>
-          <button
-            onClick={handleExportJson}
-            className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-white dark:bg-white/5 border border-zinc-200 dark:border-white/10 hover:border-emerald-300 dark:hover:border-emerald-500/50 rounded-xl text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all shadow-sm group"
-            title="Export Settings as JSON"
-          >
-            <Upload size={14} className="group-hover:-translate-y-0.5 transition-transform" />
-            {t('Export')}
-          </button>
-        </div>
 
         {/* AUTO-WRITE SECTION — only when auto-write task type is selected */}
         {taskType === 'auto-write' && (

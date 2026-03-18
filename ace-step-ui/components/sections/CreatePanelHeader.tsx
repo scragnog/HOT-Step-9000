@@ -1,6 +1,7 @@
 import React from 'react';
-import { ChevronDown, RefreshCw, Loader2 } from 'lucide-react';
+import { ChevronDown, RefreshCw, Loader2, Download, Upload } from 'lucide-react';
 import { useI18n } from '../../context/I18nContext';
+import { TaskTypeSelector } from './TaskTypeSelector';
 
 interface ModelInfo {
     id: string;
@@ -10,8 +11,6 @@ interface ModelInfo {
 }
 
 interface CreatePanelHeaderProps {
-    customMode: boolean;
-    setCustomMode: (val: boolean) => void;
     modelMenuRef: React.RefObject<HTMLDivElement>;
     showModelMenu: boolean;
     setShowModelMenu: (val: boolean) => void;
@@ -28,11 +27,17 @@ interface CreatePanelHeaderProps {
     isSwitching: boolean;
     isGenerating: boolean;
     handleSwitchModel: (id: string) => void;
+    // Task type
+    taskType: string;
+    setTaskType: (val: string) => void;
+    useReferenceAudio: boolean;
+    // JSON import/export
+    fileInputRef: React.RefObject<HTMLInputElement>;
+    onImportJson: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    onExportJson: () => void;
 }
 
 export const CreatePanelHeader: React.FC<CreatePanelHeaderProps> = ({
-    customMode,
-    setCustomMode,
     modelMenuRef,
     showModelMenu,
     setShowModelMenu,
@@ -48,33 +53,46 @@ export const CreatePanelHeader: React.FC<CreatePanelHeaderProps> = ({
     activeBackendModel,
     isSwitching,
     isGenerating,
-    handleSwitchModel
+    handleSwitchModel,
+    taskType,
+    setTaskType,
+    useReferenceAudio,
+    fileInputRef,
+    onImportJson,
+    onExportJson,
 }) => {
     const { t } = useI18n();
 
     return (
         <>
-            <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <img 
-            src="/hotstep-logo-small.webp" 
-            alt="HOT-Step 9000 Logo" 
-            style={{ width: '200px', height: 'auto' }}
-            className="rounded opacity-90 object-contain hover:opacity-100 transition-opacity"
-          />
+            {/* Two-column header: Logo left, controls right */}
+            <div className="flex gap-4 items-start">
+                {/* Left column — Logo */}
+                <div className="flex-shrink-0 flex items-start pt-1">
+                    <img
+                        src="/hotstep-logo-small.webp"
+                        alt="HOT-Step 9000 Logo"
+                        style={{ width: '200px', height: 'auto' }}
+                        className="rounded opacity-90 object-contain hover:opacity-100 transition-opacity"
+                    />
                 </div>
 
-                <div className="flex items-center gap-2">
-
-                    {/* Model Selection */}
+                {/* Right column — Model, Task Type, JSON buttons */}
+                <div className="flex-1 flex flex-col gap-2 min-w-0">
+                    {/* Model Selector */}
                     <div className="relative" ref={modelMenuRef}>
+                        <label className="block text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-1">
+                            Model
+                        </label>
                         <button
                             onClick={() => setShowModelMenu(!showModelMenu)}
-                            className="bg-zinc-200 dark:bg-black/40 border border-zinc-300 dark:border-white/5 rounded-md px-2 py-1 text-[11px] font-medium text-zinc-900 dark:text-white hover:bg-zinc-300 dark:hover:bg-black/50 transition-colors flex items-center gap-1"
+                            className="w-full bg-zinc-200 dark:bg-black/40 border border-zinc-300 dark:border-white/5 rounded-md px-2.5 py-1.5 text-[11px] font-medium text-zinc-900 dark:text-white hover:bg-zinc-300 dark:hover:bg-black/50 transition-colors flex items-center justify-between gap-1"
                             disabled={availableModels.length === 0}
                         >
-                            {availableModels.length === 0 ? '...' : getModelDisplayName(selectedModel)}
-                            <ChevronDown size={10} className="text-zinc-600 dark:text-zinc-400" />
+                            <span className="truncate">
+                                {availableModels.length === 0 ? '...' : getModelDisplayName(selectedModel)}
+                            </span>
+                            <ChevronDown size={10} className="text-zinc-600 dark:text-zinc-400 flex-shrink-0" />
                         </button>
 
                         {/* Floating Model Menu */}
@@ -93,7 +111,6 @@ export const CreatePanelHeader: React.FC<CreatePanelHeaderProps> = ({
                                             key={model.id}
                                             onClick={() => {
                                                 setSelectedModel(model.id);
-                                                // Auto-adjust parameters for non-turbo models
                                                 if (!isTurboModel(model.id)) {
                                                     setInferenceSteps(20);
                                                     setUseAdg(true);
@@ -129,11 +146,47 @@ export const CreatePanelHeader: React.FC<CreatePanelHeaderProps> = ({
                             </div>
                         )}
                     </div>
+
+                    {/* Task Type Selector (compact — no card wrapper) */}
+                    <TaskTypeSelector
+                        taskType={taskType}
+                        setTaskType={setTaskType}
+                        useReferenceAudio={useReferenceAudio}
+                        selectedModel={selectedModel}
+                    />
+
+                    {/* JSON Import / Export — compact row */}
+                    <div className="flex items-center gap-1.5">
+                        <input
+                            type="file"
+                            accept=".json"
+                            className="hidden"
+                            ref={fileInputRef}
+                            onChange={onImportJson}
+                        />
+                        <button
+                            onClick={() => fileInputRef.current?.click()}
+                            className="flex-1 flex items-center justify-center gap-1 py-1 px-2 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 hover:border-indigo-300 dark:hover:border-indigo-500/50 rounded-md text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 transition-all"
+                            title="Import settings from a JSON file"
+                        >
+                            <Download size={10} />
+                            Import JSON
+                        </button>
+                        <button
+                            onClick={onExportJson}
+                            className="flex-1 flex items-center justify-center gap-1 py-1 px-2 bg-zinc-100 dark:bg-white/5 border border-zinc-200 dark:border-white/10 hover:border-emerald-300 dark:hover:border-emerald-500/50 rounded-md text-[10px] font-semibold text-zinc-500 dark:text-zinc-400 hover:text-emerald-600 dark:hover:text-emerald-400 transition-all"
+                            title="Export current settings as a JSON file"
+                        >
+                            <Upload size={10} />
+                            Export JSON
+                        </button>
+                    </div>
                 </div>
             </div>
 
+            {/* Model mismatch warning */}
             {activeBackendModel && selectedModel !== activeBackendModel && (
-                <div className="mx-4 mt-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 flex items-center justify-between gap-2">
+                <div className="mt-2 px-3 py-2 rounded-lg bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700/50 flex items-center justify-between gap-2">
                     <p className="text-xs text-amber-700 dark:text-amber-300">
                         <span className="font-semibold">{getModelDisplayName(selectedModel)}</span> selected but <span className="font-semibold">{getModelDisplayName(activeBackendModel)}</span> is loaded
                     </p>
