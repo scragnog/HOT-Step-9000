@@ -1,5 +1,6 @@
 import React from 'react';
 import { useI18n } from '../../context/I18nContext';
+import { isBaseModel } from '../../utils/modelUtils';
 
 interface TaskTypeSelectorProps {
     taskType: string;
@@ -8,13 +9,11 @@ interface TaskTypeSelectorProps {
     selectedModel: string;
 }
 
-// Check if model is a pure base model (only base supports extract/lego/complete)
-const isBaseModel = (modelId: string): boolean => {
-    return modelId.includes('base');
-};
+
 
 // Task type descriptions
 const TASK_DESCRIPTIONS: Record<string, string> = {
+    'auto-write': 'taskDescAutoWrite',
     text2music: 'taskDescText2music',
     cover: 'taskDescCover',
     repaint: 'taskDescRepaint',
@@ -45,6 +44,7 @@ export const TaskTypeSelector: React.FC<TaskTypeSelectorProps> = ({
                     }}
                     className="bg-zinc-100 dark:bg-black/30 border border-zinc-200 dark:border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-900 dark:text-white focus:outline-none focus:border-pink-500 dark:focus:border-pink-500 transition-colors cursor-pointer [&>option]:bg-white [&>option]:dark:bg-zinc-800 [&>option]:text-zinc-900 [&>option]:dark:text-white"
                 >
+                    <option value="auto-write">Auto-Write ✨</option>
                     <option value="text2music">{t('textToMusic')}</option>
                     <option value="cover">{t('coverTask')}</option>
                     <option value="repaint">{t('repaintTask')}</option>
