@@ -2791,6 +2791,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
               onClose={() => setActiveDrawer(null)}
             >
               <GenerationSettingsAccordion
+                embedded
                 isOpen={true}
                 onToggle={() => {}}
                 isTurbo={isTurboModel(selectedModel)}
@@ -2881,7 +2882,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
             {/* ── Adapters & LoRA ── */}
             <DrawerCard
               icon="🧩"
-              title="Adapters & LoRA"
+              title="Adapters (LoRA / LoKR)"
               description="Load and configure model adapters"
               summary={adapterSummary}
               onClick={() => setActiveDrawer(activeDrawer === 'adapters' ? null : 'adapters')}
@@ -2889,10 +2890,11 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
             />
             <DrawerContainer
               isOpen={activeDrawer === 'adapters'}
-              title="Adapters & LoRA"
+              title="Adapters (LoRA / LoKR)"
               onClose={() => setActiveDrawer(null)}
             >
               <AdaptersAccordion
+                embedded
                 customMode={true}
                 isOpen={true}
                 onToggle={() => {}}
@@ -2967,6 +2969,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
               onClose={() => setActiveDrawer(null)}
             >
               <CoverRepaintSettings
+                embedded
                 taskType={taskType}
                 audioCoverStrength={audioCoverStrength}
                 setAudioCoverStrength={setAudioCoverStrength}
@@ -3027,6 +3030,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
               onClose={() => setActiveDrawer(null)}
             >
               <ScoreSystemAccordion
+                embedded
                 isOpen={true}
                 onToggle={() => {}}
                 getScores={getScores}

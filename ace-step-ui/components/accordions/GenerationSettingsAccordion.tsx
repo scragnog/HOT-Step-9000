@@ -104,6 +104,8 @@ interface GenerationSettingsAccordionProps {
     onToggleAutogen: () => void;
     getLrc: boolean;
     onToggleGetLrc: () => void;
+    /** When true, skip the accordion header — used inside DrawerContainers */
+    embedded?: boolean;
 }
 
 export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionProps> = (props) => {
@@ -117,22 +119,8 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
 
     const selectClass = "w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-xl px-2 py-1.5 text-xs text-zinc-900 dark:text-white focus:outline-none focus:border-pink-500 dark:focus:border-pink-500 transition-colors cursor-pointer [&>option]:bg-white [&>option]:dark:bg-zinc-800 [&>option]:text-zinc-900 [&>option]:dark:text-white";
 
-    return (
-        <div>
-            <button
-                type="button"
-                onClick={props.onToggle}
-                className={`w-full flex items-center justify-between px-4 py-3 bg-white dark:bg-suno-card border border-zinc-200 dark:border-white/5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors ${props.isOpen ? 'rounded-t-xl rounded-b-none border-b-0' : 'rounded-xl'}`}
-            >
-                <span className="flex items-center gap-2">
-                    <Settings2 size={16} className="text-pink-500" />
-                    {t('generationSettings')}
-                </span>
-                <ChevronDown size={18} className={`text-pink-500 chevron-icon ${props.isOpen ? 'rotated' : ''}`} />
-            </button>
-
-            {props.isOpen && (
-                <div className="bg-white dark:bg-suno-card rounded-b-xl rounded-t-none border border-t-0 border-zinc-200 dark:border-white/5 p-4 space-y-5">
+    const content = (
+                <div className={props.embedded ? "space-y-5" : "bg-white dark:bg-suno-card rounded-b-xl rounded-t-none border border-t-0 border-zinc-200 dark:border-white/5 p-4 space-y-5"}>
 
                     {/* Batch Size */}
                     <EditableSlider
@@ -421,7 +409,25 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
                         onToggleGetLrc={props.onToggleGetLrc}
                     />
                 </div>
-            )}
+    );
+
+    if (props.embedded) return content;
+
+    return (
+        <div>
+            <button
+                type="button"
+                onClick={props.onToggle}
+                className={`w-full flex items-center justify-between px-4 py-3 bg-white dark:bg-suno-card border border-zinc-200 dark:border-white/5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors ${props.isOpen ? 'rounded-t-xl rounded-b-none border-b-0' : 'rounded-xl'}`}
+            >
+                <span className="flex items-center gap-2">
+                    <Settings2 size={16} className="text-pink-500" />
+                    {t('generationSettings')}
+                </span>
+                <ChevronDown size={18} className={`text-pink-500 chevron-icon ${props.isOpen ? 'rotated' : ''}`} />
+            </button>
+
+            {props.isOpen && content}
         </div>
     );
 };
