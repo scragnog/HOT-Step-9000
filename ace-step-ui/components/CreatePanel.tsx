@@ -301,6 +301,10 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   // Per-adapter persisted scales (keyed by adapter filename)
   const [savedGroupScales, setSavedGroupScales] = usePersistedState<Record<string, { self_attn: number; cross_attn: number; mlp: number }>>('ace-adapterGroupScales', {});
   const [savedOverallScales, setSavedOverallScales] = usePersistedState<Record<string, number>>('ace-adapterOverallScales', {});
+  // Global Scale Overrides — when enabled, these values override all per-adapter scales
+  const [globalScaleOverrideEnabled, setGlobalScaleOverrideEnabled] = usePersistedState('ace-globalScaleOverride', false);
+  const [globalOverallScale, setGlobalOverallScale] = usePersistedState('ace-globalOverallScale', 1.0);
+  const [globalGroupScales, setGlobalGroupScales] = usePersistedState<{ self_attn: number; cross_attn: number; mlp: number }>('ace-globalGroupScales', { self_attn: 1.0, cross_attn: 1.0, mlp: 1.0 });
   const [adapterLoadingMessage, setAdapterLoadingMessage] = useState<string | null>(null);
 
   // Activation Steering State
@@ -746,17 +750,15 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       const nextSlot = adapterSlots.length > 0
         ? Math.max(...adapterSlots.map(s => s.slot)) + 1
         : 0;
+      // When global override is active, use global values; otherwise per-adapter saved values
+      const adapterKey = filePath.split('/').pop()?.replace(/\.[^/.]+$/, '') || '';
+      const effectiveScale = globalScaleOverrideEnabled ? globalOverallScale : savedOverallScales[adapterKey];
+      const effectiveGroups = globalScaleOverrideEnabled ? globalGroupScales : savedGroupScales[adapterKey];
       await generateApi.loadLora({
         lora_path: filePath,
         slot: nextSlot,
-        // Atomically apply saved scales in the same request
-        ...(savedOverallScales[filePath.split('/').pop()?.replace(/\.[^/.]+$/, '') || ''] != null &&
-          savedOverallScales[filePath.split('/').pop()?.replace(/\.[^/.]+$/, '') || ''] !== 1.0
-          ? { scale: savedOverallScales[filePath.split('/').pop()?.replace(/\.[^/.]+$/, '') || ''] }
-          : {}),
-        ...(savedGroupScales[filePath.split('/').pop()?.replace(/\.[^/.]+$/, '') || ''] != null
-          ? { group_scales: savedGroupScales[filePath.split('/').pop()?.replace(/\.[^/.]+$/, '') || ''] }
-          : {}),
+        ...(effectiveScale != null && effectiveScale !== 1.0 ? { scale: effectiveScale } : {}),
+        ...(effectiveGroups != null ? { group_scales: effectiveGroups } : {}),
       }, token);
       // Refresh status to get actual slot info
       const status = await generateApi.getLoraStatus(token);
@@ -825,6 +827,61 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       await generateApi.setSlotGroupScales({ slot, ...newScales }, token);
     } catch (err) {
       console.error('Failed to set slot group scales:', err);
+    }
+  };
+
+  // ── Global Scale Override handlers ────────────────────────────────────────
+  const handleGlobalOverrideToggle = async (enabled: boolean) => {
+    setGlobalScaleOverrideEnabled(enabled);
+    if (!token) return;
+
+    if (enabled) {
+      // Push global values to all loaded adapters
+      for (const slot of adapterSlots) {
+        try {
+          await generateApi.setLoraScale({ scale: globalOverallScale, slot: slot.slot }, token);
+          await generateApi.setSlotGroupScales({ slot: slot.slot, ...globalGroupScales }, token);
+        } catch (err) {
+          console.error(`Failed to apply global override to slot ${slot.slot}:`, err);
+        }
+      }
+    } else {
+      // Restore per-adapter saved values
+      for (const slot of adapterSlots) {
+        const savedScale = savedOverallScales[slot.name] ?? 1.0;
+        const savedGroups = savedGroupScales[slot.name] ?? { self_attn: 1.0, cross_attn: 1.0, mlp: 1.0 };
+        try {
+          await generateApi.setLoraScale({ scale: savedScale, slot: slot.slot }, token);
+          await generateApi.setSlotGroupScales({ slot: slot.slot, ...savedGroups }, token);
+        } catch (err) {
+          console.error(`Failed to restore per-adapter scales for slot ${slot.slot}:`, err);
+        }
+      }
+    }
+  };
+
+  const handleGlobalOverallScaleChange = async (scale: number) => {
+    setGlobalOverallScale(scale);
+    if (!token || !globalScaleOverrideEnabled) return;
+    for (const slot of adapterSlots) {
+      try {
+        await generateApi.setLoraScale({ scale, slot: slot.slot }, token);
+      } catch (err) {
+        console.error(`Failed to set global scale on slot ${slot.slot}:`, err);
+      }
+    }
+  };
+
+  const handleGlobalGroupScaleChange = async (group: string, value: number) => {
+    const newScales = { ...globalGroupScales, [group]: value };
+    setGlobalGroupScales(newScales);
+    if (!token || !globalScaleOverrideEnabled) return;
+    for (const slot of adapterSlots) {
+      try {
+        await generateApi.setSlotGroupScales({ slot: slot.slot, ...newScales }, token);
+      } catch (err) {
+        console.error(`Failed to set global group scales on slot ${slot.slot}:`, err);
+      }
     }
   };
 
@@ -1299,13 +1356,13 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           for (const slot of prevSlots) {
             try {
               setAdapterLoadingMessage(`Loading ${slot.name}...`);
-              const savedScale = savedOverallScales[slot.name];
-              const savedGroups = savedGroupScales[slot.name];
+              const effectiveScale = globalScaleOverrideEnabled ? globalOverallScale : savedOverallScales[slot.name];
+              const effectiveGroups = globalScaleOverrideEnabled ? globalGroupScales : savedGroupScales[slot.name];
               await generateApi.loadLora({
                 lora_path: slot.path,
                 slot: slot.slot,
-                ...(savedScale != null && savedScale !== 1.0 ? { scale: savedScale } : {}),
-                ...(savedGroups != null ? { group_scales: savedGroups } : {}),
+                ...(effectiveScale != null && effectiveScale !== 1.0 ? { scale: effectiveScale } : {}),
+                ...(effectiveGroups != null ? { group_scales: effectiveGroups } : {}),
               }, token);
             } catch (err) {
               console.error(`Failed to re-apply adapter ${slot.name}:`, err);
@@ -1433,13 +1490,13 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       for (const slot of slotsToReload) {
         try {
           setAdapterLoadingMessage(`Loading ${slot.name}...`);
-          const savedScale = savedOverallScales[slot.name];
-          const savedGroups = savedGroupScales[slot.name];
+          const effectiveScale = globalScaleOverrideEnabled ? globalOverallScale : savedOverallScales[slot.name];
+          const effectiveGroups = globalScaleOverrideEnabled ? globalGroupScales : savedGroupScales[slot.name];
           await generateApi.loadLora({
             lora_path: slot.path,
             slot: slot.slot,
-            ...(savedScale != null && savedScale !== 1.0 ? { scale: savedScale } : {}),
-            ...(savedGroups != null ? { group_scales: savedGroups } : {}),
+            ...(effectiveScale != null && effectiveScale !== 1.0 ? { scale: effectiveScale } : {}),
+            ...(effectiveGroups != null ? { group_scales: effectiveGroups } : {}),
           }, token);
         } catch (err) {
           console.error(`[AutoReload] Failed to restore adapter ${slot.name}:`, err);
@@ -2905,6 +2962,12 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           onSlotLayerScaleChange={handleSlotLayerScaleChange}
           temporalScheduleActive={temporalScheduleActive}
           onTemporalSchedulePreset={handleTemporalSchedulePreset}
+          globalScaleOverrideEnabled={globalScaleOverrideEnabled}
+          onGlobalOverrideToggle={handleGlobalOverrideToggle}
+          globalOverallScale={globalOverallScale}
+          onGlobalOverallScaleChange={handleGlobalOverallScaleChange}
+          globalGroupScales={globalGroupScales}
+          onGlobalGroupScaleChange={handleGlobalGroupScaleChange}
         />
 
         {/* LM ADAPTER — hidden: merge-based approach produces identical output (2026-03-16) */}
