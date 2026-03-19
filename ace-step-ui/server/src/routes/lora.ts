@@ -2,6 +2,9 @@ import { Router, Response } from 'express';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
 import { config } from '../config/index.js';
 import { exec } from 'child_process';
+import { writeFileSync, unlinkSync } from 'fs';
+import { join } from 'path';
+import { tmpdir } from 'os';
 
 const router = Router();
 
@@ -61,17 +64,21 @@ async function proxyToAceStep(endpoint: string, method: string, data?: any) {
  * Spawn a PowerShell native file/folder dialog and return the selected path.
  * Returns empty string if the user cancels.
  *
- * Uses -EncodedCommand (Base64-encoded UTF-16LE) to avoid $ variable
- * stripping when Node's exec() routes through cmd.exe on Windows.
+ * Writes the script to a temp .ps1 file and runs it with -STA to avoid:
+ *  - cmd.exe stripping $ variable references
+ *  - EncodedCommand encoding issues
+ *  - MTA apartment thread issues with Windows Forms dialogs
  */
 function showNativeDialog(psScript: string): Promise<string> {
-  // Encode script as UTF-16LE Base64 for -EncodedCommand
-  const encoded = Buffer.from(psScript, 'utf16le').toString('base64');
-  return new Promise((resolve, _reject) => {
+  const scriptPath = join(tmpdir(), `hotstep_dialog_${Date.now()}.ps1`);
+  writeFileSync(scriptPath, psScript, 'utf8');
+  return new Promise((resolve) => {
     exec(
-      `powershell -NoProfile -EncodedCommand ${encoded}`,
+      `powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`,
       { timeout: 300_000 }, // 5 min for user to interact with dialog
       (err, stdout) => {
+        // Clean up temp script
+        try { unlinkSync(scriptPath); } catch { /* ignore */ }
         if (err) {
           // timeout or exec error — treat as cancel
           return resolve('');
