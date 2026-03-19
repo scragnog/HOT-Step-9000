@@ -218,17 +218,19 @@ export const GuidanceSettingsAccordion: React.FC<GuidanceSettingsAccordionProps>
                             <EditableSlider
                                 label="PAG Scale"
                                 value={pagScale}
-                                min={0} max={1} step={0.05}
+                                min={0} max={3} step={0.05}
                                 onChange={onPagScaleChange}
                                 formatDisplay={(v) => v.toFixed(2)}
                                 helpText={
                                     pagScale === 0
                                         ? 'Disabled — PAG has no effect'
-                                        : pagScale <= 0.3
+                                        : pagScale <= 0.5
                                             ? 'Subtle — light structural consistency boost'
-                                            : pagScale <= 0.6
+                                            : pagScale <= 1.0
                                                 ? 'Moderate — noticeable structural guidance'
-                                                : 'Strong — heavy structural consistency enforcement'
+                                                : pagScale <= 2.0
+                                                    ? 'Strong — heavy structural consistency enforcement'
+                                                    : 'Maximum — extreme PAG effect (testing)'
                                 }
                                 title="Strength of Perturbed Attention Guidance. PAG improves structural consistency by comparing normal vs self-attention-perturbed outputs. Higher values enforce more consistent structure."
                             />
