@@ -60,11 +60,16 @@ async function proxyToAceStep(endpoint: string, method: string, data?: any) {
 /**
  * Spawn a PowerShell native file/folder dialog and return the selected path.
  * Returns empty string if the user cancels.
+ *
+ * Uses -EncodedCommand (Base64-encoded UTF-16LE) to avoid $ variable
+ * stripping when Node's exec() routes through cmd.exe on Windows.
  */
 function showNativeDialog(psScript: string): Promise<string> {
-  return new Promise((resolve, reject) => {
+  // Encode script as UTF-16LE Base64 for -EncodedCommand
+  const encoded = Buffer.from(psScript, 'utf16le').toString('base64');
+  return new Promise((resolve, _reject) => {
     exec(
-      `powershell -NoProfile -Command "${psScript}"`,
+      `powershell -NoProfile -EncodedCommand ${encoded}`,
       { timeout: 300_000 }, // 5 min for user to interact with dialog
       (err, stdout) => {
         if (err) {
