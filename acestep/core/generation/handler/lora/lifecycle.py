@@ -1,6 +1,7 @@
 """LoRA/LoKr adapter load/unload lifecycle management."""
 
 import json
+import dataclasses
 import os
 from typing import Any, Dict, Optional, Tuple
 
@@ -214,7 +215,7 @@ def _load_lokr_adapter(decoder: Any, weights_path: str) -> Any:
     from lycoris import create_lycoris
 
     lokr_config = _load_lokr_config(weights_path)
-    logger.info(f"Fallback LoKr config from metadata: {lokr_config.to_dict()}")
+    logger.info(f"Fallback LoKr config from metadata: {dataclasses.asdict(lokr_config)}")
     LycorisNetwork.apply_preset(
         {
             "unet_target_name": lokr_config.target_modules,
