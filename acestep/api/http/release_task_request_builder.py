@@ -95,6 +95,7 @@ def build_generate_music_request(
         mastering_params=parser.get("mastering_params") or None,
         latent_shift=parser.float("latent_shift", 0.0),
         latent_rescale=parser.float("latent_rescale", 1.0),
+        vocoder_model=parser.str("vocoder_model", ""),
         # JKASS Fast solver parameters
         beat_stability=parser.float("beat_stability", 0.0),
         frequency_damping=parser.float("frequency_damping", 0.0),

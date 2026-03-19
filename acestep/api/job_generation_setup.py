@@ -177,6 +177,7 @@ def build_generation_setup(
         mastering_params=getattr(req, "mastering_params", None),
         latent_shift=getattr(req, "latent_shift", 0.0),
         latent_rescale=getattr(req, "latent_rescale", 1.0),
+        vocoder_model=getattr(req, "vocoder_model", ""),
         # JKASS Fast solver parameters
         beat_stability=getattr(req, "beat_stability", 0.0),
         frequency_damping=getattr(req, "frequency_damping", 0.0),
