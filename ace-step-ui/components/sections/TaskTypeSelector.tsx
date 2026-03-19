@@ -36,7 +36,7 @@ export const TaskTypeSelector: React.FC<TaskTypeSelectorProps> = ({
     return (
         <div className="bg-white dark:bg-suno-card rounded-xl border border-zinc-200 dark:border-white/5 overflow-hidden">
             <div className="px-3 py-2.5 flex items-center justify-between">
-                <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">{t('taskType')}</span>
+                <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide flex-shrink-0 whitespace-nowrap">{t('taskType')}</span>
                 <select
                     value={taskType}
                     onChange={(e) => {
