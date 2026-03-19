@@ -37,6 +37,10 @@ class GenerateMusicExecuteMixin:
         apg_norm_threshold: float = 2.5,
         omega_scale: float = 1.0,
         erg_scale: float = 1.0,
+        # JKASS Fast solver parameters
+        beat_stability: float = 0.0,
+        frequency_damping: float = 0.0,
+        temporal_smoothing: float = 0.0,
     ) -> Dict[str, Any]:
         """Invoke ``service_generate`` with real-time step progress from the DiT loop."""
         infer_steps_for_progress = len(timesteps) if timesteps else inference_steps
@@ -78,6 +82,9 @@ class GenerateMusicExecuteMixin:
             apg_norm_threshold=apg_norm_threshold,
             omega_scale=omega_scale,
             erg_scale=erg_scale,
+            beat_stability=beat_stability,
+            frequency_damping=frequency_damping,
+            temporal_smoothing=temporal_smoothing,
         )
         return {"outputs": outputs, "infer_steps_for_progress": infer_steps_for_progress}
 

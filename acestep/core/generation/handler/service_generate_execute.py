@@ -88,6 +88,10 @@ class ServiceGenerateExecuteMixin:
         apg_norm_threshold: float = 2.5,
         omega_scale: float = 1.0,
         erg_scale: float = 1.0,
+        # JKASS Fast solver parameters
+        beat_stability: float = 0.0,
+        frequency_damping: float = 0.0,
+        temporal_smoothing: float = 0.0,
     ) -> Dict[str, Any]:
         """Build kwargs passed to model generation backends."""
         kwargs = {
@@ -129,6 +133,10 @@ class ServiceGenerateExecuteMixin:
             "apg_norm_threshold": apg_norm_threshold,
             "omega_scale": omega_scale,
             "erg_scale": erg_scale,
+            # JKASS Fast solver parameters
+            "beat_stability": beat_stability,
+            "frequency_damping": frequency_damping,
+            "temporal_smoothing": temporal_smoothing,
         }
         if timesteps is not None:
             kwargs["timesteps"] = torch.tensor(timesteps, dtype=torch.float32, device=self.device)
