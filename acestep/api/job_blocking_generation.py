@@ -161,6 +161,12 @@ def run_blocking_generate(
         last_progress = {"value": -1.0, "time": 0.0, "stage": ""}
 
         def _progress_cb(value: float, desc: str = "") -> None:
+            # Check if this job was cancelled — abort generation immediately
+            cancelled_jobs = getattr(app_state, "cancelled_jobs", None)
+            if cancelled_jobs and job_id in cancelled_jobs:
+                log_fn(f"[API Server] Job {job_id} cancelled — interrupting generation")
+                raise RuntimeError(f"Job {job_id} cancelled by user")
+
             now = time.time()
             try:
                 value_f = max(0.0, min(1.0, float(value)))

@@ -196,3 +196,77 @@ def register_model_switch_routes(
                     status_code=500,
                     detail=f"LM model switch failed: {status_msg}",
                 )
+
+    @app.post("/v1/models/lm/backend")
+    async def switch_lm_backend_endpoint(request: Request, _: None = Depends(verify_api_key)):
+        """Hot-switch the LM backend (pt ↔ vllm) while keeping the same model."""
+        import os
+
+        body = await request.json()
+        target_backend = (body.get("backend") or "").strip().lower()
+        if target_backend not in ("pt", "vllm"):
+            raise HTTPException(status_code=400, detail="'backend' must be 'pt' or 'vllm'")
+
+        llm = getattr(app.state, "llm_handler", None)
+        if llm is None:
+            raise HTTPException(status_code=500, detail="LLM handler not available")
+
+        # Check if already using this backend
+        prev_params = getattr(llm, "last_init_params", None) or {}
+        if not isinstance(prev_params, dict):
+            prev_params = {}
+        current_backend = prev_params.get("backend", os.getenv("ACESTEP_LM_BACKEND", "vllm")).strip().lower()
+        if current_backend == target_backend:
+            return wrap_response({
+                "message": f"LM backend is already '{target_backend}'",
+                "backend": target_backend,
+                "switched": False,
+            })
+
+        lock = getattr(app.state, "_llm_init_lock", None)
+        if lock is None:
+            raise HTTPException(status_code=500, detail="LLM init lock not available")
+
+        with lock:
+            # Unload current model
+            try:
+                llm.unload()
+            except Exception as exc:
+                print(f"[API Server] Warning: LM unload failed: {exc}")
+            app.state._llm_initialized = False
+            app.state._llm_init_error = None
+
+            # Build init params — same model, new backend
+            checkpoint_dir = prev_params.get("checkpoint_dir", "")
+            if not checkpoint_dir:
+                from acestep.model_downloader import get_checkpoints_dir
+                checkpoint_dir = str(get_checkpoints_dir())
+
+            lm_model = prev_params.get("lm_model_path", "") or os.getenv("ACESTEP_LM_MODEL_PATH", "acestep-5Hz-lm-0.6B").strip()
+
+            init_kwargs = {
+                "checkpoint_dir": checkpoint_dir,
+                "lm_model_path": lm_model,
+                "backend": target_backend,
+                "device": prev_params.get("device", os.getenv("ACESTEP_LM_DEVICE", os.getenv("ACESTEP_DEVICE", "auto"))),
+                "offload_to_cpu": prev_params.get("offload_to_cpu", False),
+                "dtype": None,
+            }
+
+            print(f"[API Server] Switching LM backend: {current_backend} → {target_backend}")
+            status_msg, ok = llm.initialize(**init_kwargs)
+            if ok:
+                app.state._llm_initialized = True
+                app.state._llm_init_error = None
+                os.environ["ACESTEP_LM_BACKEND"] = target_backend
+                return wrap_response({
+                    "message": f"LM backend switched to {target_backend}",
+                    "backend": target_backend,
+                    "switched": True,
+                })
+            else:
+                app.state._llm_init_error = status_msg
+                raise HTTPException(
+                    status_code=500,
+                    detail=f"LM backend switch failed: {status_msg}",
+                )

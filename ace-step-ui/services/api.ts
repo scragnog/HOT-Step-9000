@@ -640,6 +640,12 @@ export const generateApi = {
     lm_model: string;
     switched: boolean;
   }> => api('/api/model/lm/switch', { method: 'POST', body: { model }, token }),
+
+  switchLmBackend: (backend: 'pt' | 'vllm', token: string): Promise<{
+    message: string;
+    backend: string;
+    switched: boolean;
+  }> => api('/api/models/lm/backend', { method: 'POST', body: { backend }, token }),
 };
 
 // Activation Steering (TADA) API

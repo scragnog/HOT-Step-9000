@@ -1338,6 +1338,25 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     }
   }, [token, isLmSwitching]);
 
+  const handleLmBackendChange = useCallback(async (targetBackend: 'pt' | 'vllm') => {
+    if (targetBackend === lmBackend) return;
+    setLmBackend(targetBackend); // Immediate visual feedback
+    if (!token || isLmSwitching) return;
+    setIsLmSwitching(true);
+    try {
+      const result = await generateApi.switchLmBackend(targetBackend, token);
+      if (result.switched) {
+        console.log(`[LM Backend] ${result.message}`);
+      }
+    } catch (err: any) {
+      console.error('LM backend switch failed:', err.message);
+      // Revert on failure
+      setLmBackend(lmBackend === 'pt' ? 'pt' : 'vllm');
+    } finally {
+      setIsLmSwitching(false);
+    }
+  }, [token, isLmSwitching, lmBackend]);
+
   useEffect(() => {
     isMountedRef.current = true;
     let cancelled = false;
@@ -2841,7 +2860,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                 onThinkingToggle={() => setThinking(!thinking)}
                 loraLoaded={loraLoaded}
                 lmBackend={lmBackend}
-                onLmBackendChange={setLmBackend}
+                onLmBackendChange={handleLmBackendChange}
                 lmModel={lmModel}
                 onLmModelChange={handleLmModelChange}
                 isLmSwitching={isLmSwitching}

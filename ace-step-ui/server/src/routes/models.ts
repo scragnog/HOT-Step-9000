@@ -89,6 +89,30 @@ router.post('/switch', authMiddleware, async (req: AuthenticatedRequest, res: Re
     }
 });
 
+// POST /api/models/lm/backend - Hot-switch LM backend (pt ↔ vllm)
+router.post('/lm/backend', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const result = await proxyToAceStep('/v1/models/lm/backend', 'POST', req.body);
+        // Also update .env so the choice persists across restarts
+        const envPath = path.join(PROJECT_ROOT, '.env');
+        if (req.body.backend && fs.existsSync(envPath)) {
+            let envContent = fs.readFileSync(envPath, 'utf-8');
+            if (/^ACESTEP_LM_BACKEND=.*/m.test(envContent)) {
+                envContent = envContent.replace(
+                    /^ACESTEP_LM_BACKEND=.*/m,
+                    `ACESTEP_LM_BACKEND=${req.body.backend}`
+                );
+            } else {
+                envContent = envContent.trimEnd() + `\nACESTEP_LM_BACKEND=${req.body.backend}\n`;
+            }
+            fs.writeFileSync(envPath, envContent, 'utf-8');
+        }
+        res.json(result);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // POST /api/models/update-env - Update .env model selections (used by loading screen)
 // No auth required — only called during startup before app is fully loaded
 router.post('/update-env', async (req: any, res: Response) => {
