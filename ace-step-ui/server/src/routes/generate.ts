@@ -250,6 +250,7 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
   let localJobId: string | null = null;
   try {
     const params = req.body as GenerateBody;
+    console.log('[JKASS DEBUG] beatStability:', params.beatStability, 'frequencyDamping:', params.frequencyDamping, 'temporalSmoothing:', params.temporalSmoothing);
 
     if (!params.customMode && !params.songDescription) {
       res.status(400).json({ error: 'Song description required for simple mode' });
