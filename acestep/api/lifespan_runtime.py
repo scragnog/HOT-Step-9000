@@ -119,6 +119,7 @@ def initialize_lifespan_runtime(
     app.state.pending_lock = asyncio.Lock()
     app.state.job_temp_files = {}
     app.state.job_temp_files_lock = asyncio.Lock()
+    app.state.cancelled_jobs = set()
     app.state.stats_lock = asyncio.Lock()
     app.state.recent_durations = deque(maxlen=avg_window)
     app.state.avg_job_seconds = initial_avg_job_seconds
