@@ -2123,7 +2123,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
 
   const adapterSummary = useMemo(() => {
     const loadedCount = adapterSlots.length;
-    if (!advancedAdapters) return loraLoaded ? 'LoRA loaded' : 'None loaded';
+    if (!advancedAdapters) return loraLoaded ? 'Adapter loaded' : 'None loaded';
     return loadedCount > 0 ? `${loadedCount} adapter${loadedCount > 1 ? 's' : ''} loaded` : 'None loaded';
   }, [adapterSlots, advancedAdapters, loraLoaded]);
 

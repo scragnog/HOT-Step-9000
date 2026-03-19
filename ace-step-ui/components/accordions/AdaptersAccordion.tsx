@@ -176,16 +176,23 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                         </button>
                                     )}
                                 </div>
-                                {loraPath && (
-                                    <div className="flex items-center gap-2">
-                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400">
-                                            {loraPath.toLowerCase().includes('lokr') ? 'LOKR' : 'LORA'}
-                                        </span>
-                                        <span className="text-[10px] text-zinc-500 truncate" title={loraPath}>
-                                            {loraPath.split(/[\\/]/).pop()}
-                                        </span>
-                                    </div>
-                                )}
+                                {loraPath && (() => {
+                                    const fileName = loraPath.split(/[\\/]/).pop() || '';
+                                    // PEFT convention: adapter_model.safetensors → LORA
+                                    // LoKR: filename contains 'lokr'
+                                    const isLokr = fileName.toLowerCase().includes('lokr');
+                                    const tag = isLokr ? 'LOKR' : 'LORA';
+                                    return (
+                                        <div className="flex items-center gap-2">
+                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400">
+                                                {tag}
+                                            </span>
+                                            <span className="text-[10px] text-zinc-500 truncate" title={loraPath}>
+                                                {fileName}
+                                            </span>
+                                        </div>
+                                    );
+                                })()}
                             </div>
 
                             {/* LoRA Load/Unload Toggle */}

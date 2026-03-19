@@ -125,12 +125,12 @@ export const translations = {
         loraPath: 'LoRA Path',
         loraPathPlaceholder: 'Enter LoRA model path...',
         browseFiles: 'Browse files',
-        loraLoaded: 'LoRA Loaded',
-        loraUnloaded: 'LoRA Unloaded',
+        loraLoaded: 'Adapter Loaded',
+        loraUnloaded: 'Adapter Unloaded',
         loraLoad: 'Load',
         loraUnload: 'Unload',
-        loraScale: 'LoRA Scale',
-        loraScaleDescription: 'Adjust the influence strength of the LoRA model',
+        loraScale: 'Adapter Scale',
+        loraScaleDescription: 'Adjust the influence strength of the adapter',
 
         // CreatePanel - Audio
         useReferenceAudio: 'Use Reference Audio',
@@ -445,8 +445,8 @@ export const translations = {
         // CreatePanel - Misc
         instructionDefault: 'Fill the audio semantic mask based on the given conditions:',
         untitled: 'Untitled',
-        pleaseSignInToUseLoRA: 'Please sign in to use LoRA',
-        pleaseEnterLoRAPath: 'Please enter a LoRA path',
+        pleaseSignInToUseLoRA: 'Please sign in to use adapters',
+        pleaseEnterLoRAPath: 'Please enter an adapter path',
         loraOperationFailed: 'LoRA operation failed',
         failedToUnloadLoRA: 'Failed to unload LoRA',
         pleaseSignInToUploadAudio: 'Please sign in to upload audio',

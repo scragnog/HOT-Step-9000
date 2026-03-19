@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Folder, FileText, ChevronUp, X, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { generateApi } from '../services/api';
@@ -30,6 +30,9 @@ function formatSize(bytes?: number): string {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+// Remember last directory across modal opens
+let lastVisitedDir = '';
+
 export const FileBrowserModal: React.FC<FileBrowserModalProps> = ({
     open, onClose, onSelect, mode, startPath,
 }) => {
@@ -49,6 +52,7 @@ export const FileBrowserModal: React.FC<FileBrowserModalProps> = ({
             setCurrentDir(result.current);
             setPathInput(result.current);
             setEntries(result.entries);
+            lastVisitedDir = result.current; // remember for next open
         } catch (err: any) {
             setError(err?.message || 'Failed to list directory');
         } finally {
@@ -59,7 +63,7 @@ export const FileBrowserModal: React.FC<FileBrowserModalProps> = ({
     // Load initial directory when modal opens
     useEffect(() => {
         if (open) {
-            loadDir(startPath || '');
+            loadDir(startPath || lastVisitedDir || '');
         }
     }, [open, startPath, loadDir]);
 
@@ -87,9 +91,7 @@ export const FileBrowserModal: React.FC<FileBrowserModalProps> = ({
     };
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-            onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-        >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm">
             <div className="w-[540px] max-h-[70vh] bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-white/10 shadow-2xl flex flex-col overflow-hidden">
                 {/* Header */}
                 <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-100 dark:border-white/5">

@@ -578,8 +578,12 @@ def unload_lora(self) -> str:
             PeftModel = None  # type: ignore[assignment]
 
         if PeftModel is not None and isinstance(self.model.decoder, PeftModel):
-            logger.info("Extracting base model from PEFT wrapper")
-            self.model.decoder = self.model.decoder.get_base_model()
+            logger.info("Removing PEFT LoRA layers via merge_and_unload()")
+            # merge_and_unload() removes LoRA layers from the module graph entirely.
+            # get_base_model() only unwraps the container but leaves LoRA-modified
+            # Linear layers (LoraLayer) in place — their forward hooks keep applying
+            # the delta, so unload appears to have no effect.
+            self.model.decoder = self.model.decoder.merge_and_unload()
             load_result = self.model.decoder.load_state_dict(self._base_decoder, strict=False)
             if load_result.missing_keys:
                 logger.warning(f"Missing keys when restoring decoder: {load_result.missing_keys[:5]}")
