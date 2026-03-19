@@ -80,8 +80,31 @@ def _try_prepare_bare_peft_safetensors(safetensors_path: str) -> Optional[str]:
         logger.debug(f"Failed to inspect safetensors for PEFT detection: {exc}")
         return None
 
-    # --- Build temp dir with adapter_config.json + linked weights ---
+    # --- Build temp dir with adapter_config.json + converted weights ---
+    # ComfyUI/Kohya format uses different key names than PEFT:
+    #   lora_down.weight → lora_A.weight
+    #   lora_up.weight   → lora_B.weight
+    #   dora_scale       → lora_magnitude_vector
+    #   .alpha (tensors) → removed (stored in adapter_config.json instead)
     try:
+        from safetensors import safe_open
+        from safetensors.torch import save_file as st_save_file
+
+        # Re-open and convert all tensors
+        converted_tensors = {}
+        with safe_open(safetensors_path, framework="pt", device="cpu") as sf:
+            for key in sf.keys():
+                tensor = sf.get_tensor(key)
+                # Skip alpha scalars — already captured in config
+                if key.endswith(".alpha"):
+                    continue
+                # Rename ComfyUI keys → PEFT keys
+                new_key = key
+                new_key = new_key.replace(".lora_down.weight", ".lora_A.weight")
+                new_key = new_key.replace(".lora_up.weight", ".lora_B.weight")
+                new_key = new_key.replace(".dora_scale", ".lora_magnitude_vector")
+                converted_tensors[new_key] = tensor
+
         tmp_dir = tempfile.mkdtemp(prefix="peft_adapter_")
         config = {
             "peft_type": "LORA",
@@ -107,10 +130,8 @@ def _try_prepare_bare_peft_safetensors(safetensors_path: str) -> Optional[str]:
             json.dump(config, f, indent=2)
 
         dest_weights = os.path.join(tmp_dir, "adapter_model.safetensors")
-        try:
-            os.link(safetensors_path, dest_weights)  # Hard link (instant, no extra space)
-        except OSError:
-            shutil.copy2(safetensors_path, dest_weights)  # Fallback: full copy
+        st_save_file(converted_tensors, dest_weights)
+        del converted_tensors
 
         logger.info(
             f"Inferred PEFT config from bare safetensors: r={rank}, alpha={lora_alpha}, "
