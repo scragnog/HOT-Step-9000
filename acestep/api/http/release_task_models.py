@@ -87,6 +87,11 @@ class GenerateMusicRequest(BaseModel):
     pag_end: float = Field(default=0.80, description="PAG timestep end (0.0-1.0)")
     pag_scale: float = Field(default=0.2, description="PAG guidance scale")
 
+    # ── JKASS Fast solver parameters ──────────────────────────────
+    beat_stability: float = Field(default=0.0, description="Momentum blending with previous step delta (0=off, 1=full)")
+    frequency_damping: float = Field(default=0.0, description="Exponential decay on high-frequency bins (0=off)")
+    temporal_smoothing: float = Field(default=0.0, description="Temporal kernel on velocity delta (0=off)")
+
     shift: float = Field(
         default=3.0,
         description="Timestep shift factor (range 1.0~5.0, default 3.0). Only effective for base models, not turbo models.",
