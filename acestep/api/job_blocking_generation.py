@@ -132,6 +132,17 @@ def run_blocking_generate(
             log_fn=log_fn,
         )
 
+        # Flush CUDA cache after LLM inference — PT backend leaves intermediate
+        # tensors in the CUDA caching allocator, which makes the VRAM preflight
+        # check (inside generate_music) see less free memory than is actually
+        # available.  Without this, the first generation after boot always fails
+        # with "Insufficient free VRAM" in PT mode.
+        import gc
+        import torch as _torch
+        gc.collect()
+        if _torch.cuda.is_available():
+            _torch.cuda.empty_cache()
+
         generation_setup = build_generation_setup(
             req=req,
             caption=prepared_inputs.caption,
