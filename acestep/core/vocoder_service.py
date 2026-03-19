@@ -71,6 +71,9 @@ class VocoderService:
             
         if added_batch:
             vocoded_wav = vocoded_wav.squeeze(0).squeeze(0)
+        elif vocoded_wav.dim() == 3 and vocoded_wav.size(0) == 1:
+            # Drop the batch dimension [1, C, T] -> [C, T]
+            vocoded_wav = vocoded_wav.squeeze(0)
             
         return vocoded_wav.cpu()
 
