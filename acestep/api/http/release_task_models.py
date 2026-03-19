@@ -92,6 +92,23 @@ class GenerateMusicRequest(BaseModel):
     frequency_damping: float = Field(default=0.0, description="Exponential decay on high-frequency bins (0=off)")
     temporal_smoothing: float = Field(default=0.0, description="Temporal kernel on velocity delta (0=off)")
 
+    # ── Anti-Autotune ─────────────────────────────────────────────
+    anti_autotune: float = Field(default=0.0, description="Spectral smoothing to reduce robotic/autotuned vocal artifacts (0=off, 1=full)")
+
+    # ── Advanced Guidance Parameters ──────────────────────────────
+    guidance_interval_decay: float = Field(default=0.0, description="Guidance interval decay rate")
+    min_guidance_scale: float = Field(default=3.0, description="Minimum guidance scale for decayed guidance")
+    guidance_scale_text: float = Field(default=0.0, description="Independent text prompt guidance (0=use main)")
+    guidance_scale_lyric: float = Field(default=0.0, description="Independent lyric guidance (0=use main)")
+    apg_momentum: float = Field(default=0.0, description="APG momentum (0=default internal)")
+    apg_norm_threshold: float = Field(default=0.0, description="APG norm threshold (0=default 2.5)")
+    omega_scale: float = Field(default=1.0, description="Omega guidance scale")
+    erg_scale: float = Field(default=1.0, description="ERG guidance scale")
+
+    # ── Iterative Refinement ──────────────────────────────────────
+    refine_passes: int = Field(default=0, description="Number of refinement passes (0=disabled)")
+    refine_strength: float = Field(default=0.3, description="Refinement noise strength")
+
     shift: float = Field(
         default=3.0,
         description="Timestep shift factor (range 1.0~5.0, default 3.0). Only effective for base models, not turbo models.",

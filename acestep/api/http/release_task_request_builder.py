@@ -99,6 +99,20 @@ def build_generate_music_request(
         beat_stability=parser.float("beat_stability", 0.0),
         frequency_damping=parser.float("frequency_damping", 0.0),
         temporal_smoothing=parser.float("temporal_smoothing", 0.0),
+        # Anti-Autotune
+        anti_autotune=parser.float("anti_autotune", 0.0),
+        # Advanced Guidance Parameters
+        guidance_interval_decay=parser.float("guidance_interval_decay", 0.0),
+        min_guidance_scale=parser.float("min_guidance_scale", 3.0),
+        guidance_scale_text=parser.float("guidance_scale_text", 0.0),
+        guidance_scale_lyric=parser.float("guidance_scale_lyric", 0.0),
+        apg_momentum=parser.float("apg_momentum", 0.0),
+        apg_norm_threshold=parser.float("apg_norm_threshold", 0.0),
+        omega_scale=parser.float("omega_scale", 1.0),
+        erg_scale=parser.float("erg_scale", 1.0),
+        # Iterative Refinement
+        refine_passes=parser.int("refine_passes", 0),
+        refine_strength=parser.float("refine_strength", 0.3),
         # Activation steering
         steering_enabled=parser.bool("steering_enabled"),
         steering_loaded=parser.get("steering_loaded") or [],

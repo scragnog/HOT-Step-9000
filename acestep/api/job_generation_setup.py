@@ -181,6 +181,17 @@ def build_generation_setup(
         beat_stability=getattr(req, "beat_stability", 0.0),
         frequency_damping=getattr(req, "frequency_damping", 0.0),
         temporal_smoothing=getattr(req, "temporal_smoothing", 0.0),
+        # Anti-Autotune
+        anti_autotune=getattr(req, "anti_autotune", 0.0),
+        # Advanced Guidance Parameters
+        guidance_interval_decay=getattr(req, "guidance_interval_decay", 0.0),
+        min_guidance_scale=getattr(req, "min_guidance_scale", 3.0),
+        guidance_scale_text=getattr(req, "guidance_scale_text", 0.0),
+        guidance_scale_lyric=getattr(req, "guidance_scale_lyric", 0.0),
+        apg_momentum=getattr(req, "apg_momentum", 0.0),
+        apg_norm_threshold=getattr(req, "apg_norm_threshold", 0.0),
+        omega_scale=getattr(req, "omega_scale", 1.0),
+        erg_scale=getattr(req, "erg_scale", 1.0),
         # Scoring & LRC
         get_lrc=getattr(req, "get_lrc", False),
         get_scores=getattr(req, "get_scores", False),
