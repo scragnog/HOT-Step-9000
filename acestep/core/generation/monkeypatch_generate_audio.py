@@ -24,8 +24,12 @@ def _patch_decoder_layer_for_pag(model) -> int:
     """Patch decoder layers to support pag_identity_mask in their forward.
 
     The checkpoint's AceStepDiTLayer.forward doesn't handle pag_identity_mask.
-    This wraps each DiT layer's forward to intercept self-attention and replace
-    the attention output with identity for PAG-marked batch items.
+    This wraps each DiT layer's forward AND self_attn.forward to intercept
+    self-attention and replace output with identity for PAG-marked batch items.
+
+    We can't use register_forward_hook because self_attn receives hidden_states
+    as a keyword arg → hook's `inp` tuple is empty → identity replacement fails.
+    Direct method wrapping gives full access to args and kwargs.
 
     Returns the number of layers patched.
     """
@@ -49,42 +53,41 @@ def _patch_decoder_layer_for_pag(model) -> int:
         if getattr(layer, "_pag_patched", False):
             continue
 
-        original_forward = layer.forward
+        # -- Step 1: Wrap self_attn.forward to intercept attention output --
+        original_self_attn_forward = self_attn.forward
 
-        def _make_pag_forward(orig_fwd, layer_ref):
-            """Create a PAG-aware wrapper for the layer forward."""
-            def pag_forward(*args, **kwargs):
-                pag_mask = kwargs.pop("pag_identity_mask", None)
-                if pag_mask is None or not pag_mask.any():
-                    return orig_fwd(*args, **kwargs)
+        def _make_pag_self_attn_forward(orig_sa_fwd, layer_ref):
+            def pag_self_attn_forward(*args, **kwargs):
+                result = orig_sa_fwd(*args, **kwargs)
 
-                # PAG is active: we need to intercept self-attention output.
-                # Strategy: hook self_attn to capture its output, then replace
-                # PAG items with identity (the normalized input).
-                captured = {}
-
-                # Hook the self-attention module to capture input/output
-                def _hook(module, inp, output):
-                    # output is (attn_output, attn_weights)
-                    attn_out = output[0]
-                    # The input to self_attn is norm_hidden_states (after AdaLN)
-                    norm_hs = inp[0] if len(inp) > 0 else None
-                    if norm_hs is not None:
+                pag_mask = getattr(layer_ref, "_pag_active_mask", None)
+                if pag_mask is not None and pag_mask.any():
+                    # Get the input hidden_states (positional or keyword)
+                    hs = args[0] if len(args) > 0 else kwargs.get("hidden_states")
+                    if hs is not None:
+                        attn_out = result[0]
                         # Replace PAG items' attention output with identity
-                        attn_out[pag_mask] = norm_hs[pag_mask]
-                    captured["hooked"] = True
-                    return (attn_out,) + output[1:]
-
-                hook_handle = layer_ref.self_attn.register_forward_hook(_hook)
-                try:
-                    result = orig_fwd(*args, **kwargs)
-                finally:
-                    hook_handle.remove()
+                        attn_out[pag_mask] = hs[pag_mask]
 
                 return result
-            return pag_forward
+            return pag_self_attn_forward
 
-        layer.forward = _make_pag_forward(original_forward, layer)
+        self_attn.forward = _make_pag_self_attn_forward(original_self_attn_forward, layer)
+
+        # -- Step 2: Wrap layer.forward to set/clear PAG mask --
+        original_layer_forward = layer.forward
+
+        def _make_pag_layer_forward(orig_fwd, layer_ref):
+            def pag_layer_forward(*args, **kwargs):
+                pag_mask = kwargs.pop("pag_identity_mask", None)
+                layer_ref._pag_active_mask = pag_mask
+                try:
+                    return orig_fwd(*args, **kwargs)
+                finally:
+                    layer_ref._pag_active_mask = None
+            return pag_layer_forward
+
+        layer.forward = _make_pag_layer_forward(original_layer_forward, layer)
         layer._pag_patched = True
         count += 1
 
