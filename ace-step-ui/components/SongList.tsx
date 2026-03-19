@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect, useCallback } from 'react';
 import { Song } from '../types';
-import { Play, MoreHorizontal, Heart, ThumbsDown, ListPlus, Pause, Search, Filter, Check, Globe, Lock, Loader2, ThumbsUp, Share2, Video, Info, Clock, ChevronLeft, ChevronRight, Trash2, LayoutList, LayoutGrid, List, ArrowLeftRight, X, Download } from 'lucide-react';
+import { Play, MoreHorizontal, Heart, ThumbsDown, ListPlus, Pause, Search, Filter, Check, Globe, Lock, Loader2, ThumbsUp, Share2, Video, Info, Clock, ChevronLeft, ChevronRight, Trash2, LayoutList, LayoutGrid, List, ArrowLeftRight, X, Download, Pencil } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
 import { SongDropdownMenu } from './SongDropdownMenu';
@@ -962,17 +962,25 @@ const SongItem: React.FC<SongItemProps> = ({
                                     className="font-bold text-lg bg-zinc-100 dark:bg-zinc-800 px-2 py-0.5 rounded border border-pink-500 focus:outline-none text-zinc-900 dark:text-white min-w-0 flex-1"
                                 />
                             ) : (
+                                <>
                                 <h3
-                                    className={`font-bold text-lg truncate ${isCurrent ? 'text-pink-600 dark:text-pink-500' : 'text-zinc-900 dark:text-white'} ${isOwner && !song.isGenerating ? 'cursor-pointer hover:underline' : ''}`}
-                                    onClick={(e) => {
-                                        if (isOwner && !song.isGenerating) {
-                                            e.stopPropagation();
-                                            setIsEditingTitle(true);
-                                        }
-                                    }}
+                                    className={`font-bold text-lg truncate ${isCurrent ? 'text-pink-600 dark:text-pink-500' : 'text-zinc-900 dark:text-white'}`}
                                 >
                                     {song.title || (song.isGenerating ? (song.queuePosition ? "Queued..." : "Creating...") : "Untitled")}
                                 </h3>
+                                {isOwner && !song.isGenerating && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setIsEditingTitle(true);
+                                        }}
+                                        className="opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-400 hover:text-pink-500 dark:hover:text-pink-400 flex-shrink-0"
+                                        title="Rename track"
+                                    >
+                                        <Pencil size={13} />
+                                    </button>
+                                )}
+                                </>
                             )}
                             <span className="inline-flex items-center justify-center text-[9px] font-bold text-white bg-gradient-to-r from-pink-500 to-purple-500 px-1.5 py-0.5 rounded-sm shadow-sm" title={`DiT model: ${song.ditModel || 'undefined'}`}>
                                 {getModelDisplayName(song.ditModel)}

@@ -105,7 +105,7 @@ class LLMHandler:
         """Release LM weights/tokenizer and clear caches to free memory."""
         import gc
         try:
-            if self.llm_backend == "vllm" and self.llm is not None:
+            if self.llm_backend in ("vllm", "custom-vllm") and self.llm is not None:
                 # Step 1: Signal the engine to exit (handles CUDA graph pool + distributed teardown)
                 try:
                     if hasattr(self.llm, "exit"):
@@ -117,12 +117,27 @@ class LLMHandler:
                 # ModelRunner.exit() only drops CUDA graphs — it does NOT del self.model,
                 # so the weight tensors stay resident in VRAM until GC runs.  Force this now.
                 try:
+                    # nano-vllm path: model_runner.model / model_runner.kv_cache
                     mr = getattr(self.llm, "model_runner", None)
                     if mr is not None:
                         if hasattr(mr, "model"):
                             del mr.model
                         if hasattr(mr, "kv_cache"):
                             del mr.kv_cache
+
+                    # custom-vllm path: _pipeline.model / _pipeline._kv_storage
+                    pipeline = getattr(self.llm, "_pipeline", None)
+                    if pipeline is not None:
+                        if hasattr(pipeline, "model"):
+                            del pipeline.model
+                        if hasattr(pipeline, "_kv_storage"):
+                            del pipeline._kv_storage
+                        del pipeline
+                    # Also release the custom-vllm CachePool and active slots
+                    if hasattr(self.llm, "_cache"):
+                        del self.llm._cache
+                    if hasattr(self.llm, "_active_slots"):
+                        self.llm._active_slots.clear()
                 except Exception as e:
                     print(f"[LLMHandler] Warning: explicit model weight deletion failed: {e}")
 
@@ -890,14 +905,14 @@ class LLMHandler:
                     status_msg = f"✅ 5Hz LM initialized (PyTorch fallback, MLX not available)\nModel: {full_lm_model_path}\nBackend: PyTorch"
                     return status_msg, True
 
-            if backend == "vllm" and device != "cuda":
+            if backend in ("vllm", "custom-vllm") and device != "cuda":
                 logger.info(
-                    f"[initialize] vllm backend requires CUDA, using PyTorch backend for device={device}."
+                    f"[initialize] {backend} backend requires CUDA, using PyTorch backend for device={device}."
                 )
                 backend = "pt"
 
             # Initialize based on user-selected backend
-            if backend == "vllm":
+            if backend in ("vllm", "custom-vllm"):
                 _warn_if_prerelease_python()
                 total_gb = get_gpu_memory_gb() if device == "cuda" else 0.0
                 free_gb = 0.0
@@ -920,10 +935,16 @@ class LLMHandler:
                         return status_msg, False
                     status_msg = f"✅ 5Hz LM initialized successfully (PyTorch fallback)\nModel: {full_lm_model_path}\nBackend: PyTorch"
                 else:
-                    status_msg = self._initialize_5hz_lm_vllm(
-                        full_lm_model_path,
-                        enforce_eager=enforce_eager_for_vllm,
-                    )
+                    if backend == "custom-vllm":
+                        status_msg = self._initialize_5hz_lm_custom_vllm(
+                            full_lm_model_path,
+                            enforce_eager=enforce_eager_for_vllm,
+                        )
+                    else:
+                        status_msg = self._initialize_5hz_lm_vllm(
+                            full_lm_model_path,
+                            enforce_eager=enforce_eager_for_vllm,
+                        )
                     logger.info(f"5Hz LM status message: {status_msg}")
                     if status_msg.startswith("❌"):
                         if not self.llm_initialized:
@@ -942,6 +963,9 @@ class LLMHandler:
                 success, status_msg = self._load_pytorch_model(full_lm_model_path, device)
                 if not success:
                     return status_msg, False
+            logger.info("=" * 60)
+            logger.info(f"=== ACTIVE LM MODE: {self.llm_backend} ===")
+            logger.info("=" * 60)
 
             return status_msg, True
 
@@ -1078,6 +1102,137 @@ class LLMHandler:
             self.llm_initialized = False
             return f"❌ Error initializing 5Hz LM: {str(e)}\n\nTraceback:\n{traceback.format_exc()}"
 
+    def _initialize_5hz_lm_custom_vllm(
+        self,
+        model_path: str,
+        enforce_eager: bool = False,
+        gpu_memory_utilization_override: Optional[float] = None,
+        max_model_len_override: Optional[int] = None,
+    ) -> str:
+        """Initialize 5Hz LM model using vllm backend. When enforce_eager is True, CUDA graph
+        capture is disabled (required when LoRA training may run in the same process).
+
+        When gpu_memory_utilization_override / max_model_len_override are provided
+        (e.g. during LM-LoRA merge reinit), skip recalculation and reuse the
+        values from the original initialization."""
+        if not torch.cuda.is_available():
+            self.llm_initialized = False
+            logger.error("CUDA/ROCm is not available. Please check your GPU setup.")
+            return "❌ CUDA/ROCm is not available. Please check your GPU setup."
+        try:
+            from acestep.customized_vllm import LLM, SamplingParams
+        except ImportError:
+            self.llm_initialized = False
+            logger.error("nano-vllm is not installed. Please install it using 'cd acestep/third_parts/nano-vllm && pip install .")
+            return "❌ nano-vllm is not installed. Please install it using 'cd acestep/third_parts/nano-vllm && pip install ."
+
+        try:
+            current_device = torch.cuda.current_device()
+            device_name = torch.cuda.get_device_name(current_device)
+
+            torch.cuda.empty_cache()
+            self._cleanup_torch_distributed_state()
+
+            # Use overrides if provided, or fall back to cached values from
+            # the original init.  This is critical for LM LoRA merge reinit:
+            # at that point DiT is on GPU, so recalculating would over-allocate
+            # and starve DiT of VRAM.
+            use_override = (
+                gpu_memory_utilization_override is not None
+                or self._vllm_gpu_memory_utilization is not None
+            )
+            if use_override:
+                gpu_memory_utilization = (
+                    gpu_memory_utilization_override
+                    or self._vllm_gpu_memory_utilization
+                )
+                low_gpu_memory_mode = False
+                logger.info(
+                    f"[LM reinit] Reusing gpu_memory_utilization={gpu_memory_utilization:.3f}"
+                )
+            else:
+                # First init — calculate adaptively based on model size
+                gpu_memory_utilization, low_gpu_memory_mode = self.get_gpu_memory_utilization(
+                    model_path=model_path,
+                    minimal_gpu=3,
+                    min_ratio=0.1,
+                    max_ratio=0.9
+                )
+
+            if max_model_len_override is not None:
+                self.max_model_len = max_model_len_override
+            elif self._vllm_max_model_len is not None:
+                self.max_model_len = self._vllm_max_model_len
+            elif low_gpu_memory_mode:
+                self.max_model_len = 2048
+            else:
+                self.max_model_len = 4096
+
+            # Cache these values for future reinit (LM LoRA merge)
+            if self._vllm_gpu_memory_utilization is None:
+                self._vllm_gpu_memory_utilization = gpu_memory_utilization
+                self._vllm_max_model_len = self.max_model_len
+
+            logger.info(f"Initializing 5Hz LM with model: {model_path}, enforce_eager: {enforce_eager}, tensor_parallel_size: 1, max_model_len: {self.max_model_len}, gpu_memory_utilization: {gpu_memory_utilization:.3f}")
+            start_time = time.time()
+            try:
+                self.llm = LLM(
+                    model=model_path,
+                    enforce_eager=enforce_eager,
+                    tensor_parallel_size=1,
+                    max_model_len=self.max_model_len,
+                    gpu_memory_utilization=gpu_memory_utilization,
+                    tokenizer=self.llm_tokenizer,
+                )
+            except (OverflowError, Exception) as init_err:
+                # OverflowError ("Python int too large to convert to C long")
+                # can occur on some Windows configurations during CUDA graph
+                # capture when torch.compile / Triton passes a symbolic int
+                # that exceeds 32-bit C long.  Retry with enforce_eager=True
+                # to disable CUDA graphs (still uses vLLM, just without graphs).
+                is_overflow = (
+                    isinstance(init_err, OverflowError)
+                    or "too large to convert to C long" in str(init_err)
+                )
+                if is_overflow and not enforce_eager:
+                    logger.warning(
+                        f"CUDA graph capture failed with OverflowError — "
+                        f"retrying with enforce_eager=True (disables CUDA graphs, "
+                        f"vLLM inference continues normally). "
+                        f"Torch: {torch.__version__}, CUDA: {torch.version.cuda}"
+                    )
+                    # Clear possibly stale inductor cache
+                    import shutil
+                    inductor_cache = os.path.join(
+                        os.path.expanduser("~"), ".cache", "acestep", "torchinductor"
+                    )
+                    if os.path.isdir(inductor_cache):
+                        try:
+                            shutil.rmtree(inductor_cache)
+                            logger.info(f"Cleared inductor cache: {inductor_cache}")
+                        except Exception as cache_err:
+                            logger.debug(f"Could not clear inductor cache: {cache_err}")
+
+                    torch.cuda.empty_cache()
+                    self.llm = LLM(
+                        model=model_path,
+                        enforce_eager=True,
+                        tensor_parallel_size=1,
+                        max_model_len=self.max_model_len,
+                        gpu_memory_utilization=gpu_memory_utilization,
+                        tokenizer=self.llm_tokenizer,
+                    )
+                else:
+                    raise  # Re-raise non-overflow errors or already-eager failures
+            logger.info(f"5Hz LM initialized successfully in {time.time() - start_time:.2f} seconds")
+            self.llm_initialized = True
+            self.llm_backend = "custom-vllm"
+            return f"✅ 5Hz LM initialized successfully\nModel: {model_path}\nDevice: {device_name}\nGPU Memory Utilization: {gpu_memory_utilization:.3f}\nLow GPU Memory Mode: {low_gpu_memory_mode if gpu_memory_utilization_override is None else 'N/A (override)'}"  
+        except Exception as e:
+            self.llm_initialized = False
+            return f"❌ Error initializing 5Hz LM: {str(e)}\n\nTraceback:\n{traceback.format_exc()}"
+
+
     def _run_vllm(
         self,
         formatted_prompts: Union[str, List[str]],
@@ -1108,7 +1263,10 @@ class LLMHandler:
         Accepts either a single formatted prompt (str) or a list of formatted prompts (List[str]).
         Returns a single string for single mode, or a list of strings for batch mode.
         """
-        from nanovllm import SamplingParams
+        if self.llm_backend == "custom-vllm":
+            from acestep.customized_vllm import SamplingParams
+        else:
+            from nanovllm import SamplingParams
 
         # Determine if batch mode
         formatted_prompt_list, is_batch = self._normalize_batch_input(formatted_prompts)
@@ -1158,7 +1316,7 @@ class LLMHandler:
         # This cuts the output GEMM by ~70% by only projecting onto the
         # audio code token subrange instead of the full ~217K vocabulary.
         partial_lm_model = None
-        if generation_phase == "codes" and self.llm_backend == "vllm":
+        if generation_phase == "codes" and self.llm_backend in ("vllm", "custom-vllm"):
             try:
                 qwen3_model = self.llm.model_runner.model
                 if self.constrained_processor and self.constrained_processor.audio_code_token_ids:
@@ -1715,7 +1873,7 @@ class LLMHandler:
 
             # Call backend-specific batch generation
             try:
-                if self.llm_backend == "vllm":
+                if self.llm_backend in ("vllm", "custom-vllm"):
                     codes_outputs = self._run_vllm(
                         formatted_prompts=formatted_prompts,
                         temperature=temperature,
@@ -2611,7 +2769,7 @@ class LLMHandler:
         cot_text = cfg.get("cot_text", "")
 
         try:
-            if self.llm_backend == "vllm":
+            if self.llm_backend in ("vllm", "custom-vllm"):
                 output_text = self._run_vllm(
                     formatted_prompts=formatted_prompt,
                     temperature=temperature,
@@ -2633,7 +2791,7 @@ class LLMHandler:
                     lyrics=lyrics,
                     cot_text=cot_text,
                 )
-                return output_text, f"✅ Generated successfully (vllm) | length={len(output_text)}"
+                return output_text, f"✅ Generated successfully ({self.llm_backend}) | length={len(output_text)}"
 
             elif self.llm_backend == "mlx":
                 # MLX backend (Apple Silicon native)
@@ -2691,7 +2849,7 @@ class LLMHandler:
             logger.error(f"Error in generate_from_formatted_prompt: {type(e).__name__}: {e}\n{error_detail}")
             # Reset nano-vllm state on error to prevent stale context from causing
             # subsequent CUDA illegal memory access errors
-            if self.llm_backend == "vllm":
+            if self.llm_backend in ("vllm", "custom-vllm"):
                 try:
                     from nanovllm.utils.context import reset_context
                     reset_context()
@@ -4310,7 +4468,7 @@ class LLMHandler:
             # For PyTorch backend, directly return the model
             return self.llm
 
-        elif self.llm_backend == "vllm":
+        elif self.llm_backend in ("vllm", "custom-vllm"):
             # For vllm backend, load HuggingFace model from disk
             # Note: transformers caches model weights, so this doesn't duplicate disk I/O
             if self._hf_model_for_scoring is None:

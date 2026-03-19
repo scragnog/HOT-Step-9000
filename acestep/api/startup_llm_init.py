@@ -68,7 +68,7 @@ def initialize_llm_at_startup(
                 print(f"[API Server] No GPU-validated LM model available, attempting {lm_model_path} anyway (may cause OOM)")
 
         lm_backend = os.getenv("ACESTEP_LM_BACKEND", "vllm").strip().lower()
-        if lm_backend not in {"vllm", "pt", "mlx"}:
+        if lm_backend not in {"vllm", "pt", "mlx", "custom-vllm"}:
             lm_backend = "vllm"
         lm_device = os.getenv("ACESTEP_LM_DEVICE", device)
         lm_offload_env = os.getenv("ACESTEP_LM_OFFLOAD_TO_CPU")
