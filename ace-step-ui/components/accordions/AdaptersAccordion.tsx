@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Sliders, ChevronDown, FolderSearch } from 'lucide-react';
 import { useI18n } from '../../context/I18nContext';
 import { useAuth } from '../../context/AuthContext';
@@ -120,6 +120,22 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
     const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
     const [fileBrowserMode, setFileBrowserMode] = useState<'file' | 'folder'>('file');
 
+    // Detected adapter type from file metadata
+    const [detectedType, setDetectedType] = useState<'lokr' | 'lora' | 'unknown' | null>(null);
+
+    // Detect adapter type when path changes
+    useEffect(() => {
+        if (!loraPath.trim() || !token) {
+            setDetectedType(null);
+            return;
+        }
+        let cancelled = false;
+        generateApi.detectAdapterType(loraPath.trim(), token)
+            .then(result => { if (!cancelled) setDetectedType(result.type); })
+            .catch(() => { if (!cancelled) setDetectedType('unknown'); });
+        return () => { cancelled = true; };
+    }, [loraPath, token]);
+
     const Toggle: React.FC<{ on: boolean; onClick: () => void; disabled?: boolean }> = ({ on, onClick, disabled }) => (
         <button
             type="button"
@@ -178,13 +194,13 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                 </div>
                                 {loraPath && (() => {
                                     const fileName = loraPath.split(/[\\/]/).pop() || '';
-                                    // PEFT convention: adapter_model.safetensors → LORA
-                                    // LoKR: filename contains 'lokr'
-                                    const isLokr = fileName.toLowerCase().includes('lokr');
-                                    const tag = isLokr ? 'LOKR' : 'LORA';
+                                    const tag = detectedType === 'lokr' ? 'LOKR' : detectedType === 'lora' ? 'LORA' : '...';
+                                    const tagColor = detectedType === 'lokr'
+                                        ? 'bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400'
+                                        : 'bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400';
                                     return (
                                         <div className="flex items-center gap-2">
-                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400">
+                                            <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${tagColor}`}>
                                                 {tag}
                                             </span>
                                             <span className="text-[10px] text-zinc-500 truncate" title={loraPath}>

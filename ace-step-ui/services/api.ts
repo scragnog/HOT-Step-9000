@@ -540,6 +540,12 @@ export const generateApi = {
     entries: Array<{ name: string; path: string; type: 'dir' | 'file'; size?: number }>;
   }> => api(`/api/lora/browse-dir?path=${encodeURIComponent(path)}`, { token }),
 
+  // Detect adapter type from file metadata (safetensors header / adapter_config.json)
+  detectAdapterType: (path: string, token: string): Promise<{
+    type: 'lokr' | 'lora' | 'unknown';
+    name: string;
+  }> => api(`/api/lora/detect-type?path=${encodeURIComponent(path)}`, { token }),
+
   // Advanced adapter: group scales
   setGroupScales: (params: {
     self_attn: number;

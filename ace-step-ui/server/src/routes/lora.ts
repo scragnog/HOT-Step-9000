@@ -1,7 +1,7 @@
 import { Router, Response } from 'express';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
 import { config } from '../config/index.js';
-import { readdirSync, statSync } from 'fs';
+import { readdirSync, statSync, existsSync, readFileSync, openSync, readSync, closeSync } from 'fs';
 import { join, dirname, resolve } from 'path';
 import { homedir } from 'os';
 
@@ -107,6 +107,78 @@ router.get('/status', authMiddleware, async (_req: AuthenticatedRequest, res: Re
 });
 
 // ── In-browser file/folder browser (Node-native, no PowerShell) ───────
+
+/**
+ * Detect adapter type from file metadata.
+ * - Reads safetensors binary header for "lokr_config" key → LoKR
+ * - Checks for adapter_config.json in parent/same dir → PEFT LoRA
+ * - Falls back to 'unknown'
+ */
+function detectAdapterType(filePath: string): { type: 'lokr' | 'lora' | 'unknown'; name: string } {
+  const fileName = filePath.replace(/\\/g, '/').split('/').pop() || '';
+  const dir = dirname(filePath);
+  const parentDir = dirname(dir);
+
+  // Check safetensors header for lokr_config metadata
+  if (fileName.toLowerCase().endsWith('.safetensors') && existsSync(filePath)) {
+    try {
+      // Safetensors format: first 8 bytes = little-endian uint64 header size
+      // Then header_size bytes of JSON metadata
+      const fd = openSync(filePath, 'r');
+      const sizeBuf = Buffer.alloc(8);
+      readSync(fd, sizeBuf, 0, 8, 0);
+      const headerSize = Number(sizeBuf.readBigUInt64LE(0));
+      // Cap at 1MB to avoid reading huge headers
+      const safeSize = Math.min(headerSize, 1024 * 1024);
+      const headerBuf = Buffer.alloc(safeSize);
+      readSync(fd, headerBuf, 0, safeSize, 8);
+      closeSync(fd);
+      const headerStr = headerBuf.toString('utf8');
+      // Check for lokr_config in the metadata (top-level __metadata__ key)
+      if (headerStr.includes('"lokr_config"')) {
+        return { type: 'lokr', name: fileName };
+      }
+    } catch {
+      // Failed to read header — fall through
+    }
+  }
+
+  // Check for adapter_config.json (PEFT LoRA)
+  // Could be in same dir as file, or if file is adapter_model.safetensors, in its dir
+  const configPaths = [
+    join(dir, 'adapter_config.json'),
+    join(parentDir, 'adapter_config.json'),
+  ];
+  for (const cp of configPaths) {
+    if (existsSync(cp)) {
+      return { type: 'lora', name: fileName };
+    }
+  }
+
+  // Check filename convention
+  if (fileName.toLowerCase() === 'lokr_weights.safetensors') {
+    return { type: 'lokr', name: fileName };
+  }
+  if (fileName.toLowerCase() === 'adapter_model.safetensors') {
+    return { type: 'lora', name: fileName };
+  }
+
+  return { type: 'unknown', name: fileName };
+}
+
+/** Detect adapter type for a given path */
+router.get('/detect-type', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const filePath = (req.query.path as string || '').trim();
+    if (!filePath) {
+      return res.status(400).json({ error: 'path parameter required' });
+    }
+    const result = detectAdapterType(filePath);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 
 
