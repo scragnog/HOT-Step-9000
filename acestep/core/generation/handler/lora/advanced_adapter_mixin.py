@@ -93,7 +93,14 @@ def _extract_adapter_delta(self, lora_path: str) -> dict:
             lokr_first = [f for f in st_files if "lokr" in os.path.basename(f).lower()]
             lokr_weights_path = lokr_first[0] if lokr_first else st_files[0]
     elif lora_path.endswith(".safetensors"):
-        lokr_weights_path = lora_path
+        # User selected a .safetensors file directly — check whether the
+        # parent directory is a PEFT adapter dir before assuming LoKr.
+        parent = os.path.dirname(lora_path)
+        if os.path.exists(os.path.join(parent, "adapter_config.json")):
+            lora_path = parent
+            is_peft = True
+        else:
+            lokr_weights_path = lora_path
 
     # Reset dynamo state — nano-vllm's global config changes
     # (capture_scalar_outputs, @torch.compile decorators) contaminate

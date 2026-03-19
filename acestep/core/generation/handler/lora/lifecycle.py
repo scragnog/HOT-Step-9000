@@ -305,6 +305,17 @@ def add_lora(self, lora_path: str, adapter_name: str | None = None) -> str:
 
     lokr_weights_path = _resolve_lokr_weights_path(lora_path)
     if lokr_weights_path is None:
+        # If user selected a .safetensors file directly (e.g. via file picker),
+        # check whether the parent directory is a PEFT adapter directory.
+        if os.path.isfile(lora_path):
+            parent = os.path.dirname(lora_path)
+            if os.path.exists(os.path.join(parent, "adapter_config.json")):
+                logger.info(
+                    f"Redirecting file selection to parent PEFT adapter dir: "
+                    f"{lora_path} → {parent}"
+                )
+                lora_path = parent
+
         config_file = os.path.join(lora_path, "adapter_config.json")
         if not os.path.exists(config_file):
             return (
