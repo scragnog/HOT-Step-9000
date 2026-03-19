@@ -177,6 +177,10 @@ def build_generation_setup(
         mastering_params=getattr(req, "mastering_params", None),
         latent_shift=getattr(req, "latent_shift", 0.0),
         latent_rescale=getattr(req, "latent_rescale", 1.0),
+        # JKASS Fast solver parameters
+        beat_stability=getattr(req, "beat_stability", 0.0),
+        frequency_damping=getattr(req, "frequency_damping", 0.0),
+        temporal_smoothing=getattr(req, "temporal_smoothing", 0.0),
         # Scoring & LRC
         get_lrc=getattr(req, "get_lrc", False),
         get_scores=getattr(req, "get_scores", False),
