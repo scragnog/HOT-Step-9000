@@ -1985,6 +1985,7 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         pag_scale = kwargs.get('pag_scale', 1.0)
         pag_start = kwargs.get('pag_start', 0.0)
         pag_end = kwargs.get('pag_end', 1.0)
+        logger.info(f"[generate_audio] PAG debug: guidance_mode={guidance_mode!r}, _gm={_gm!r}, is_pag={is_pag}, pag_scale={pag_scale}, pag_start={pag_start}, pag_end={pag_end}, do_cfg={diffusion_guidance_sale > 1.0}")
 
         # Scale encoder hidden states for omega_scale (prompt reweighting)
         if omega_scale != 1.0:
