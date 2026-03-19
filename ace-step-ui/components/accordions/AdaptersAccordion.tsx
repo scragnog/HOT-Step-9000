@@ -161,17 +161,16 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                         <>
                             {/* Adapter file selection */}
                             <div className="space-y-2">
-                                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Adapter File</label>
-                                {loraPath ? (
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex-1 flex items-center gap-2 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg px-3 py-2">
-                                            <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400">
-                                                {loraPath.toLowerCase().includes('lokr') ? 'LOKR' : 'LORA'}
-                                            </span>
-                                            <span className="text-xs text-zinc-700 dark:text-zinc-300 truncate" title={loraPath}>
-                                                {loraPath.split(/[\\/]/).pop()}
-                                            </span>
-                                        </div>
+                                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Adapter Path</label>
+                                <div className="flex gap-2">
+                                    <input
+                                        type="text"
+                                        value={loraPath}
+                                        onChange={(e) => onLoraPathChange(e.target.value)}
+                                        placeholder="Paste path to .safetensors file or adapter folder"
+                                        className="flex-1 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none focus:border-pink-500"
+                                    />
+                                    {loraPath && (
                                         <button
                                             onClick={() => onLoraPathChange('')}
                                             className="px-2 py-2 rounded-lg text-xs text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
@@ -179,25 +178,17 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                         >
                                             ✕
                                         </button>
-                                        <button
-                                            onClick={handleBrowseFile}
-                                            disabled={isBrowsing}
-                                            title="Browse for adapter files"
-                                            className="px-3 py-2 rounded-lg text-xs font-semibold bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 disabled:opacity-40 transition-colors flex items-center gap-1.5"
-                                        >
-                                            <FolderSearch size={14} />
-                                            {isBrowsing ? '...' : 'Change'}
-                                        </button>
+                                    )}
+                                </div>
+                                {loraPath && (
+                                    <div className="flex items-center gap-2">
+                                        <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400">
+                                            {loraPath.toLowerCase().includes('lokr') ? 'LOKR' : 'LORA'}
+                                        </span>
+                                        <span className="text-[10px] text-zinc-500 truncate" title={loraPath}>
+                                            {loraPath.split(/[\\/]/).pop()}
+                                        </span>
                                     </div>
-                                ) : (
-                                    <button
-                                        onClick={handleBrowseFile}
-                                        disabled={isBrowsing}
-                                        className="w-full flex items-center justify-center gap-2 bg-zinc-50 dark:bg-black/20 border border-dashed border-zinc-300 dark:border-white/10 rounded-lg px-4 py-3 text-xs text-zinc-500 dark:text-zinc-400 hover:bg-pink-50 dark:hover:bg-pink-900/10 hover:border-pink-400 dark:hover:border-pink-500/30 disabled:opacity-40 transition-colors cursor-pointer"
-                                    >
-                                        <FolderSearch size={16} />
-                                        {isBrowsing ? 'Opening file picker...' : 'Select .safetensors file'}
-                                    </button>
                                 )}
                             </div>
 
