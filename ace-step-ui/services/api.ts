@@ -534,15 +534,11 @@ export const generateApi = {
     folder: string;
   }> => api(`/api/lora/list-files?folder=${encodeURIComponent(folder)}`, { token }),
 
-  // Open native folder picker dialog
-  browseLoraFolder: (token: string): Promise<{
-    folder: string;
-  }> => api('/api/lora/browse-folder', { token }),
-
-  // Open native file picker dialog (.safetensors)
-  browseLoraFile: (token: string): Promise<{
-    file: string;
-  }> => api('/api/lora/browse-file', { token }),
+  // In-browser file/folder browser — lists directories and .safetensors files
+  browseDir: (path: string, token: string): Promise<{
+    current: string;
+    entries: Array<{ name: string; path: string; type: 'dir' | 'file'; size?: number }>;
+  }> => api(`/api/lora/browse-dir?path=${encodeURIComponent(path)}`, { token }),
 
   // Advanced adapter: group scales
   setGroupScales: (params: {
