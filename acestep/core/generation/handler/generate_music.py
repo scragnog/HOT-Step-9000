@@ -11,6 +11,7 @@ import torch
 from loguru import logger
 
 from acestep.constants import DEFAULT_DIT_INSTRUCTION
+from acestep.core.generation.spectral_smoothing import apply_spectral_smoothing
 from acestep.gpu_config import (
     DIT_INFERENCE_VRAM_PER_BATCH,
     VRAM_SAFETY_MARGIN_GB,
@@ -136,6 +137,19 @@ class GenerateMusicMixin:
         steering_loaded: Optional[List[str]] = None,
         steering_alphas: Optional[Dict[str, float]] = None,
         scheduler: str = "linear",
+        # Anti-Autotune spectral smoothing (0=off, 1=full)
+        anti_autotune: float = 0.0,
+        # JKASS Fast solver parameters
+        beat_stability: float = 0.0,
+        frequency_damping: float = 0.0,
+        temporal_smoothing: float = 0.0,
+        # Advanced Guidance Parameters
+        guidance_scale_text: float = 0.0,
+        guidance_scale_lyric: float = 0.0,
+        apg_momentum: float = 0.0,
+        apg_norm_threshold: float = 0.0,
+        omega_scale: float = 1.0,
+        erg_scale: float = 1.0,
         progress=None,
     ) -> Dict[str, Any]:
         """Generate audio from text/reference inputs and return response payload.
@@ -300,6 +314,10 @@ class GenerateMusicMixin:
                 latent_shift=latent_shift,
                 latent_rescale=latent_rescale,
             )
+            # Apply anti-autotune spectral smoothing before VAE decode
+            if anti_autotune > 0:
+                logger.info(f"[generate_music] Applying anti-autotune spectral smoothing (strength={anti_autotune:.2f})")
+                pred_latents = apply_spectral_smoothing(pred_latents, anti_autotune)
             pred_wavs, pred_latents_cpu, time_costs = self._decode_generate_music_pred_latents(
                 pred_latents=pred_latents,
                 progress=progress,

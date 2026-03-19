@@ -122,6 +122,21 @@ class GenerationParams:
     # Latent Post-Processing (before VAE decode)
     latent_shift: float = 0.0       # Additive shift on DiT latents. Default 0 = no shift.
     latent_rescale: float = 1.0     # Multiplicative rescale on DiT latents. Default 1.0 = no rescale.
+    anti_autotune: float = 0.0      # Spectral smoothing strength (0=off, 1=full). Reduces robotic vocal artifacts.
+
+    # JKASS Fast solver parameters (only used when infer_method="jkass_fast")
+    beat_stability: float = 0.0     # Momentum blending with previous step's delta (0=off, 1=full prev)
+    frequency_damping: float = 0.0  # Exponential decay on high-frequency bins (0=off)
+    temporal_smoothing: float = 0.0 # Tiny temporal kernel on the velocity delta (0=off)
+
+    # Advanced Guidance Parameters
+    guidance_scale_text: float = 0.0    # Independent text prompt guidance (0 = use main guidance_scale)
+    guidance_scale_lyric: float = 0.0   # Independent lyric guidance (0 = use main guidance_scale)
+    apg_momentum: float = 0.0          # APG momentum (0 = default internal value)
+    apg_norm_threshold: float = 0.0    # APG norm threshold (0 = default internal value)
+    omega_scale: float = 1.0           # Prompt reweighting scale (1.0 = no change)
+    erg_scale: float = 1.0             # ERG reweighting scale (1.0 = no change)
+
 
     # Advanced Settings
     inference_steps: int = 8
@@ -660,6 +675,16 @@ def generate_music(
             steering_loaded=params.steering_loaded,
             steering_alphas=params.steering_alphas,
             scheduler=params.scheduler,
+            anti_autotune=params.anti_autotune,
+            beat_stability=params.beat_stability,
+            frequency_damping=params.frequency_damping,
+            temporal_smoothing=params.temporal_smoothing,
+            guidance_scale_text=params.guidance_scale_text,
+            guidance_scale_lyric=params.guidance_scale_lyric,
+            apg_momentum=params.apg_momentum,
+            apg_norm_threshold=params.apg_norm_threshold,
+            omega_scale=params.omega_scale,
+            erg_scale=params.erg_scale,
             progress=progress,
         )
 
