@@ -272,7 +272,7 @@ export const GuidanceSettingsAccordion: React.FC<GuidanceSettingsAccordionProps>
                                 onClick={() => {
                                     onGuidanceScaleTextChange?.(0);
                                     onGuidanceScaleLyricChange?.(0);
-                                    onApgMomentumChange?.(0);
+                                    onApgMomentumChange?.(0.75);
                                     onApgNormThresholdChange?.(2.5);
                                     onOmegaScaleChange?.(1.0);
                                     onErgScaleChange?.(1.0);
@@ -329,13 +329,13 @@ export const GuidanceSettingsAccordion: React.FC<GuidanceSettingsAccordionProps>
                                     onChange={(v) => onApgMomentumChange?.(v)}
                                     formatDisplay={(v) => v.toFixed(2)}
                                     helpText={
-                                        (apgMomentum ?? 0) === 0
-                                            ? 'Default — no momentum smoothing applied'
-                                            : (apgMomentum ?? 0) <= 0.3
-                                                ? 'Light smoothing — subtle guidance stabilisation'
-                                                : (apgMomentum ?? 0) <= 0.7
-                                                    ? 'Medium smoothing — reduces guidance oscillations'
-                                                    : 'Heavy smoothing — very stable but may blur fine detail'
+                                        (apgMomentum ?? 0.75) === 0
+                                            ? 'Disabled — no momentum smoothing at all'
+                                            : (apgMomentum ?? 0.75) < 0.5
+                                                ? 'Light — minimal guidance stabilisation'
+                                                : (apgMomentum ?? 0.75) <= 0.85
+                                                    ? 'Standard — default model momentum'
+                                                    : 'Heavy — very stable but may blur fine detail'
                                     }
                                     title="Applies momentum-based smoothing to APG guidance updates across diffusion steps. Higher values carry forward previous guidance direction, reducing jitter but potentially softening transitions."
                                 />

@@ -205,7 +205,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   // Advanced Guidance Parameters
   const [guidanceScaleText, setGuidanceScaleText] = usePersistedState('ace-guidanceScaleText', 0.0);
   const [guidanceScaleLyric, setGuidanceScaleLyric] = usePersistedState('ace-guidanceScaleLyric', 0.0);
-  const [apgMomentum, setApgMomentum] = usePersistedState('ace-apgMomentum', 0.0);
+  const [apgMomentum, setApgMomentum] = usePersistedState('ace-apgMomentum', 0.75);
   const [apgNormThreshold, setApgNormThreshold] = usePersistedState('ace-apgNormThreshold', 2.5);
   const [omegaScale, setOmegaScale] = usePersistedState('ace-omegaScale', 1.0);
   const [ergScale, setErgScale] = usePersistedState('ace-ergScale', 1.0);

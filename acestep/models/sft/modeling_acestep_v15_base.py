@@ -1906,9 +1906,9 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         noise = self.prepare_noise(context_latents, seed)
         bsz, device, dtype = context_latents.shape[0], context_latents.device, context_latents.dtype
         past_key_values = EncoderDecoderCache(DynamicCache(), DynamicCache())
-        momentum_buffer = MomentumBuffer(momentum=-apg_momentum if apg_momentum > 0 else -0.75)
-        if apg_momentum > 0:
-            logger.info(f"[generate_audio] APG momentum: {-apg_momentum:.2f}")
+        momentum_buffer = MomentumBuffer(momentum=-apg_momentum)
+        if apg_momentum != 0.75:
+            logger.info(f"[generate_audio] APG momentum: {-apg_momentum:.2f} (default: -0.75)")
         # Treat 0 as "use default" for norm_threshold (old UI clients have 0.0 persisted)
         if apg_norm_threshold <= 0:
             apg_norm_threshold = 2.5
