@@ -30,8 +30,8 @@ interface GenerationSettingsAccordionProps {
     // Inference
     inferenceSteps: number;
     onInferenceStepsChange: (val: number) => void;
-    inferMethod: 'ode' | 'euler' | 'heun' | 'dpm2m' | 'rk4';
-    onInferMethodChange: (val: 'ode' | 'euler' | 'heun' | 'dpm2m' | 'rk4') => void;
+    inferMethod: 'ode' | 'euler' | 'heun' | 'dpm2m' | 'rk4' | 'jkass_quality' | 'jkass_fast';
+    onInferMethodChange: (val: 'ode' | 'euler' | 'heun' | 'dpm2m' | 'rk4' | 'jkass_quality' | 'jkass_fast') => void;
     scheduler: string;
     onSchedulerChange: (val: string) => void;
     // Audio Format
@@ -106,6 +106,32 @@ interface GenerationSettingsAccordionProps {
     onToggleGetLrc: () => void;
     /** When true, skip the accordion header — used inside DrawerContainers */
     embedded?: boolean;
+
+    // Anti-Autotune
+    antiAutotune?: number;
+    onAntiAutotuneChange?: (val: number) => void;
+
+    // JKASS Fast solver parameters
+    beatStability?: number;
+    onBeatStabilityChange?: (val: number) => void;
+    frequencyDamping?: number;
+    onFrequencyDampingChange?: (val: number) => void;
+    temporalSmoothing?: number;
+    onTemporalSmoothingChange?: (val: number) => void;
+
+    // Advanced Guidance Parameters
+    guidanceScaleText?: number;
+    onGuidanceScaleTextChange?: (val: number) => void;
+    guidanceScaleLyric?: number;
+    onGuidanceScaleLyricChange?: (val: number) => void;
+    apgMomentum?: number;
+    onApgMomentumChange?: (val: number) => void;
+    apgNormThreshold?: number;
+    onApgNormThresholdChange?: (val: number) => void;
+    omegaScale?: number;
+    onOmegaScaleChange?: (val: number) => void;
+    ergScale?: number;
+    onErgScaleChange?: (val: number) => void;
 }
 
 export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionProps> = (props) => {
@@ -246,17 +272,60 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
                                     </div>
                                     <div className="space-y-1.5">
                                         <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{t('inferMethod')}</label>
-                                        <select value={props.inferMethod} onChange={(e) => props.onInferMethodChange(e.target.value as 'ode' | 'euler' | 'heun' | 'dpm2m' | 'rk4')} className={selectClass}>
+                                        <select value={props.inferMethod} onChange={(e) => props.onInferMethodChange(e.target.value as any)} className={selectClass}>
                                             <option value="ode" title={t('solverEulerDesc')}>{t('solverEuler')}</option>
                                             <option value="heun" title={t('solverHeunDesc')}>{t('solverHeun')}</option>
                                             <option value="dpm2m" title={t('solverDpm2mDesc')}>{t('solverDpm2m')}</option>
                                             <option value="rk4" title={t('solverRk4Desc')}>{t('solverRk4')}</option>
+                                            <option value="jkass_quality" title="JKASS Quality: Heun with derivative averaging (2 NFE)">JKASS Quality</option>
+                                            <option value="jkass_fast" title="JKASS Fast: Euler with momentum, frequency damping, and temporal smoothing (1 NFE)">JKASS Fast</option>
                                         </select>
                                         <p className="text-[10px] leading-tight text-zinc-500 dark:text-zinc-500">
-                                            {t(({ ode: 'solverEulerDesc', euler: 'solverEulerDesc', heun: 'solverHeunDesc', dpm2m: 'solverDpm2mDesc', rk4: 'solverRk4Desc' } as const)[props.inferMethod])}
+                                            {({ ode: t('solverEulerDesc'), euler: t('solverEulerDesc'), heun: t('solverHeunDesc'), dpm2m: t('solverDpm2mDesc'), rk4: t('solverRk4Desc'), jkass_quality: 'Heun with derivative averaging — smooth, high-accuracy results (2× cost)', jkass_fast: 'Euler with beat stability, frequency damping & temporal smoothing' } as Record<string, string>)[props.inferMethod] || ''}
                                         </p>
                                     </div>
                                 </div>
+
+                                {/* JKASS Fast Sub-Controls */}
+                                {props.inferMethod === 'jkass_fast' && (
+                                    <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 space-y-3">
+                                        <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">JKASS Fast Controls</p>
+                                        <EditableSlider
+                                            label="Beat Stability"
+                                            value={props.beatStability ?? 0}
+                                            min={0} max={1} step={0.01}
+                                            onChange={(v) => props.onBeatStabilityChange?.(v)}
+                                            formatDisplay={(v) => v.toFixed(2)}
+                                            helpText="Momentum blending with previous step — smooths rhythmic elements"
+                                        />
+                                        <EditableSlider
+                                            label="Frequency Damping"
+                                            value={props.frequencyDamping ?? 0}
+                                            min={0} max={5} step={0.1}
+                                            onChange={(v) => props.onFrequencyDampingChange?.(v)}
+                                            formatDisplay={(v) => v.toFixed(1)}
+                                            helpText="Exponential decay on high-frequency bins — tames harsh overtones"
+                                        />
+                                        <EditableSlider
+                                            label="Temporal Smoothing"
+                                            value={props.temporalSmoothing ?? 0}
+                                            min={0} max={1} step={0.01}
+                                            onChange={(v) => props.onTemporalSmoothingChange?.(v)}
+                                            formatDisplay={(v) => v.toFixed(2)}
+                                            helpText="Smoothing kernel across time axis — reduces temporal jitter"
+                                        />
+                                    </div>
+                                )}
+
+                                {/* Anti-Autotune */}
+                                <EditableSlider
+                                    label="Anti-Autotune"
+                                    value={props.antiAutotune ?? 0}
+                                    min={0} max={1} step={0.01}
+                                    onChange={(v) => props.onAntiAutotuneChange?.(v)}
+                                    formatDisplay={(v) => v.toFixed(2)}
+                                    helpText="Spectral smoothing to reduce robotic/autotuned vocal artifacts (0=off, 1=full)"
+                                />
                                 <div className="col-span-2 grid grid-cols-2 gap-3">
                                     <div className="space-y-1.5">
                                         <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{t('scheduler')}</label>
@@ -343,6 +412,18 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
                         cfgIntervalEnd={props.cfgIntervalEnd}
                         onCfgIntervalEndChange={props.onCfgIntervalEndChange}
                         isTurbo={props.isTurbo}
+                        guidanceScaleText={props.guidanceScaleText}
+                        onGuidanceScaleTextChange={props.onGuidanceScaleTextChange}
+                        guidanceScaleLyric={props.guidanceScaleLyric}
+                        onGuidanceScaleLyricChange={props.onGuidanceScaleLyricChange}
+                        apgMomentum={props.apgMomentum}
+                        onApgMomentumChange={props.onApgMomentumChange}
+                        apgNormThreshold={props.apgNormThreshold}
+                        onApgNormThresholdChange={props.onApgNormThresholdChange}
+                        omegaScale={props.omegaScale}
+                        onOmegaScaleChange={props.onOmegaScaleChange}
+                        ergScale={props.ergScale}
+                        onErgScaleChange={props.onErgScaleChange}
                     />
 
                     {/* LM / CoT Settings */}

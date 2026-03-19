@@ -176,6 +176,22 @@ interface GenerateBody {
   pagEnd?: number;
   pagScale?: number;
 
+  // Anti-Autotune spectral smoothing
+  antiAutotune?: number;
+
+  // JKASS Fast solver parameters
+  beatStability?: number;
+  frequencyDamping?: number;
+  temporalSmoothing?: number;
+
+  // Advanced Guidance Parameters
+  guidanceScaleText?: number;
+  guidanceScaleLyric?: number;
+  apgMomentum?: number;
+  apgNormThreshold?: number;
+  omegaScale?: number;
+  ergScale?: number;
+
   // Iterative Refinement
   refinePasses?: number;
   refineStrength?: number;
@@ -331,6 +347,19 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
         score_scale: params.scoreScale ?? 0.1,
         refine_passes: params.refinePasses ?? 0,
         refine_strength: params.refineStrength ?? 0.3,
+        // Anti-Autotune spectral smoothing
+        anti_autotune: params.antiAutotune ?? 0.0,
+        // JKASS Fast solver parameters
+        beat_stability: params.beatStability ?? 0.0,
+        frequency_damping: params.frequencyDamping ?? 0.0,
+        temporal_smoothing: params.temporalSmoothing ?? 0.0,
+        // Advanced Guidance Parameters
+        guidance_scale_text: params.guidanceScaleText ?? 0.0,
+        guidance_scale_lyric: params.guidanceScaleLyric ?? 0.0,
+        apg_momentum: params.apgMomentum ?? 0.0,
+        apg_norm_threshold: params.apgNormThreshold ?? 0.0,
+        omega_scale: params.omegaScale ?? 1.0,
+        erg_scale: params.ergScale ?? 1.0,
         lm_repetition_penalty: params.lmRepetitionPenalty ?? 1.0,
         // Always send LM model selection (enables hot-switching regardless of thinking mode)
         lm_model_path: params.lmModel || undefined,

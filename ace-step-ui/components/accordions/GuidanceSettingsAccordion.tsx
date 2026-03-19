@@ -23,6 +23,20 @@ interface GuidanceSettingsAccordionProps {
     cfgIntervalEnd: number;
     onCfgIntervalEndChange: (val: number) => void;
     isTurbo?: boolean;
+
+    // Advanced Guidance Parameters
+    guidanceScaleText?: number;
+    onGuidanceScaleTextChange?: (val: number) => void;
+    guidanceScaleLyric?: number;
+    onGuidanceScaleLyricChange?: (val: number) => void;
+    apgMomentum?: number;
+    onApgMomentumChange?: (val: number) => void;
+    apgNormThreshold?: number;
+    onApgNormThresholdChange?: (val: number) => void;
+    omegaScale?: number;
+    onOmegaScaleChange?: (val: number) => void;
+    ergScale?: number;
+    onErgScaleChange?: (val: number) => void;
 }
 
 export const GuidanceSettingsAccordion: React.FC<GuidanceSettingsAccordionProps> = ({
@@ -43,6 +57,18 @@ export const GuidanceSettingsAccordion: React.FC<GuidanceSettingsAccordionProps>
     cfgIntervalEnd,
     onCfgIntervalEndChange,
     isTurbo = false,
+    guidanceScaleText,
+    onGuidanceScaleTextChange,
+    guidanceScaleLyric,
+    onGuidanceScaleLyricChange,
+    apgMomentum,
+    onApgMomentumChange,
+    apgNormThreshold,
+    onApgNormThresholdChange,
+    omegaScale,
+    onOmegaScaleChange,
+    ergScale,
+    onErgScaleChange,
 }) => {
     const { t } = useI18n();
 
@@ -150,6 +176,67 @@ export const GuidanceSettingsAccordion: React.FC<GuidanceSettingsAccordionProps>
                                 onChange={onCfgIntervalEndChange}
                                 formatDisplay={(val) => val.toFixed(2)}
                                 title={t('cfgIntervalEndTooltip')}
+                            />
+                        </div>
+                    </div>
+
+                    {/* Advanced Guidance Parameters */}
+                    <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-3 space-y-3">
+                        <p className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider">Advanced Guidance</p>
+                        <div className="grid grid-cols-2 gap-3">
+                            <EditableSlider
+                                label="Text Scale"
+                                value={guidanceScaleText ?? 0}
+                                min={0} max={15} step={0.5}
+                                onChange={(v) => onGuidanceScaleTextChange?.(v)}
+                                formatDisplay={(v) => v.toFixed(1)}
+                                helpText="Independent text guidance (0 = use main)"
+                            />
+                            <EditableSlider
+                                label="Lyric Scale"
+                                value={guidanceScaleLyric ?? 0}
+                                min={0} max={15} step={0.5}
+                                onChange={(v) => onGuidanceScaleLyricChange?.(v)}
+                                formatDisplay={(v) => v.toFixed(1)}
+                                helpText="Independent lyric guidance (0 = use main)"
+                            />
+                        </div>
+                        {guidanceMode === 'apg' && (
+                            <div className="grid grid-cols-2 gap-3">
+                                <EditableSlider
+                                    label="APG Momentum"
+                                    value={apgMomentum ?? 0}
+                                    min={0} max={1} step={0.01}
+                                    onChange={(v) => onApgMomentumChange?.(v)}
+                                    formatDisplay={(v) => v.toFixed(2)}
+                                    helpText="Momentum parameter (0 = default)"
+                                />
+                                <EditableSlider
+                                    label="APG Norm Threshold"
+                                    value={apgNormThreshold ?? 0}
+                                    min={0} max={10} step={0.1}
+                                    onChange={(v) => onApgNormThresholdChange?.(v)}
+                                    formatDisplay={(v) => v.toFixed(1)}
+                                    helpText="Norm threshold (0 = default)"
+                                />
+                            </div>
+                        )}
+                        <div className="grid grid-cols-2 gap-3">
+                            <EditableSlider
+                                label="Omega Scale"
+                                value={omegaScale ?? 1}
+                                min={0} max={3} step={0.1}
+                                onChange={(v) => onOmegaScaleChange?.(v)}
+                                formatDisplay={(v) => v.toFixed(1)}
+                                helpText="Prompt reweighting (1.0 = normal)"
+                            />
+                            <EditableSlider
+                                label="ERG Scale"
+                                value={ergScale ?? 1}
+                                min={0} max={3} step={0.1}
+                                onChange={(v) => onErgScaleChange?.(v)}
+                                formatDisplay={(v) => v.toFixed(1)}
+                                helpText="ERG reweighting (1.0 = normal)"
                             />
                         </div>
                     </div>

@@ -296,7 +296,7 @@ export interface GenerationParams {
   seed?: number;
   thinking?: boolean;
   audioFormat?: 'mp3' | 'flac';
-  inferMethod?: 'ode' | 'euler' | 'heun' | 'dpm2m' | 'rk4';
+  inferMethod?: 'ode' | 'euler' | 'heun' | 'dpm2m' | 'rk4' | 'jkass_quality' | 'jkass_fast';
   scheduler?: 'linear' | 'ddim_uniform' | 'sgm_uniform' | 'bong_tangent' | 'linear_quadratic';
   shift?: number;
 
@@ -351,6 +351,22 @@ export interface GenerationParams {
   pagStart?: number;
   pagEnd?: number;
   pagScale?: number;
+
+  // Anti-Autotune spectral smoothing
+  antiAutotune?: number;
+
+  // JKASS Fast solver parameters
+  beatStability?: number;
+  frequencyDamping?: number;
+  temporalSmoothing?: number;
+
+  // Advanced Guidance Parameters
+  guidanceScaleText?: number;
+  guidanceScaleLyric?: number;
+  apgMomentum?: number;
+  apgNormThreshold?: number;
+  omegaScale?: number;
+  ergScale?: number;
 
   // Activation Steering (TADA)
   steeringEnabled?: boolean;

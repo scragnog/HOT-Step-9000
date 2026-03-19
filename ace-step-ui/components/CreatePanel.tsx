@@ -134,7 +134,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [thinking, setThinking] = usePersistedState('ace-thinking', false); // Default false for GPU compatibility
   const [audioFormat, setAudioFormat] = usePersistedState<'mp3' | 'flac' | 'wav' | 'opus'>('ace-audioFormat', 'mp3');
   const [inferenceSteps, setInferenceSteps] = usePersistedState('ace-inferenceSteps', 12);
-  const [inferMethod, setInferMethod] = usePersistedState<'ode' | 'euler' | 'heun' | 'dpm2m' | 'rk4'>('ace-inferMethod', 'ode');
+  const [inferMethod, setInferMethod] = usePersistedState<'ode' | 'euler' | 'heun' | 'dpm2m' | 'rk4' | 'jkass_quality' | 'jkass_fast'>('ace-inferMethod', 'ode');
   const [scheduler, setScheduler] = usePersistedState<string>('ace-scheduler', 'linear');
   const [lmBackend, setLmBackend] = useState<'pt' | 'vllm'>('pt');
   const [lmModel, setLmModel] = usePersistedState('ace-lmModel', 'acestep-5Hz-lm-0.6B');
@@ -188,6 +188,22 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [pagScale, setPagScale] = usePersistedState('ace-pagScale', 0.2);
   const [cfgIntervalStart, setCfgIntervalStart] = usePersistedState('ace-cfgIntervalStart', 0.0);
   const [cfgIntervalEnd, setCfgIntervalEnd] = usePersistedState('ace-cfgIntervalEnd', 1.0);
+
+  // Anti-Autotune spectral smoothing
+  const [antiAutotune, setAntiAutotune] = usePersistedState('ace-antiAutotune', 0.0);
+
+  // JKASS Fast solver parameters
+  const [beatStability, setBeatStability] = usePersistedState('ace-beatStability', 0.0);
+  const [frequencyDamping, setFrequencyDamping] = usePersistedState('ace-frequencyDamping', 0.0);
+  const [temporalSmoothing, setTemporalSmoothing] = usePersistedState('ace-temporalSmoothing', 0.0);
+
+  // Advanced Guidance Parameters
+  const [guidanceScaleText, setGuidanceScaleText] = usePersistedState('ace-guidanceScaleText', 0.0);
+  const [guidanceScaleLyric, setGuidanceScaleLyric] = usePersistedState('ace-guidanceScaleLyric', 0.0);
+  const [apgMomentum, setApgMomentum] = usePersistedState('ace-apgMomentum', 0.0);
+  const [apgNormThreshold, setApgNormThreshold] = usePersistedState('ace-apgNormThreshold', 0.0);
+  const [omegaScale, setOmegaScale] = usePersistedState('ace-omegaScale', 1.0);
+  const [ergScale, setErgScale] = usePersistedState('ace-ergScale', 1.0);
   const [customTimesteps, setCustomTimesteps] = useState('');
   const [useCotMetas, setUseCotMetas] = usePersistedState('ace-useCotMetas', true);
   const [useCotCaption, setUseCotCaption] = usePersistedState('ace-useCotCaption', true);
@@ -2119,6 +2135,16 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           pagScale: guidanceMode === 'pag' ? pagScale : undefined,
           cfgIntervalStart,
           cfgIntervalEnd,
+          antiAutotune,
+          beatStability: inferMethod === 'jkass_fast' ? beatStability : undefined,
+          frequencyDamping: inferMethod === 'jkass_fast' ? frequencyDamping : undefined,
+          temporalSmoothing: inferMethod === 'jkass_fast' ? temporalSmoothing : undefined,
+          guidanceScaleText: guidanceScaleText > 0 ? guidanceScaleText : undefined,
+          guidanceScaleLyric: guidanceScaleLyric > 0 ? guidanceScaleLyric : undefined,
+          apgMomentum: guidanceMode === 'apg' && apgMomentum > 0 ? apgMomentum : undefined,
+          apgNormThreshold: guidanceMode === 'apg' && apgNormThreshold > 0 ? apgNormThreshold : undefined,
+          omegaScale: omegaScale !== 1.0 ? omegaScale : undefined,
+          ergScale: ergScale !== 1.0 ? ergScale : undefined,
           customTimesteps: customTimesteps.trim() || undefined,
           useCotMetas,
           useCotCaption,
@@ -2905,6 +2931,26 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                 onToggleAutogen={() => setAutogen(!autogen)}
                 getLrc={getLrc}
                 onToggleGetLrc={() => setGetLrc(!getLrc)}
+                antiAutotune={antiAutotune}
+                onAntiAutotuneChange={setAntiAutotune}
+                beatStability={beatStability}
+                onBeatStabilityChange={setBeatStability}
+                frequencyDamping={frequencyDamping}
+                onFrequencyDampingChange={setFrequencyDamping}
+                temporalSmoothing={temporalSmoothing}
+                onTemporalSmoothingChange={setTemporalSmoothing}
+                guidanceScaleText={guidanceScaleText}
+                onGuidanceScaleTextChange={setGuidanceScaleText}
+                guidanceScaleLyric={guidanceScaleLyric}
+                onGuidanceScaleLyricChange={setGuidanceScaleLyric}
+                apgMomentum={apgMomentum}
+                onApgMomentumChange={setApgMomentum}
+                apgNormThreshold={apgNormThreshold}
+                onApgNormThresholdChange={setApgNormThreshold}
+                omegaScale={omegaScale}
+                onOmegaScaleChange={setOmegaScale}
+                ergScale={ergScale}
+                onErgScaleChange={setErgScale}
               />
             </DrawerContainer>
 
