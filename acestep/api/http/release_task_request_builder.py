@@ -95,6 +95,10 @@ def build_generate_music_request(
         mastering_params=parser.get("mastering_params") or None,
         latent_shift=parser.float("latent_shift", 0.0),
         latent_rescale=parser.float("latent_rescale", 1.0),
+        # JKASS Fast solver parameters
+        beat_stability=parser.float("beat_stability", 0.0),
+        frequency_damping=parser.float("frequency_damping", 0.0),
+        temporal_smoothing=parser.float("temporal_smoothing", 0.0),
         # Activation steering
         steering_enabled=parser.bool("steering_enabled"),
         steering_loaded=parser.get("steering_loaded") or [],
