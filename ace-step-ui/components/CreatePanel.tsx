@@ -638,7 +638,20 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     setLoraError(null);
     try {
       const result = await generateApi.listLoraFiles(adapterFolder, token);
-      setAdapterFiles(result.files || []);
+      const files = result.files || [];
+      // Enrich any 'unknown' types with Node-side adapter detection
+      const enriched = await Promise.all(
+        files.map(async (f: { name: string; path: string; size: number; type: string }) => {
+          if (f.type === 'unknown' || !f.type) {
+            try {
+              const detection = await generateApi.detectAdapterType(f.path, token);
+              return { ...f, type: detection.type };
+            } catch { return f; }
+          }
+          return f;
+        })
+      );
+      setAdapterFiles(enriched);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to scan folder';
       setLoraError(msg);

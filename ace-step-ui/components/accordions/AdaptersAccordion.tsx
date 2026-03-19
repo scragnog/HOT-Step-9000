@@ -489,7 +489,7 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                             )}
 
                                             {/* ─── Role Sliders ───────────────────────────────────────── */}
-                                            {onSlotLayerScaleChange && (() => {
+                                            {onSlotLayerScaleChange && adapterSlots.length > 1 && (() => {
                                                 const ROLES = [
                                                     {
                                                         key: 'voice',
