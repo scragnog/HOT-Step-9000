@@ -37,9 +37,11 @@ if exist ".env" (
 REM Read current model selections from .env
 set "CURRENT_MODEL=acestep-v15-base"
 set "CURRENT_LM_MODEL=acestep-5Hz-lm-0.6B"
+set "CURRENT_LM_BACKEND=vllm"
 if exist ".env" (
     for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_CONFIG_PATH=" ".env"') do set "CURRENT_MODEL=%%b"
     for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_LM_MODEL_PATH=" ".env"') do set "CURRENT_LM_MODEL=%%b"
+    for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_LM_BACKEND=" ".env"') do set "CURRENT_LM_BACKEND=%%b"
 )
 
 REM Scan checkpoints/ for available ACE-Step models (acestep-v15-*)
@@ -79,6 +81,7 @@ echo var AVAILABLE_MODELS = [%MODEL_LIST%];
 echo var AVAILABLE_LM_MODELS = [%LM_MODEL_LIST%];
 echo var CURRENT_MODEL = '%CURRENT_MODEL%';
 echo var CURRENT_LM_MODEL = '%CURRENT_LM_MODEL%';
+echo var CURRENT_LM_BACKEND = '%CURRENT_LM_BACKEND%';
 ) > "%~dp0loading-config.js"
 
 if "%IS_RESTART%"=="0" (

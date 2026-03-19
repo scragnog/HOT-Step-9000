@@ -315,6 +315,13 @@
                 <label>Language Model (5Hz LM)</label>
                 <select id="lmModelSelect"></select>
             </div>
+            <div class="model-row">
+                <label>LM Backend</label>
+                <select id="lmBackendSelect">
+                    <option value="vllm">VLLM-Nano (faster)</option>
+                    <option value="pt">PyTorch (native)</option>
+                </select>
+            </div>
             <div class="env-updated" id="envUpdated">✓ Models saved to .env</div>
             <div class="actions">
                 <button type="button" class="btn btn-secondary" id="btnUpdate" disabled>Waiting for backend...</button>
@@ -373,6 +380,7 @@
         if (typeof AVAILABLE_LM_MODELS === 'undefined') var AVAILABLE_LM_MODELS = [];
         if (typeof CURRENT_MODEL === 'undefined') var CURRENT_MODEL = 'acestep-v15-base';
         if (typeof CURRENT_LM_MODEL === 'undefined') var CURRENT_LM_MODEL = 'acestep-5Hz-lm-0.6B';
+        if (typeof CURRENT_LM_BACKEND === 'undefined') var CURRENT_LM_BACKEND = 'vllm';
 
         document.getElementById('frontend-port').textContent = `(port ${VITE_PORT})`;
 
@@ -402,6 +410,10 @@
         populateSelect(modelSelect, AVAILABLE_MODELS, CURRENT_MODEL);
         populateSelect(lmModelSelect, AVAILABLE_LM_MODELS, CURRENT_LM_MODEL);
 
+        // Set LM Backend dropdown to saved value
+        const lmBackendSelect = document.getElementById('lmBackendSelect');
+        lmBackendSelect.value = CURRENT_LM_BACKEND;
+
         // ---- Buttons & Events ----
         const btnLaunch = document.getElementById('btnLaunch');
         const btnUpdate = document.getElementById('btnUpdate');
@@ -418,7 +430,7 @@
             }
         });
 
-        async function updateEnvViaExpress(configPath, lmModelPath, retries = 5) {
+        async function updateEnvViaExpress(configPath, lmModelPath, lmBackend, retries = 5) {
             for (let attempt = 1; attempt <= retries; attempt++) {
                 try {
                     const resp = await fetch('http://localhost:3001/api/models/update-env', {
@@ -427,6 +439,7 @@
                         body: JSON.stringify({
                             ACESTEP_CONFIG_PATH: configPath,
                             ACESTEP_LM_MODEL_PATH: lmModelPath,
+                            ACESTEP_LM_BACKEND: lmBackend,
                         }),
                     });
                     if (resp.ok) return true;
@@ -445,7 +458,7 @@
             userClickedStart = true;
             
             // 1. Save .env choice first
-            await updateEnvViaExpress(modelSelect.value, lmModelSelect.value);
+            await updateEnvViaExpress(modelSelect.value, lmModelSelect.value, lmBackendSelect.value);
             envUpdatedEl.classList.add('show');
             setTimeout(() => envUpdatedEl.classList.remove('show'), 3000);
             

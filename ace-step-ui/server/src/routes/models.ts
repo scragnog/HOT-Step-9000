@@ -93,9 +93,9 @@ router.post('/switch', authMiddleware, async (req: AuthenticatedRequest, res: Re
 // No auth required — only called during startup before app is fully loaded
 router.post('/update-env', async (req: any, res: Response) => {
     try {
-        const { ACESTEP_CONFIG_PATH, ACESTEP_LM_MODEL_PATH } = req.body;
-        if (!ACESTEP_CONFIG_PATH && !ACESTEP_LM_MODEL_PATH) {
-            res.status(400).json({ error: 'At least one of ACESTEP_CONFIG_PATH or ACESTEP_LM_MODEL_PATH required' });
+        const { ACESTEP_CONFIG_PATH, ACESTEP_LM_MODEL_PATH, ACESTEP_LM_BACKEND } = req.body;
+        if (!ACESTEP_CONFIG_PATH && !ACESTEP_LM_MODEL_PATH && !ACESTEP_LM_BACKEND) {
+            res.status(400).json({ error: 'At least one setting required' });
             return;
         }
 
@@ -119,9 +119,20 @@ router.post('/update-env', async (req: any, res: Response) => {
                 `ACESTEP_LM_MODEL_PATH=${ACESTEP_LM_MODEL_PATH}`
             );
         }
+        if (ACESTEP_LM_BACKEND) {
+            if (/^ACESTEP_LM_BACKEND=.*/m.test(envContent)) {
+                envContent = envContent.replace(
+                    /^ACESTEP_LM_BACKEND=.*/m,
+                    `ACESTEP_LM_BACKEND=${ACESTEP_LM_BACKEND}`
+                );
+            } else {
+                // Append if not present
+                envContent = envContent.trimEnd() + `\nACESTEP_LM_BACKEND=${ACESTEP_LM_BACKEND}\n`;
+            }
+        }
 
         fs.writeFileSync(envPath, envContent, 'utf-8');
-        console.log(`[Models] .env updated: CONFIG_PATH=${ACESTEP_CONFIG_PATH || '(unchanged)'}, LM_MODEL_PATH=${ACESTEP_LM_MODEL_PATH || '(unchanged)'}`);
+        console.log(`[Models] .env updated: CONFIG_PATH=${ACESTEP_CONFIG_PATH || '(unchanged)'}, LM_MODEL_PATH=${ACESTEP_LM_MODEL_PATH || '(unchanged)'}, LM_BACKEND=${ACESTEP_LM_BACKEND || '(unchanged)'}`);
         res.json({ success: true });
     } catch (error: any) {
         console.error('[Models] Failed to update .env:', error);
