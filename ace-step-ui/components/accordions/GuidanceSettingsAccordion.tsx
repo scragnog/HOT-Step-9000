@@ -24,6 +24,12 @@ interface GuidanceSettingsAccordionProps {
     onCfgIntervalEndChange: (val: number) => void;
     isTurbo?: boolean;
 
+    // Guidance Envelope Parameters
+    guidanceIntervalDecay?: number;
+    onGuidanceIntervalDecayChange?: (val: number) => void;
+    minGuidanceScale?: number;
+    onMinGuidanceScaleChange?: (val: number) => void;
+
     // Advanced Guidance Parameters
     guidanceScaleText?: number;
     onGuidanceScaleTextChange?: (val: number) => void;
@@ -57,6 +63,10 @@ export const GuidanceSettingsAccordion: React.FC<GuidanceSettingsAccordionProps>
     cfgIntervalEnd,
     onCfgIntervalEndChange,
     isTurbo = false,
+    guidanceIntervalDecay,
+    onGuidanceIntervalDecayChange,
+    minGuidanceScale,
+    onMinGuidanceScaleChange,
     guidanceScaleText,
     onGuidanceScaleTextChange,
     guidanceScaleLyric,
@@ -133,22 +143,95 @@ export const GuidanceSettingsAccordion: React.FC<GuidanceSettingsAccordionProps>
                         </p>
                     </div>
 
+                    {/* Guidance Envelope Settings */}
+                    {(guidanceIntervalDecay !== undefined && minGuidanceScale !== undefined) && (
+                        <div className="space-y-3 p-3 bg-zinc-50/50 dark:bg-zinc-900/10 border border-zinc-200/50 dark:border-white/5 rounded-xl">
+                            <h4 className="text-xs font-semibold text-zinc-700 dark:text-zinc-300" title="Controls how guidance strength changes over the diffusion process. Combines a decay rate with a minimum floor to shape the guidance profile.">Guidance Envelope</h4>
+                            <EditableSlider
+                                label="Interval Decay"
+                                value={guidanceIntervalDecay}
+                                min={0}
+                                max={1}
+                                step={0.05}
+                                onChange={onGuidanceIntervalDecayChange!}
+                                formatDisplay={(val) => val.toFixed(2)}
+                                helpText={
+                                    guidanceIntervalDecay === 0
+                                        ? 'Off — constant guidance strength throughout all steps'
+                                        : guidanceIntervalDecay <= 0.3
+                                            ? 'Gentle taper — guidance slowly decreases toward the end'
+                                            : guidanceIntervalDecay <= 0.6
+                                                ? 'Moderate — guidance fades noticeably in later steps'
+                                                : 'Aggressive — guidance drops quickly to the minimum floor'
+                                }
+                                title="Rate at which guidance strength decreases over diffusion steps. Higher values mean guidance weakens faster, giving the model more creative freedom in later steps while maintaining prompt adherence early on."
+                            />
+                            <EditableSlider
+                                label="Minimum Scale"
+                                value={minGuidanceScale}
+                                min={1}
+                                max={15}
+                                step={0.5}
+                                onChange={onMinGuidanceScaleChange!}
+                                formatDisplay={(val) => val.toFixed(1)}
+                                helpText={
+                                    guidanceIntervalDecay === 0
+                                        ? 'No effect — decay is off, guidance stays constant'
+                                        : minGuidanceScale >= guidanceScale
+                                            ? 'At or above main scale — decay has no effect'
+                                            : `Guidance will taper from ${guidanceScale.toFixed(1)} down to ${minGuidanceScale.toFixed(1)}`
+                                }
+                                title="The lowest value guidance can reach when decay is active. Acts as a floor — guidance will decrease from the main scale toward this value but never below it."
+                            />
+                        </div>
+                    )}
+
                     {/* PAG Sub-Controls */}
                     {guidanceMode === 'pag' && (
                         <div className="space-y-3 p-3 bg-amber-50/50 dark:bg-amber-900/10 border border-amber-200/50 dark:border-amber-500/20 rounded-xl">
-                            {[
-                                { label: 'PAG Start', value: pagStart, onChange: onPagStartChange },
-                                { label: 'PAG End', value: pagEnd, onChange: onPagEndChange },
-                                { label: 'PAG Scale', value: pagScale, onChange: onPagScaleChange },
-                            ].map(({ label, value, onChange }) => (
-                                <div key={label} className="space-y-1">
-                                    <div className="flex justify-between">
-                                        <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{label}</label>
-                                        <span className="text-xs text-zinc-500">{value.toFixed(2)}</span>
-                                    </div>
-                                    <input type="range" min="0" max="1" step="0.05" value={value} onChange={(e) => onChange(parseFloat(e.target.value))} className="w-full accent-pink-500" />
-                                </div>
-                            ))}
+                            <EditableSlider
+                                label="PAG Start"
+                                value={pagStart}
+                                min={0} max={1} step={0.05}
+                                onChange={onPagStartChange}
+                                formatDisplay={(v) => v.toFixed(2)}
+                                helpText={
+                                    pagStart === 0
+                                        ? 'PAG active from the very first diffusion step'
+                                        : `PAG begins at ${Math.round(pagStart * 100)}% through the diffusion process`
+                                }
+                                title="The diffusion timestep (0–1) where PAG starts taking effect. Earlier values (closer to 0) apply PAG sooner, influencing overall structure. Later values apply PAG only during refinement."
+                            />
+                            <EditableSlider
+                                label="PAG End"
+                                value={pagEnd}
+                                min={0} max={1} step={0.05}
+                                onChange={onPagEndChange}
+                                formatDisplay={(v) => v.toFixed(2)}
+                                helpText={
+                                    pagEnd >= 1
+                                        ? 'PAG active until the final diffusion step'
+                                        : `PAG stops at ${Math.round(pagEnd * 100)}% through the process`
+                                }
+                                title="The diffusion timestep (0–1) where PAG stops. Setting this below 1.0 disables PAG for the final refinement steps, which can improve fine detail."
+                            />
+                            <EditableSlider
+                                label="PAG Scale"
+                                value={pagScale}
+                                min={0} max={1} step={0.05}
+                                onChange={onPagScaleChange}
+                                formatDisplay={(v) => v.toFixed(2)}
+                                helpText={
+                                    pagScale === 0
+                                        ? 'Disabled — PAG has no effect'
+                                        : pagScale <= 0.3
+                                            ? 'Subtle — light structural consistency boost'
+                                            : pagScale <= 0.6
+                                                ? 'Moderate — noticeable structural guidance'
+                                                : 'Strong — heavy structural consistency enforcement'
+                                }
+                                title="Strength of Perturbed Attention Guidance. PAG improves structural consistency by comparing normal vs self-attention-perturbed outputs. Higher values enforce more consistent structure."
+                            />
                         </div>
                     )}
 
@@ -190,7 +273,16 @@ export const GuidanceSettingsAccordion: React.FC<GuidanceSettingsAccordionProps>
                                 min={0} max={15} step={0.5}
                                 onChange={(v) => onGuidanceScaleTextChange?.(v)}
                                 formatDisplay={(v) => v.toFixed(1)}
-                                helpText="Independent text guidance (0 = use main)"
+                                helpText={
+                                    (guidanceScaleText ?? 0) === 0
+                                        ? 'Using main guidance scale for text/style prompts'
+                                        : (guidanceScaleText ?? 0) <= 3
+                                            ? 'Subtle — loose interpretation, more creative freedom'
+                                            : (guidanceScaleText ?? 0) <= 7
+                                                ? 'Balanced — follows text prompts without being rigid'
+                                                : 'Strong — tightly follows text/style, may reduce variety'
+                                }
+                                title="Controls how strongly the text/style description guides generation, independently of the main guidance scale. Set to 0 to defer to the main Guidance Scale slider."
                             />
                             <EditableSlider
                                 label="Lyric Scale"
@@ -198,7 +290,16 @@ export const GuidanceSettingsAccordion: React.FC<GuidanceSettingsAccordionProps>
                                 min={0} max={15} step={0.5}
                                 onChange={(v) => onGuidanceScaleLyricChange?.(v)}
                                 formatDisplay={(v) => v.toFixed(1)}
-                                helpText="Independent lyric guidance (0 = use main)"
+                                helpText={
+                                    (guidanceScaleLyric ?? 0) === 0
+                                        ? 'Using main guidance scale for lyric content'
+                                        : (guidanceScaleLyric ?? 0) <= 3
+                                            ? 'Loose — lyrics lightly influence melody & phrasing'
+                                            : (guidanceScaleLyric ?? 0) <= 7
+                                                ? 'Balanced — lyrics shape phrasing and rhythm'
+                                                : 'Strict — tightly follows lyric structure and syllable count'
+                                }
+                                title="Controls how strongly the lyric content guides generation, independently of the main guidance scale. Set to 0 to defer to the main Guidance Scale slider."
                             />
                         </div>
                         {guidanceMode === 'apg' && (
@@ -209,7 +310,16 @@ export const GuidanceSettingsAccordion: React.FC<GuidanceSettingsAccordionProps>
                                     min={0} max={1} step={0.01}
                                     onChange={(v) => onApgMomentumChange?.(v)}
                                     formatDisplay={(v) => v.toFixed(2)}
-                                    helpText="Momentum parameter (0 = default)"
+                                    helpText={
+                                        (apgMomentum ?? 0) === 0
+                                            ? 'Default — no momentum smoothing applied'
+                                            : (apgMomentum ?? 0) <= 0.3
+                                                ? 'Light smoothing — subtle guidance stabilisation'
+                                                : (apgMomentum ?? 0) <= 0.7
+                                                    ? 'Medium smoothing — reduces guidance oscillations'
+                                                    : 'Heavy smoothing — very stable but may blur fine detail'
+                                    }
+                                    title="Applies momentum-based smoothing to APG guidance updates across diffusion steps. Higher values carry forward previous guidance direction, reducing jitter but potentially softening transitions."
                                 />
                                 <EditableSlider
                                     label="APG Norm Threshold"
@@ -217,7 +327,16 @@ export const GuidanceSettingsAccordion: React.FC<GuidanceSettingsAccordionProps>
                                     min={0} max={10} step={0.1}
                                     onChange={(v) => onApgNormThresholdChange?.(v)}
                                     formatDisplay={(v) => v.toFixed(1)}
-                                    helpText="Norm threshold (0 = default)"
+                                    helpText={
+                                        (apgNormThreshold ?? 0) === 0
+                                            ? 'Default — no gradient clamping'
+                                            : (apgNormThreshold ?? 0) <= 2
+                                                ? 'Tight clamp — strongly limits guidance corrections'
+                                                : (apgNormThreshold ?? 0) <= 5
+                                                    ? 'Moderate — prevents extreme corrections'
+                                                    : 'Permissive — only limits very large corrections'
+                                    }
+                                    title="Caps the magnitude of APG guidance corrections. Prevents individual steps from overshooting, which can cause artifacts. Lower values = more conservative guidance, higher values = more freedom."
                                 />
                             </div>
                         )}
@@ -228,7 +347,16 @@ export const GuidanceSettingsAccordion: React.FC<GuidanceSettingsAccordionProps>
                                 min={0} max={3} step={0.1}
                                 onChange={(v) => onOmegaScaleChange?.(v)}
                                 formatDisplay={(v) => v.toFixed(1)}
-                                helpText="Prompt reweighting (1.0 = normal)"
+                                helpText={
+                                    (omegaScale ?? 1) === 0
+                                        ? 'Disabled — prompt weighting has no effect'
+                                        : (omegaScale ?? 1) < 0.8
+                                            ? 'Reduced — de-emphasises prompt, more diffusion freedom'
+                                            : (omegaScale ?? 1) <= 1.2
+                                                ? 'Normal — standard prompt weighting balance'
+                                                : 'Amplified — stronger prompt emphasis, tighter adherence'
+                                }
+                                title="Multiplier for prompt-based reweighting during the diffusion process. Values below 1.0 give the model more creative freedom; values above 1.0 force closer prompt adherence at the risk of reduced naturalness."
                             />
                             <EditableSlider
                                 label="ERG Scale"
@@ -236,7 +364,16 @@ export const GuidanceSettingsAccordion: React.FC<GuidanceSettingsAccordionProps>
                                 min={0} max={3} step={0.1}
                                 onChange={(v) => onErgScaleChange?.(v)}
                                 formatDisplay={(v) => v.toFixed(1)}
-                                helpText="ERG reweighting (1.0 = normal)"
+                                helpText={
+                                    (ergScale ?? 1) === 0
+                                        ? 'Disabled — no entropy regularisation'
+                                        : (ergScale ?? 1) < 0.8
+                                            ? 'Low — sharper, more decisive predictions'
+                                            : (ergScale ?? 1) <= 1.2
+                                                ? 'Normal — balanced prediction diversity'
+                                                : 'High — broader predictions, more sonic variety'
+                                }
+                                title="Entropy Regularisation Guidance. Controls how spread out the model's predictions are across possible outputs. Lower values produce more focused/peaked results; higher values encourage more diverse, exploratory generation."
                             />
                         </div>
                     </div>
