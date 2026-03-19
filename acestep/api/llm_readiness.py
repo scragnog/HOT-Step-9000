@@ -62,7 +62,7 @@ def ensure_llm_ready_for_request(
             req.lm_model_path or os.getenv("ACESTEP_LM_MODEL_PATH") or "acestep-5Hz-lm-0.6B"
         ).strip()
         backend = (req.lm_backend or os.getenv("ACESTEP_LM_BACKEND") or "vllm").strip().lower()
-        if backend not in {"vllm", "pt", "mlx"}:
+        if backend not in {"vllm", "pt", "mlx", "custom-vllm"}:
             backend = "vllm"
 
         lm_model_name = get_model_name(lm_model_path)

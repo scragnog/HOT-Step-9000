@@ -1832,6 +1832,8 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         non_cover_text_attention_mask: Optional[torch.FloatTensor] = None,
         cfg_interval_start: float = 0.0,
         cfg_interval_end: float = 1.0,
+        guidance_interval_decay: float = 0.0,
+        min_guidance_scale: float = 3.0,
         precomputed_lm_hints_25Hz: Optional[torch.FloatTensor] = None,
         audio_codes: Optional[torch.FloatTensor] = None,
         use_progress_bar: bool = True,
@@ -1983,7 +1985,8 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
                                context_lat, guidance_scale, g_fn, cfg_start, cfg_end,
                                momentum_buf, bsz_val, device_val, dtype_val,
                                is_pag_mode=False, pag_scale_val=1.0,
-                               pag_start_val=0.0, pag_end_val=1.0):
+                               pag_start_val=0.0, pag_end_val=1.0,
+                               step_meta=None, decay_val=0.0, min_scale_val=3.0):
                 def model_fn(xt_inner, t_val):
                     if is_pag_mode and do_cfg:
                         x_in = torch.cat([xt_inner, xt_inner, xt_inner], dim=0)  # Triple for PAG
@@ -2016,6 +2019,12 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
                         else:
                             p_cond, p_uncond = vt_inner.chunk(2)
                         if apply_cfg:
+                            current_cfg = guidance_scale
+                            if decay_val > 0.0 and step_meta is not None:
+                                progress = step_meta["idx"] / max(step_meta["total"] - 1, 1)
+                                decay_amount = (guidance_scale - min_scale_val) * progress * decay_val
+                                current_cfg = max(min_scale_val, guidance_scale - decay_amount)
+                                
                             if is_pag_mode and do_pag:
                                 from acestep.core.generation.guidance import pag_combined_guidance
                                 vt_inner = pag_combined_guidance(
@@ -2027,7 +2036,7 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
                                 )
                             else:
                                 vt_inner = g_fn(
-                                    p_cond, p_uncond, guidance_scale,
+                                    p_cond, p_uncond, current_cfg,
                                     momentum_buffer=momentum_buf,
                                     disable_momentum=True,
                                     latents=xt_inner, sigma=t_val,
@@ -2048,9 +2057,11 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
 
         solver_state = {}
         _switched_to_non_cover = False
+        step_metadata = {"idx": 0, "total": infer_steps}
         logger.info(f"[generate_audio] Starting diffusion: solver={solver_name}, steps={infer_steps}, shift={shift}")
         with torch.no_grad():
             for step_idx, (t_curr, t_prev) in enumerate(iterator):
+                step_metadata["idx"] = step_idx
                 # Temporal adapter re-merge (if schedule callback is set)
                 if on_step_callback is not None:
                     t_curr_f_cb = t_curr.item() if isinstance(t_curr, torch.Tensor) else float(t_curr)
@@ -2085,6 +2096,7 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
                             momentum_buffer, bsz, device, dtype,
                             is_pag_mode=is_pag, pag_scale_val=pag_scale,
                             pag_start_val=pag_start, pag_end_val=pag_end,
+                            step_meta=step_metadata, decay_val=guidance_interval_decay, min_scale_val=min_guidance_scale
                         )
 
                 # Main decoder forward pass
@@ -2140,8 +2152,14 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
                                 step_idx=step_idx, total_steps=infer_steps,
                             )
                         else:
+                            current_cfg = diffusion_guidance_sale
+                            if guidance_interval_decay > 0.0:
+                                progress = step_idx / max(infer_steps - 1, 1)
+                                decay_amount = (diffusion_guidance_sale - min_guidance_scale) * progress * guidance_interval_decay
+                                current_cfg = max(min_guidance_scale, diffusion_guidance_sale - decay_amount)
+
                             vt = guidance_fn(
-                                pred_cond, pred_null_cond, diffusion_guidance_sale,
+                                pred_cond, pred_null_cond, current_cfg,
                                 momentum_buffer=momentum_buffer,
                                 latents=xt, sigma=t_curr,
                                 dt=dt_val,
