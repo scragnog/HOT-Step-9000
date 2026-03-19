@@ -1,5 +1,5 @@
 import React from 'react';
-import { Settings2, ChevronDown, Cpu, Dices, Hash } from 'lucide-react';
+import { Settings2, ChevronDown, Cpu, Dices, Hash, RotateCcw } from 'lucide-react';
 import { useI18n } from '../../context/I18nContext';
 import { usePersistedState } from '../../hooks/usePersistedState';
 import { EditableSlider } from '../EditableSlider';
@@ -293,7 +293,22 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
                                 {/* JKASS Fast Sub-Controls */}
                                 {props.inferMethod === 'jkass_fast' && (
                                     <div className="rounded-lg border border-amber-500/20 bg-amber-500/5 p-3 space-y-3">
-                                        <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">JKASS Fast Controls</p>
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">JKASS Fast Controls</p>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    props.onBeatStabilityChange?.(0.25);
+                                                    props.onFrequencyDampingChange?.(0.4);
+                                                    props.onTemporalSmoothingChange?.(0.13);
+                                                }}
+                                                className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-amber-400 hover:text-amber-300 hover:bg-amber-500/20 transition-colors"
+                                                title="Reset JKASS Fast parameters to recommended defaults"
+                                            >
+                                                <RotateCcw className="w-3 h-3" />
+                                                Reset
+                                            </button>
+                                        </div>
                                         <EditableSlider
                                             label="Beat Stability"
                                             value={props.beatStability ?? 0}

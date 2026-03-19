@@ -186,8 +186,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   // PAG (Perturbed-Attention Guidance) Parameters
   const [usePag, setUsePag] = usePersistedState('ace-usePag', false);
   const [pagStart, setPagStart] = usePersistedState('ace-pagStart', 0.30);
-  const [pagEnd, setPagEnd] = usePersistedState('ace-pagEnd', 0.80);
-  const [pagScale, setPagScale] = usePersistedState('ace-pagScale', 0.2);
+  const [pagEnd, setPagEnd] = usePersistedState('ace-pagEnd', 0.70);
+  const [pagScale, setPagScale] = usePersistedState('ace-pagScale', 0.25);
   const [cfgIntervalStart, setCfgIntervalStart] = usePersistedState('ace-cfgIntervalStart', 0.0);
   const [cfgIntervalEnd, setCfgIntervalEnd] = usePersistedState('ace-cfgIntervalEnd', 1.0);
   const [guidanceIntervalDecay, setGuidanceIntervalDecay] = usePersistedState('ace-guidanceIntervalDecay', 0.0);
@@ -198,9 +198,9 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [antiAutotune, setAntiAutotune] = usePersistedState('ace-antiAutotune', 0.0);
 
   // JKASS Fast solver parameters
-  const [beatStability, setBeatStability] = usePersistedState('ace-beatStability', 0.0);
-  const [frequencyDamping, setFrequencyDamping] = usePersistedState('ace-frequencyDamping', 0.0);
-  const [temporalSmoothing, setTemporalSmoothing] = usePersistedState('ace-temporalSmoothing', 0.0);
+  const [beatStability, setBeatStability] = usePersistedState('ace-beatStability', 0.25);
+  const [frequencyDamping, setFrequencyDamping] = usePersistedState('ace-frequencyDamping', 0.4);
+  const [temporalSmoothing, setTemporalSmoothing] = usePersistedState('ace-temporalSmoothing', 0.13);
 
   // Advanced Guidance Parameters
   const [guidanceScaleText, setGuidanceScaleText] = usePersistedState('ace-guidanceScaleText', 0.0);
