@@ -308,6 +308,9 @@ class GenerateMusicMixin:
                 apg_norm_threshold=apg_norm_threshold,
                 omega_scale=omega_scale,
                 erg_scale=erg_scale,
+                beat_stability=beat_stability,
+                frequency_damping=frequency_damping,
+                temporal_smoothing=temporal_smoothing,
             )
             outputs = service_run["outputs"]
             infer_steps_for_progress = service_run["infer_steps_for_progress"]
