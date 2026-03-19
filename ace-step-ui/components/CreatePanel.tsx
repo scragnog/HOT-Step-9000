@@ -136,7 +136,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [inferenceSteps, setInferenceSteps] = usePersistedState('ace-inferenceSteps', 12);
   const [inferMethod, setInferMethod] = usePersistedState<'ode' | 'euler' | 'heun' | 'dpm2m' | 'rk4'>('ace-inferMethod', 'ode');
   const [scheduler, setScheduler] = usePersistedState<string>('ace-scheduler', 'linear');
-  const [lmBackend, setLmBackend] = usePersistedState<'pt' | 'vllm'>('ace-lmBackend', 'pt');
+  const [lmBackend, setLmBackend] = useState<'pt' | 'vllm'>('pt');
   const [lmModel, setLmModel] = usePersistedState('ace-lmModel', 'acestep-5Hz-lm-0.6B');
   const [shift, setShift] = usePersistedState('ace-shift', 3.0);
 
@@ -282,6 +282,18 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   }, [fetchedModels]);
 
   // Model utility functions now imported from ../utils/modelUtils
+
+  // Initialize LM backend from .env (reflects what was chosen on the loading screen)
+  useEffect(() => {
+    fetch('/api/models/env-config')
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.lmBackend === 'vllm' || data?.lmBackend === 'pt') {
+          setLmBackend(data.lmBackend);
+        }
+      })
+      .catch(() => {}); // Non-critical — keep default
+  }, []);
 
   // Genre selection state (cascading)
   // Two-level genre cascade states

@@ -140,4 +140,21 @@ router.post('/update-env', async (req: any, res: Response) => {
     }
 });
 
+// GET /api/models/env-config - Return current .env config for frontend initialization
+// No auth — called at app startup before auth context is available
+router.get('/env-config', async (_req: any, res: Response) => {
+    try {
+        const envPath = path.join(PROJECT_ROOT, '.env');
+        let lmBackend = 'vllm';
+        if (fs.existsSync(envPath)) {
+            const content = fs.readFileSync(envPath, 'utf-8');
+            const match = content.match(/^ACESTEP_LM_BACKEND=(.*)$/m);
+            if (match) lmBackend = match[1].trim().toLowerCase();
+        }
+        res.json({ lmBackend });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 export default router;
