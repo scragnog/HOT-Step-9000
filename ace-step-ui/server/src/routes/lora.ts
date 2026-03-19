@@ -88,7 +88,7 @@ router.post('/load', authMiddleware, async (req: AuthenticatedRequest, res: Resp
 
 router.post('/unload', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const result = await proxyToAceStep('/v1/lora/unload', 'POST');
+    const result = await proxyToAceStep('/v1/lora/unload', 'POST', req.body);
     res.json(result || { message: 'LoRA unloaded' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

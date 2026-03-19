@@ -1021,14 +1021,55 @@ class LLMHandler:
 
             logger.info(f"Initializing 5Hz LM with model: {model_path}, enforce_eager: {enforce_eager}, tensor_parallel_size: 1, max_model_len: {self.max_model_len}, gpu_memory_utilization: {gpu_memory_utilization:.3f}")
             start_time = time.time()
-            self.llm = LLM(
-                model=model_path,
-                enforce_eager=enforce_eager,
-                tensor_parallel_size=1,
-                max_model_len=self.max_model_len,
-                gpu_memory_utilization=gpu_memory_utilization,
-                tokenizer=self.llm_tokenizer,
-            )
+            try:
+                self.llm = LLM(
+                    model=model_path,
+                    enforce_eager=enforce_eager,
+                    tensor_parallel_size=1,
+                    max_model_len=self.max_model_len,
+                    gpu_memory_utilization=gpu_memory_utilization,
+                    tokenizer=self.llm_tokenizer,
+                )
+            except (OverflowError, Exception) as init_err:
+                # OverflowError ("Python int too large to convert to C long")
+                # can occur on some Windows configurations during CUDA graph
+                # capture when torch.compile / Triton passes a symbolic int
+                # that exceeds 32-bit C long.  Retry with enforce_eager=True
+                # to disable CUDA graphs (still uses vLLM, just without graphs).
+                is_overflow = (
+                    isinstance(init_err, OverflowError)
+                    or "too large to convert to C long" in str(init_err)
+                )
+                if is_overflow and not enforce_eager:
+                    logger.warning(
+                        f"CUDA graph capture failed with OverflowError — "
+                        f"retrying with enforce_eager=True (disables CUDA graphs, "
+                        f"vLLM inference continues normally). "
+                        f"Torch: {torch.__version__}, CUDA: {torch.version.cuda}"
+                    )
+                    # Clear possibly stale inductor cache
+                    import shutil
+                    inductor_cache = os.path.join(
+                        os.path.expanduser("~"), ".cache", "acestep", "torchinductor"
+                    )
+                    if os.path.isdir(inductor_cache):
+                        try:
+                            shutil.rmtree(inductor_cache)
+                            logger.info(f"Cleared inductor cache: {inductor_cache}")
+                        except Exception as cache_err:
+                            logger.debug(f"Could not clear inductor cache: {cache_err}")
+
+                    torch.cuda.empty_cache()
+                    self.llm = LLM(
+                        model=model_path,
+                        enforce_eager=True,
+                        tensor_parallel_size=1,
+                        max_model_len=self.max_model_len,
+                        gpu_memory_utilization=gpu_memory_utilization,
+                        tokenizer=self.llm_tokenizer,
+                    )
+                else:
+                    raise  # Re-raise non-overflow errors or already-eager failures
             logger.info(f"5Hz LM initialized successfully in {time.time() - start_time:.2f} seconds")
             self.llm_initialized = True
             self.llm_backend = "vllm"

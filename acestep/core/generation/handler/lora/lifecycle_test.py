@@ -272,5 +272,21 @@ class LifecycleTests(unittest.TestCase):
         new_net.apply_to.assert_called_once()
 
 
+    def test_load_lora_resolves_peft_safetensors_file_to_parent_directory(self):
+        """Selecting adapter_model.safetensors directly should redirect to parent PEFT dir."""
+        handler = _DummyHandler()
+        with tempfile.TemporaryDirectory() as tmp:
+            adapter_dir = Path(tmp) / "adapter"
+            adapter_dir.mkdir(parents=True, exist_ok=True)
+            config = adapter_dir / "adapter_config.json"
+            config.write_text('{"peft_type": "LORA"}')
+            weights = adapter_dir / "adapter_model.safetensors"
+            weights.write_bytes(b"")  # dummy
+
+            # Selecting the .safetensors FILE directly should NOT give "Invalid adapter"
+            message = lifecycle.add_lora(handler, str(weights))
+            self.assertNotIn("Invalid adapter", message)
+
+
 if __name__ == "__main__":
     unittest.main()
