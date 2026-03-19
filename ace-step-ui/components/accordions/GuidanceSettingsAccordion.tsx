@@ -1,5 +1,5 @@
 import React from 'react';
-import { Crosshair, ChevronDown } from 'lucide-react';
+import { Crosshair, ChevronDown, RotateCcw } from 'lucide-react';
 import { useI18n } from '../../context/I18nContext';
 import { EditableSlider } from '../EditableSlider';
 
@@ -265,7 +265,25 @@ export const GuidanceSettingsAccordion: React.FC<GuidanceSettingsAccordionProps>
 
                     {/* Advanced Guidance Parameters */}
                     <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-3 space-y-3">
-                        <p className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider">Advanced Guidance</p>
+                        <div className="flex items-center justify-between">
+                            <p className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider">Advanced Guidance</p>
+                            <button
+                                type="button"
+                                onClick={() => {
+                                    onGuidanceScaleTextChange?.(0);
+                                    onGuidanceScaleLyricChange?.(0);
+                                    onApgMomentumChange?.(0);
+                                    onApgNormThresholdChange?.(2.5);
+                                    onOmegaScaleChange?.(1.0);
+                                    onErgScaleChange?.(1.0);
+                                }}
+                                className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-indigo-400 hover:text-indigo-300 hover:bg-indigo-500/20 transition-colors"
+                                title="Reset all advanced guidance parameters to model defaults"
+                            >
+                                <RotateCcw className="w-3 h-3" />
+                                Reset
+                            </button>
+                        </div>
                         <div className="grid grid-cols-2 gap-3">
                             <EditableSlider
                                 label="Text Scale"
