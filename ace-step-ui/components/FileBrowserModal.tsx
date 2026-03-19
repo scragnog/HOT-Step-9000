@@ -30,8 +30,14 @@ function formatSize(bytes?: number): string {
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-// Remember last directory across modal opens
-let lastVisitedDir = '';
+const STORAGE_KEY = 'hotstep_file_browser_last_dir';
+
+function getLastDir(): string {
+    try { return localStorage.getItem(STORAGE_KEY) || ''; } catch { return ''; }
+}
+function saveLastDir(dir: string) {
+    try { localStorage.setItem(STORAGE_KEY, dir); } catch { /* ignore */ }
+}
 
 export const FileBrowserModal: React.FC<FileBrowserModalProps> = ({
     open, onClose, onSelect, mode, startPath,
@@ -52,7 +58,7 @@ export const FileBrowserModal: React.FC<FileBrowserModalProps> = ({
             setCurrentDir(result.current);
             setPathInput(result.current);
             setEntries(result.entries);
-            lastVisitedDir = result.current; // remember for next open
+            saveLastDir(result.current);
         } catch (err: any) {
             setError(err?.message || 'Failed to list directory');
         } finally {
@@ -63,7 +69,7 @@ export const FileBrowserModal: React.FC<FileBrowserModalProps> = ({
     // Load initial directory when modal opens
     useEffect(() => {
         if (open) {
-            loadDir(startPath || lastVisitedDir || '');
+            loadDir(startPath || getLastDir() || '');
         }
     }, [open, startPath, loadDir]);
 
