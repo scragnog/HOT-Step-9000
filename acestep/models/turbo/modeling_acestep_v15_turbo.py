@@ -494,16 +494,35 @@ class AceStepDiTLayer(GradientCheckpointingLayer):
         # Step 1: Self-attention with adaptive layer norm (AdaLN)
         # Apply adaptive normalization: norm(x) * (1 + scale) + shift
         norm_hidden_states = (self.self_attn_norm(hidden_states) * (1 + scale_msa) + shift_msa).type_as(hidden_states)
-        attn_output, self_attn_weights = self.self_attn(
-            hidden_states=norm_hidden_states,
-            position_embeddings=position_embeddings,
-            attention_mask=attention_mask,
-            position_ids=position_ids,
-            output_attentions=output_attentions,
-            use_cache=False,
-            past_key_value=None,
-            **kwargs,
-        )
+
+        # PAG: for batch items marked by pag_identity_mask, skip self-attention
+        # and use identity (the input itself) instead. This is the "perturbed"
+        # prediction that PAG guides away from.
+        pag_identity_mask = kwargs.get('pag_identity_mask', None)
+        if pag_identity_mask is not None and pag_identity_mask.any():
+            attn_output, self_attn_weights = self.self_attn(
+                hidden_states=norm_hidden_states,
+                position_embeddings=position_embeddings,
+                attention_mask=attention_mask,
+                position_ids=position_ids,
+                output_attentions=output_attentions,
+                use_cache=False,
+                past_key_value=None,
+                **{k: v for k, v in kwargs.items() if k != 'pag_identity_mask'},
+            )
+            # PAG items: replace attention output with identity (skip attention effect)
+            attn_output[pag_identity_mask] = norm_hidden_states[pag_identity_mask]
+        else:
+            attn_output, self_attn_weights = self.self_attn(
+                hidden_states=norm_hidden_states,
+                position_embeddings=position_embeddings,
+                attention_mask=attention_mask,
+                position_ids=position_ids,
+                output_attentions=output_attentions,
+                use_cache=False,
+                past_key_value=None,
+                **kwargs,
+            )
         # Apply gated residual connection: x = x + attn_output * gate
         hidden_states = (hidden_states + attn_output * gate_msa).type_as(hidden_states)
 
@@ -1940,6 +1959,14 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         else:
             xt = noise
         
+        # PAG setup — turbo model doesn't use CFG, so PAG works with dual-batch
+        # [normal, pag_perturbed] and formula: vt = vt_normal + pag_scale*(vt_normal - vt_perturbed)
+        guidance_mode = kwargs.pop('guidance_mode', '')
+        is_pag = (guidance_mode == 'pag')
+        pag_scale = kwargs.pop('pag_scale', 1.0)
+        pag_start = kwargs.pop('pag_start', 0.0)
+        pag_end = kwargs.pop('pag_end', 1.0)
+
         # Use pre-computed t_schedule_list (already validated and mapped to valid timesteps)
         t_schedule = torch.tensor(t_schedule_list, device=device, dtype=dtype)
         num_steps = len(t_schedule)
@@ -1962,21 +1989,49 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
                 context_latents = context_latents_non_cover
                 past_key_values = EncoderDecoderCache(DynamicCache(), DynamicCache())
             
-            with torch.no_grad():        
-                decoder_outputs = self.decoder(
-                    hidden_states=xt,
-                    timestep=t_curr_tensor,
-                    timestep_r=t_curr_tensor,
-                    attention_mask=attention_mask,
-                    encoder_hidden_states=encoder_hidden_states,
-                    encoder_attention_mask=encoder_attention_mask,
-                    context_latents=context_latents,
-                    use_cache=True,
-                    past_key_values=past_key_values,
-                )
+            with torch.no_grad():
+                # PAG: dual-batch [normal, pag_perturbed] when PAG is active this step
+                do_pag_this_step = is_pag and (pag_start <= current_timestep <= pag_end)
+                if do_pag_this_step:
+                    x_in = torch.cat([xt, xt], dim=0)
+                    t_pag = current_timestep * torch.ones((x_in.shape[0],), device=device, dtype=dtype)
+                    # PAG identity mask: second half gets perturbed attention
+                    pag_mask = torch.zeros(x_in.shape[0], dtype=torch.bool, device=device)
+                    pag_mask[bsz:] = True
+                    decoder_outputs = self.decoder(
+                        hidden_states=x_in,
+                        timestep=t_pag,
+                        timestep_r=t_pag,
+                        attention_mask=torch.cat([attention_mask, attention_mask], dim=0),
+                        encoder_hidden_states=torch.cat([encoder_hidden_states, encoder_hidden_states], dim=0),
+                        encoder_attention_mask=torch.cat([encoder_attention_mask, encoder_attention_mask], dim=0),
+                        context_latents=torch.cat([context_latents, context_latents], dim=0),
+                        use_cache=False,
+                        past_key_values=None,
+                        pag_identity_mask=pag_mask,
+                    )
+                else:
+                    decoder_outputs = self.decoder(
+                        hidden_states=xt,
+                        timestep=t_curr_tensor,
+                        timestep_r=t_curr_tensor,
+                        attention_mask=attention_mask,
+                        encoder_hidden_states=encoder_hidden_states,
+                        encoder_attention_mask=encoder_attention_mask,
+                        context_latents=context_latents,
+                        use_cache=True,
+                        past_key_values=past_key_values,
+                    )
                 
-            vt = decoder_outputs[0]
-            past_key_values = decoder_outputs[1]
+            if do_pag_this_step:
+                vt_all = decoder_outputs[0]
+                vt_normal, vt_pag = vt_all.chunk(2)
+                # PAG formula: guide away from perturbed prediction
+                vt = vt_normal + pag_scale * (vt_normal - vt_pag)
+                # Don't update cache when using dual-batch PAG
+            else:
+                vt = decoder_outputs[0]
+                past_key_values = decoder_outputs[1]
             
             # On final step, directly compute x0 from noise
             if step_idx == num_steps - 1:
