@@ -4,6 +4,7 @@ import { useI18n } from '../../context/I18nContext';
 import { useAuth } from '../../context/AuthContext';
 import { generateApi } from '../../services/api';
 import { EditableSlider } from '../EditableSlider';
+import { FileBrowserModal } from '../FileBrowserModal';
 
 export interface AdapterSlot {
     slot: number;
@@ -113,8 +114,11 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
     const { token } = useAuth();
     const [browsedFiles, setBrowsedFiles] = useState<AdapterFile[]>([]);
     const [showBrowse, setShowBrowse] = useState(false);
-    const [isBrowsing, setIsBrowsing] = useState(false);
     const [expandedLayers, setExpandedLayers] = useState<Set<number>>(new Set());
+
+    // In-browser file browser modal state
+    const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
+    const [fileBrowserMode, setFileBrowserMode] = useState<'file' | 'folder'>('file');
 
     const Toggle: React.FC<{ on: boolean; onClick: () => void; disabled?: boolean }> = ({ on, onClick, disabled }) => (
         <button
@@ -126,22 +130,6 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
             <div className={`w-4 h-4 rounded-full bg-white transform transition-transform duration-200 shadow-sm ${on ? 'translate-x-5' : 'translate-x-0'}`} />
         </button>
     );
-
-    // Open native file picker for a .safetensors file (basic mode)
-    const handleBrowseFile = async () => {
-        if (!token) return;
-        setIsBrowsing(true);
-        try {
-            const result = await generateApi.browseLoraFile(token);
-            if (result.file) {
-                onLoraPathChange(result.file);
-            }
-        } catch (err) {
-            console.warn('Browse file error:', err);
-        } finally {
-            setIsBrowsing(false);
-        }
-    };
 
     if (!customMode) return null;
 
@@ -170,10 +158,18 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                         placeholder="Paste path to .safetensors file or adapter folder"
                                         className="flex-1 bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg px-3 py-2 text-xs text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none focus:border-pink-500"
                                     />
+                                    <button
+                                        onClick={() => { setFileBrowserMode('file'); setFileBrowserOpen(true); }}
+                                        title="Browse for adapter files"
+                                        className="px-3 py-2 rounded-lg text-xs font-semibold bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400 hover:bg-pink-100 dark:hover:bg-pink-900/30 transition-colors flex items-center gap-1.5 flex-shrink-0"
+                                    >
+                                        <FolderSearch size={14} />
+                                        Browse
+                                    </button>
                                     {loraPath && (
                                         <button
                                             onClick={() => onLoraPathChange('')}
-                                            className="px-2 py-2 rounded-lg text-xs text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-colors"
+                                            className="px-2 py-2 rounded-lg text-xs text-zinc-400 hover:text-red-500 dark:hover:text-red-400 transition-colors flex-shrink-0"
                                             title="Clear selection"
                                         >
                                             ✕
@@ -258,22 +254,12 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                         Scan
                                     </button>
                                     <button
-                                        onClick={async () => {
-                                            if (!token) return;
-                                            setIsBrowsing(true);
-                                            try {
-                                                const result = await generateApi.browseLoraFolder(token);
-                                                if (result.folder) {
-                                                    onAdapterFolderChange(result.folder);
-                                                }
-                                            } catch (e) { console.warn('Browse error:', e); } finally { setIsBrowsing(false); }
-                                        }}
-                                        disabled={isBrowsing}
-                                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400 hover:bg-pink-100 dark:hover:bg-pink-900/30 disabled:opacity-40 transition-colors"
-                                        title="Browse for adapter files in the folder"
+                                        onClick={() => { setFileBrowserMode('folder'); setFileBrowserOpen(true); }}
+                                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold bg-pink-50 dark:bg-pink-900/20 text-pink-600 dark:text-pink-400 hover:bg-pink-100 dark:hover:bg-pink-900/30 transition-colors"
+                                        title="Browse for adapter folder"
                                     >
                                         <FolderSearch size={14} />
-                                        {isBrowsing ? '...' : 'Browse'}
+                                        Browse
                                     </button>
                                 </div>
                                 {showBrowse && browsedFiles.length > 0 && (
@@ -721,7 +707,24 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                 </div>
     );
 
-    if (embedded) return content;
+    if (embedded) return (
+        <>
+            {content}
+            <FileBrowserModal
+                open={fileBrowserOpen}
+                onClose={() => setFileBrowserOpen(false)}
+                onSelect={(path) => {
+                    if (fileBrowserMode === 'file') {
+                        onLoraPathChange(path);
+                    } else {
+                        onAdapterFolderChange(path);
+                    }
+                    setFileBrowserOpen(false);
+                }}
+                mode={fileBrowserMode}
+            />
+        </>
+    );
 
     return (
         <div>
@@ -737,6 +740,19 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
             </button>
 
             {isOpen && content}
+            <FileBrowserModal
+                open={fileBrowserOpen}
+                onClose={() => setFileBrowserOpen(false)}
+                onSelect={(path) => {
+                    if (fileBrowserMode === 'file') {
+                        onLoraPathChange(path);
+                    } else {
+                        onAdapterFolderChange(path);
+                    }
+                    setFileBrowserOpen(false);
+                }}
+                mode={fileBrowserMode}
+            />
         </div>
     );
 };

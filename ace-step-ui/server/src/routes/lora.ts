@@ -1,10 +1,9 @@
 import { Router, Response } from 'express';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
 import { config } from '../config/index.js';
-import { exec } from 'child_process';
-import { writeFileSync, unlinkSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
+import { readdirSync, statSync } from 'fs';
+import { join, dirname, resolve } from 'path';
+import { homedir } from 'os';
 
 const router = Router();
 
@@ -60,34 +59,7 @@ async function proxyToAceStep(endpoint: string, method: string, data?: any) {
   }
 }
 
-/**
- * Spawn a PowerShell native file/folder dialog and return the selected path.
- * Returns empty string if the user cancels.
- *
- * Writes the script to a temp .ps1 file and runs it with -STA to avoid:
- *  - cmd.exe stripping $ variable references
- *  - EncodedCommand encoding issues
- *  - MTA apartment thread issues with Windows Forms dialogs
- */
-function showNativeDialog(psScript: string): Promise<string> {
-  const scriptPath = join(tmpdir(), `hotstep_dialog_${Date.now()}.ps1`);
-  writeFileSync(scriptPath, psScript, 'utf8');
-  return new Promise((resolve) => {
-    exec(
-      `powershell.exe -STA -NoProfile -ExecutionPolicy Bypass -File "${scriptPath}"`,
-      { timeout: 300_000 }, // 5 min for user to interact with dialog
-      (err, stdout) => {
-        // Clean up temp script
-        try { unlinkSync(scriptPath); } catch { /* ignore */ }
-        if (err) {
-          // timeout or exec error — treat as cancel
-          return resolve('');
-        }
-        resolve(stdout.trim());
-      },
-    );
-  });
-}
+
 
 router.post('/load', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -134,25 +106,66 @@ router.get('/status', authMiddleware, async (_req: AuthenticatedRequest, res: Re
   }
 });
 
-// ── Native file/folder browser dialogs (Windows) ─────────────────────
+// ── In-browser file/folder browser (Node-native, no PowerShell) ───────
 
-/** Open a native file picker filtered to .safetensors files */
-router.get('/browse-file', authMiddleware, async (_req: AuthenticatedRequest, res: Response) => {
-  try {
-    const ps = `Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.OpenFileDialog; $d.Filter = 'SafeTensors (*.safetensors)|*.safetensors|All files (*.*)|*.*'; $d.Title = 'Select Adapter File'; if ($d.ShowDialog() -eq 'OK') { $d.FileName } else { '' }`;
-    const file = await showNativeDialog(ps);
-    res.json({ file });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
 
-/** Open a native folder picker dialog */
-router.get('/browse-folder', authMiddleware, async (_req: AuthenticatedRequest, res: Response) => {
+
+/**
+ * List directories and .safetensors files at a given path.
+ * Used by the in-browser file browser modal.
+ */
+router.get('/browse-dir', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const ps = `Add-Type -AssemblyName System.Windows.Forms; $d = New-Object System.Windows.Forms.FolderBrowserDialog; $d.Description = 'Select Adapter Folder'; if ($d.ShowDialog() -eq 'OK') { $d.SelectedPath } else { '' }`;
-    const folder = await showNativeDialog(ps);
-    res.json({ folder });
+    let dir = (req.query.path as string || '').trim();
+
+    // Default to user's home directory
+    if (!dir) {
+      dir = homedir();
+    }
+
+    dir = resolve(dir);
+
+    // On Windows, list drive letters if path is empty or root-like
+    const entries: Array<{ name: string; path: string; type: 'dir' | 'file'; size?: number }> = [];
+
+    // Add parent directory entry (unless we're at a root)
+    const parent = dirname(dir);
+    if (parent !== dir) {
+      entries.push({ name: '..', path: parent, type: 'dir' });
+    }
+
+    try {
+      const items = readdirSync(dir, { withFileTypes: true });
+      for (const item of items) {
+        // Skip hidden files/folders
+        if (item.name.startsWith('.')) continue;
+
+        const fullPath = join(dir, item.name);
+
+        if (item.isDirectory()) {
+          entries.push({ name: item.name, path: fullPath, type: 'dir' });
+        } else if (item.name.toLowerCase().endsWith('.safetensors')) {
+          try {
+            const stat = statSync(fullPath);
+            entries.push({ name: item.name, path: fullPath, type: 'file', size: stat.size });
+          } catch {
+            entries.push({ name: item.name, path: fullPath, type: 'file' });
+          }
+        }
+      }
+    } catch (fsErr: any) {
+      return res.status(400).json({ error: `Cannot read directory: ${fsErr.message}`, current: dir });
+    }
+
+    // Sort: directories first (alphabetical), then files (alphabetical)
+    entries.sort((a, b) => {
+      if (a.name === '..') return -1;
+      if (b.name === '..') return 1;
+      if (a.type !== b.type) return a.type === 'dir' ? -1 : 1;
+      return a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
+    });
+
+    res.json({ current: dir, entries });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
