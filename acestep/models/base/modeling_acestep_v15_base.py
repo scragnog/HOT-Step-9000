@@ -2099,6 +2099,7 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         }
         _switched_to_non_cover = False
         step_metadata = {"idx": 0, "total": infer_steps}
+        _loguru.info(f"[generate_audio] solver_state: {solver_state}")
         logger.info(f"[generate_audio] Starting diffusion: solver={solver_name}, steps={infer_steps}, shift={shift}")
         with torch.no_grad():
             for step_idx, (t_curr, t_prev) in enumerate(iterator):
