@@ -48,6 +48,10 @@ async def run_one_job_runtime(
     executor = app_state.executor
 
     await ensure_models_initialized_fn(app_state)
+    # Signal that a generation is actively running
+    generation_idle = getattr(app_state, "generation_idle", None)
+    if generation_idle is not None:
+        generation_idle.clear()
     job_store.mark_running(job_id)
     update_progress_job_cache_fn(
         app_state=app_state,
@@ -112,6 +116,9 @@ async def run_one_job_runtime(
                     torch.mps.empty_cache()
         except Exception:
             pass
+        # Signal that generation has finished — safe for backend switches etc.
+        if generation_idle is not None:
+            generation_idle.set()
         dt = max(0.0, time.time() - t0)
         async with app_state.stats_lock:
             app_state.recent_durations.append(dt)

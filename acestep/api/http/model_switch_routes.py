@@ -211,6 +211,18 @@ def register_model_switch_routes(
         if llm is None:
             raise HTTPException(status_code=500, detail="LLM handler not available")
 
+        # Wait for any active generation to finish before touching the LLM.
+        # Switching backends while CUDA is mid-inference corrupts the stream.
+        generation_idle = getattr(app.state, "generation_idle", None)
+        if generation_idle is not None:
+            print("[API Server] Backend switch: waiting for active generation to finish...")
+            if not generation_idle.wait(timeout=120):
+                raise HTTPException(
+                    status_code=409,
+                    detail="Cannot switch backend: a generation is still running after 120s timeout",
+                )
+            print("[API Server] Backend switch: generation idle, proceeding")
+
         # Check if already using this backend
         prev_params = getattr(llm, "last_init_params", None) or {}
         if not isinstance(prev_params, dict):

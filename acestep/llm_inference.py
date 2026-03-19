@@ -2866,6 +2866,11 @@ class LLMHandler:
 
         with torch.inference_mode():
             for step in tqdm(range(max_new_tokens), desc="LLM CFG Generation", unit="token", disable=self.disable_tqdm):
+                # Fast cancellation check — set by cancel_route when user cancels
+                if getattr(self, "_cancel_requested", False):
+                    self._cancel_requested = False
+                    raise RuntimeError("Generation cancelled by user")
+
                 # Standard batch forward pass
                 outputs = self._forward_pass(model, generated_ids, model_kwargs, past_key_values, use_cache)
                 next_token_logits = outputs.logits[:, -1, :]  # [batch_size*2, vocab_size]

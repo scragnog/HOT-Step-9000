@@ -50,6 +50,10 @@ def register_cancel_route(
         rec = store.get(job_id)
         if rec and rec.status not in ("succeeded", "failed"):
             store.mark_failed(job_id, "Cancelled by user")
+            # Signal the LLM handler to stop any in-progress token generation
+            llm_handler = getattr(app.state, "llm_handler", None)
+            if llm_handler is not None:
+                llm_handler._cancel_requested = True
             # Update local cache if available
             local_cache = getattr(app.state, "local_cache", None)
             if local_cache is not None:

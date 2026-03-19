@@ -107,6 +107,9 @@ def run_blocking_generate(
             log_fn(f"[API Server] Failed to setup generation file logger: {e}")
 
     try:
+        # Clear any stale cancel flag from a previous cancellation
+        if llm_handler is not None:
+            llm_handler._cancel_requested = False
 
         def _ensure_llm_ready() -> None:
             ensure_llm_ready_for_request(

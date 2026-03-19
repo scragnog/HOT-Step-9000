@@ -8,7 +8,7 @@ import sys
 from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from threading import Lock
+from threading import Event, Lock
 from typing import Any, Callable
 
 
@@ -120,6 +120,8 @@ def initialize_lifespan_runtime(
     app.state.job_temp_files = {}
     app.state.job_temp_files_lock = asyncio.Lock()
     app.state.cancelled_jobs = set()
+    app.state.generation_idle = Event()
+    app.state.generation_idle.set()  # starts idle (no active generation)
     app.state.stats_lock = asyncio.Lock()
     app.state.recent_durations = deque(maxlen=avg_window)
     app.state.avg_job_seconds = initial_avg_job_seconds
