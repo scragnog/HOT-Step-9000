@@ -878,3 +878,152 @@ Post-processing engine for enhancing generated audio quality. Ported from the Co
 ### VRAM offloading
 
 When using stem-separation mode, ACE-Step's models (DiT, VAE, tokenizer) are automatically offloaded to CPU before Demucs runs, then restored to GPU afterwards — same pattern as the stem separation feature.
+
+---
+
+## JKASS Inference Solvers
+
+Two additional ODE solver algorithms — **JKASS** and **JKASS Fast** — designed specifically for music diffusion models. Both provide frequency-dependent processing and optional post-step smoothing that the generic mathematical solvers (Euler, Heun, etc.) lack.
+
+### What's included
+
+| File | Description |
+|------|-------------|
+| `acestep/core/generation/solvers.py` | `jkass` and `jkass_fast` solver implementations with beat stability, frequency damping, and temporal smoothing |
+| `acestep/models/base/modeling_acestep_v15_base.py` | `solver_state` dictionary wired into the denoising loop, passed to solver step functions |
+| `acestep/inference.py` | `beat_stability`, `frequency_damping`, `temporal_smoothing` in `GenerationParams` |
+| Full API chain (4 files) | Parameters wired through Pydantic model, request builder, generation setup |
+| `ace-step-ui` | JKASS Fast Controls sub-panel (3 sliders with help text), reset button, conditional display when `jkass_fast` solver selected |
+
+### How it works
+
+1. **JKASS** — A 2nd-order Heun-class solver with frequency-aware momentum blending. After each Heun step, it applies spectral damping (exponential decay on high-frequency bins) and temporal smoothing (convolution kernel across the time axis). This reduces harsh overtones and temporal jitter without sacrificing musical structure.
+2. **JKASS Fast** — A single-evaluation variant that achieves similar results at half the compute cost. Uses momentum blending with the previous step, spectral damping, and temporal smoothing — all configurable via the UI.
+3. **JKASS Fast Controls** appear automatically when JKASS Fast is selected as the inference method:
+   - **Beat Stability** (0–1, default 0.25): Momentum blending with the previous denoising step — smooths rhythmic elements
+   - **Frequency Damping** (0–5, default 0.4): Exponential decay on high-frequency bins — tames harsh overtones
+   - **Temporal Smoothing** (0–1, default 0.13): Smoothing kernel across the time axis — reduces temporal jitter
+4. A **Reset** button restores all three parameters to their recommended defaults.
+
+---
+
+## Anti-Autotune System
+
+Spectral smoothing for reducing robotic vocal artifacts that can occur in AI-generated music. Operates on the generated audio tensor before saving, applying a gentle spectral envelope smoothing pass that preserves natural timbre while reducing the "auto-tuned" quality of AI vocals.
+
+### What's included
+
+| File | Description |
+|------|-------------|
+| `acestep/inference.py` | `anti_autotune` field in `GenerationParams` (0.0–1.0); applied during audio post-processing |
+| Full API chain (4 files) | Wired through Pydantic model, request builder, generation setup |
+| `ace-step-ui` | Anti-Autotune slider in the Generation Settings accordion |
+
+### How it works
+
+1. The slider maps to `anti_autotune` (0.0 = off, 1.0 = full smoothing)
+2. When enabled, a spectral envelope smoothing pass is applied to the generated audio before normalization and mastering
+3. This reduces the unnaturally precise pitch quantization that gives AI vocals their characteristic "auto-tuned" sound
+4. Best used at subtle values (0.1–0.3) for natural-sounding vocals; higher values can over-smooth
+
+---
+
+## Advanced Guidance Parameters
+
+Extension of the existing [Advanced Guidance & Solver Modes](#advanced-guidance--solver-modes) with fine-grained control over individual guidance components, decay scheduling, and per-prompt-type guidance scaling.
+
+### What's included
+
+| File | Description |
+|------|-------------|
+| `acestep/inference.py` | 8 new fields in `GenerationParams`: `guidance_scale_text`, `guidance_scale_lyric`, `apg_momentum`, `apg_norm_threshold`, `omega_scale`, `erg_scale`, `guidance_interval_decay`, `min_guidance_scale` |
+| Full API chain (4 files) | All parameters wired through Pydantic model, request builder, generation setup |
+| `ace-step-ui/components/accordions/GuidanceSettingsAccordion.tsx` | Advanced Guidance sub-panel with text/lyric scale overrides, APG tuning, omega/ERG scales, and reset button |
+
+### Parameters
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| **Text Scale** | 0 (use main) | Independent guidance scale for the text/style prompt. When 0, uses the main guidance scale. |
+| **Lyric Scale** | 0 (use main) | Independent guidance scale for lyrics. Allows stronger lyric adherence without affecting musical style. |
+| **APG Momentum** | 0.75 | Adaptive Projected Gradient momentum — controls how much previous gradient direction influences the current step |
+| **APG Norm Threshold** | 2.5 | Gradient clamping threshold for APG — prevents gradient explosion |
+| **Omega Scale** | 1.0 | Omega guidance multiplier — scales the overall guidance signal |
+| **ERG Scale** | 1.0 | Energy-Renormalized Guidance multiplier — preserves energy norms during guidance |
+| **Guidance Decay** | 0 (off) | Linear decay of guidance scale over the diffusion trajectory. Stronger guidance early (structure), softer late (detail). |
+| **Min Guidance** | 3.0 | Floor value when guidance decay is active — prevents guidance from dropping too low |
+
+### How it works
+
+1. Open the **Guidance Settings** accordion → the **Advanced Guidance** sub-panel appears below the main CFG scale slider
+2. Set independent text/lyric scales to decouple prompt adherence from lyric fidelity
+3. Tune APG momentum and norm threshold for smoother or more aggressive gradient-based guidance
+4. Enable guidance decay for a "strong start, gentle finish" scheduling approach
+5. A **Reset** button restores all parameters to model defaults
+
+---
+
+## Custom VLLM Backend
+
+A third LM backend option alongside PyTorch (`pt`) and standard `vllm`. The Custom VLLM backend uses a bespoke vLLM integration with KV-cache pooling, custom memory management, and optimized token sampling — purpose-built for ACE-Step's two-phase generation (text tokens → audio codes).
+
+### What's included
+
+| File | Description |
+|------|-------------|
+| `acestep/llm_inference.py` | `custom-vllm` backend initialization, KV-cache pool management, active slot tracking, custom pipeline integration |
+| `acestep/api/startup_llm_init.py` | `custom-vllm` added to valid backend set |
+| `acestep/api/llm_readiness.py` | Readiness checks for `custom-vllm` |
+| `acestep/api/http/model_switch_routes.py` | Hot-switch support between `pt`, `vllm`, and `custom-vllm` backends |
+| `acestep/api/http/release_task_models.py` | `custom-vllm` added to `lm_backend` literal type |
+| `ace-step-ui/components/accordions/LmCotAccordion.tsx` | "Custom VLLM" option in the LM Backend dropdown |
+| `ace-step-ui/components/CreatePanel.tsx` | State management for the third backend option |
+
+### How it works
+
+1. Select **Custom VLLM** from the **LM Backend** dropdown in the LM / CoT accordion
+2. The backend hot-switches from the current LM engine to the custom vLLM pipeline (~5–15s)
+3. Custom VLLM uses a bespoke KV-cache pool with explicit slot management — memory is pre-allocated and reused across generations rather than allocated/freed each time
+4. The custom pipeline handles ACE-Step's two-phase generation (text reasoning → audio code generation) with phase-specific sampling parameters
+5. VRAM usage is comparable to standard VLLM (~9.2 GB) but with potentially better throughput on high-end GPUs due to cache pooling
+
+### Switching backends
+
+All three backends can be hot-switched at any time via the UI dropdown. The current model is unloaded, VRAM is freed, and the new backend is initialized with the same model weights. No server restart required.
+
+---
+
+## Vocoder Enhancement (HiFi-GAN)
+
+Optional high-quality audio decode pass using ADaMoSHiFiGAN. After the standard VAE decoding, the generated waveform is re-encoded to a mel spectrogram and decoded through a dedicated vocoder model for improved timbre, clarity, and reduced artifacts.
+
+### What's included
+
+| File | Description |
+|------|-------------|
+| `acestep/core/audio/music_vocoder.py` | `ADaMoSHiFiGANV1` model class — HiFi-GAN architecture with mel-spectrogram encode/decode |
+| `acestep/core/vocoder_service.py` | **[NEW]** `VocoderService` singleton — lazy model loading, checkpoint scanning, sample-rate resampling (48kHz ↔ 44.1kHz), shape normalization |
+| `acestep/inference.py` | `vocoder_model` field in `GenerationParams`; vocoder hook runs between VAE decode and normalization |
+| Full API chain (4 files) | `vocoder_model` wired through Pydantic model, request builder, generation setup |
+| `ace-step-ui` | Vocoder Enhancement toggle with model dropdown, auto-populated from scanned checkpoints |
+
+### How it works
+
+1. **Model Installation:** Run `install.bat` and select "Yes" when prompted to download the vocoder model (~206 MB). The model is placed in `checkpoints/music_vocoder/`.
+2. **Enable:** In the UI, open the Output Processing section and enable **Vocoder Enhancement**. The dropdown auto-populates with any vocoder models found in `checkpoints/`.
+3. **Processing Pipeline:** After the standard VAE decode produces a waveform:
+   - The stereo audio (`[2, time]`) is reshaped to `[2, 1, time]` (2 mono batches)
+   - Resampled from 48kHz → 44.1kHz (HiFi-GAN's native rate)
+   - Encoded to mel spectrogram via `model.encode()`
+   - Decoded back to waveform via `model.decode()`
+   - Resampled back to 48kHz and reshaped to `[2, time]`
+4. The vocoder model is loaded lazily on first use and cached in memory for subsequent generations.
+5. Set the dropdown to **None** to disable and skip the vocoder pass entirely.
+
+### Model source
+
+The ADaMoSHiFiGANV1 model is available from the official ACE-Step repository:
+- **Repository:** [`ACE-Step/ACE-Step-v1-3.5B`](https://huggingface.co/ACE-Step/ACE-Step-v1-3.5B/tree/main/music_vocoder)
+- **Files:** `config.json` (940 B) + `diffusion_pytorch_model.safetensors` (206 MB)
+- **Location:** `checkpoints/music_vocoder/`
+

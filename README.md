@@ -30,7 +30,11 @@ HOT-Step 9000 sits on top of the original ACE-Step backend but introduces a mass
 - **Auto-Mastering:** Every generated track can be automatically mastered with two options — a built-in 6-stage Processing Chain (EQ, saturation, stereo widening, compression, limiter) or reference-based mastering via [Matchering](https://github.com/sergree/matchering). Interactive console for real-time tweaks, persistent presets, and one-click remastering of existing tracks.
 - **Advanced Multi-Adapter System:** Slot-based loading of up to 4 simultaneous LoRA/LoKr adapters with per-layer scaling via weight-space merging.
 - **Activation Steering (TADA):** Experimental zero-shot generation guidance by modifying model activations directly.
-- **Advanced Guidance & Solvers:** 7 guidance modes (including PAG, APG, ADG) and 4 ODE solvers (Euler, Heun, DPM++ 2M, RK4).
+- **Advanced Guidance & Solvers:** 7 guidance modes (including PAG, APG, ADG) and 6 ODE solvers (Euler, Heun, DPM++ 2M, RK4, JKASS, JKASS Fast) with per-solver parameter tuning. Advanced Guidance sub-panel for independent text/lyric scales, APG tuning, and guidance decay scheduling.
+- **JKASS Inference Solvers:** Purpose-built music diffusion solvers with frequency damping, beat stability, and temporal smoothing — configurable per-generation via dedicated UI controls.
+- **Custom VLLM Backend:** Third LM backend option with bespoke KV-cache pooling and optimized two-phase generation. Hot-switchable between PyTorch, standard VLLM, and Custom VLLM without restart.
+- **Anti-Autotune:** Spectral smoothing to reduce robotic vocal artifacts in AI-generated music, with a simple 0–1 intensity slider.
+- **Vocoder Enhancement (HiFi-GAN):** Optional high-quality audio decode pass using ADaMoSHiFiGAN for improved timbre and clarity. Downloads separately (~206 MB).
 - **Timestep Scheduler:** 6 pluggable timestep distributions (Linear, DDIM, SGM, Bong Tangent, Linear Quadratic, Composite 2-Stage) for controlling where denoising effort is concentrated.
 - **Cover Mode Tools:** Tempo scaling (0.5x–2.0x) and pitch shifting (±12 semitones) for covers and repaints, applied before VAE encoding.
 - **Stem Extraction & Separation:** Both generative extraction (via DiT) and deterministic separation (BS-RoFormer/Demucs) with a built-in multi-track mixer.

@@ -183,6 +183,45 @@ if "%MODEL_CHOICE%"=="1" (
 echo.
 
 :: -------------------------------------------------------------------
+:: 5b. Optional: Download Vocoder Enhancement Model (HiFi-GAN)
+:: -------------------------------------------------------------------
+echo  ============================================================
+echo    Optional: Vocoder Enhancement Model (HiFi-GAN)
+echo  ============================================================
+echo.
+echo    The ADaMoSHiFiGAN vocoder model improves audio quality by
+echo    re-decoding generated audio through a dedicated HiFi-GAN.
+echo    Size: ~206 MB
+echo.
+
+if exist "checkpoints\music_vocoder\diffusion_pytorch_model.safetensors" (
+    echo  Vocoder model already installed. Skipping.
+) else (
+    set /p VOCODER_CHOICE="  Download vocoder model? [Y/n] (default=Y): "
+    if "!VOCODER_CHOICE!"=="" set VOCODER_CHOICE=Y
+    if /i "!VOCODER_CHOICE!"=="Y" (
+        echo.
+        echo  Downloading vocoder model from HuggingFace...
+        if not exist "checkpoints\music_vocoder" mkdir "checkpoints\music_vocoder"
+        curl -L -o "checkpoints\music_vocoder\config.json" "https://huggingface.co/ACE-Step/ACE-Step-v1-3.5B/resolve/main/music_vocoder/config.json"
+        if errorlevel 1 (
+            echo  WARNING: Failed to download config.json
+        )
+        curl -L -o "checkpoints\music_vocoder\diffusion_pytorch_model.safetensors" "https://huggingface.co/ACE-Step/ACE-Step-v1-3.5B/resolve/main/music_vocoder/diffusion_pytorch_model.safetensors"
+        if errorlevel 1 (
+            echo  WARNING: Failed to download vocoder model weights
+        ) else (
+            echo  Vocoder model downloaded successfully.
+        )
+    ) else (
+        echo  Skipping vocoder download. You can manually download later from:
+        echo    https://huggingface.co/ACE-Step/ACE-Step-v1-3.5B/tree/main/music_vocoder
+        echo  Place files in: checkpoints\music_vocoder\
+    )
+)
+echo.
+
+:: -------------------------------------------------------------------
 :: 6. Install UI dependencies (Node.js / npm)
 :: -------------------------------------------------------------------
 echo  [6/6] Setting up React UI...
