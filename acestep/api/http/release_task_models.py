@@ -104,7 +104,7 @@ class GenerateMusicRequest(BaseModel):
 
     # 5Hz LM (server-side): used for metadata completion and (when thinking=True) codes generation.
     lm_model_path: Optional[str] = None  # e.g. "acestep-5Hz-lm-0.6B"
-    lm_backend: Literal["vllm", "pt", "mlx"] = "vllm"
+    lm_backend: Literal["vllm", "pt", "mlx", "custom-vllm"] = "vllm"
 
     constrained_decoding: bool = True
     constrained_decoding_debug: bool = False

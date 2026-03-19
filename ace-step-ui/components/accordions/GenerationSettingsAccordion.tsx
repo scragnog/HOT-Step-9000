@@ -52,12 +52,16 @@ interface GenerationSettingsAccordionProps {
     onCfgIntervalStartChange: (val: number) => void;
     cfgIntervalEnd: number;
     onCfgIntervalEndChange: (val: number) => void;
+    guidanceIntervalDecay?: number;
+    onGuidanceIntervalDecayChange?: (val: number) => void;
+    minGuidanceScale?: number;
+    onMinGuidanceScaleChange?: (val: number) => void;
     // LM / CoT
     thinking: boolean;
     onThinkingToggle: () => void;
     loraLoaded: boolean;
-    lmBackend: 'pt' | 'vllm';
-    onLmBackendChange: (val: 'pt' | 'vllm') => void;
+    lmBackend: 'pt' | 'vllm' | 'custom-vllm';
+    onLmBackendChange: (val: 'pt' | 'vllm' | 'custom-vllm') => void;
     lmModel: string;
     onLmModelChange: (val: string) => void;
     isLmSwitching?: boolean;
@@ -411,6 +415,10 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
                         onCfgIntervalStartChange={props.onCfgIntervalStartChange}
                         cfgIntervalEnd={props.cfgIntervalEnd}
                         onCfgIntervalEndChange={props.onCfgIntervalEndChange}
+                        guidanceIntervalDecay={props.guidanceIntervalDecay}
+                        onGuidanceIntervalDecayChange={props.onGuidanceIntervalDecayChange}
+                        minGuidanceScale={props.minGuidanceScale}
+                        onMinGuidanceScaleChange={props.onMinGuidanceScaleChange}
                         isTurbo={props.isTurbo}
                         guidanceScaleText={props.guidanceScaleText}
                         onGuidanceScaleTextChange={props.onGuidanceScaleTextChange}

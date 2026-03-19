@@ -197,6 +197,8 @@ const AudioBox: React.FC<AudioBoxProps> = ({
 interface AudioSelectionSectionProps {
     useReferenceAudio: boolean;
     setUseReferenceAudio: (val: boolean) => void;
+    referenceAsCover?: boolean;
+    setReferenceAsCover?: (val: boolean) => void;
     taskType: string;
     // Reference audio state
     referenceAudioUrl: string | null;
@@ -237,6 +239,8 @@ interface AudioSelectionSectionProps {
 export const AudioSelectionSection: React.FC<AudioSelectionSectionProps> = ({
     useReferenceAudio,
     setUseReferenceAudio,
+    referenceAsCover,
+    setReferenceAsCover,
     taskType,
     referenceAudioUrl,
     referenceAudioTitle,
@@ -324,6 +328,22 @@ export const AudioSelectionSection: React.FC<AudioSelectionSectionProps> = ({
                         className={`w-10 h-5 rounded-full flex items-center transition-colors duration-200 px-0.5 border border-zinc-200 dark:border-white/5 ${useReferenceAudio ? 'bg-pink-600' : 'bg-zinc-300 dark:bg-black/40'} cursor-pointer`}
                     >
                         <div className={`w-4 h-4 rounded-full bg-white transform transition-transform duration-200 shadow-sm ${useReferenceAudio ? 'translate-x-5' : 'translate-x-0'}`} />
+                    </button>
+                </div>
+            )}
+
+            {/* ── Reference As Cover toggle ── only when reference is active */}
+            {useReferenceAudio && taskType !== 'extract' && setReferenceAsCover && (
+                <div className="flex items-center justify-between px-2 pl-4 py-1 border-l-2 border-pink-500/20 ml-2">
+                    <div>
+                        <span className="text-xs font-bold text-zinc-600 dark:text-zinc-300">Reference As Cover</span>
+                        <p className="text-[10px] text-zinc-400 dark:text-zinc-500">Treats reference audio as structural cover input instead of style transfer</p>
+                    </div>
+                    <button
+                        onClick={() => setReferenceAsCover(!referenceAsCover)}
+                        className={`w-8 h-4 rounded-full flex items-center transition-colors duration-200 px-0.5 border border-zinc-200 dark:border-white/5 ${referenceAsCover ? 'bg-pink-600' : 'bg-zinc-300 dark:bg-black/40'} cursor-pointer`}
+                    >
+                        <div className={`w-3 h-3 rounded-full bg-white transform transition-transform duration-200 shadow-sm ${referenceAsCover ? 'translate-x-4' : 'translate-x-0'}`} />
                     </button>
                 </div>
             )}

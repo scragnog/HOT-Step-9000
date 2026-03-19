@@ -204,8 +204,8 @@ def register_model_switch_routes(
 
         body = await request.json()
         target_backend = (body.get("backend") or "").strip().lower()
-        if target_backend not in ("pt", "vllm"):
-            raise HTTPException(status_code=400, detail="'backend' must be 'pt' or 'vllm'")
+        if target_backend not in ("pt", "vllm", "custom-vllm"):
+            raise HTTPException(status_code=400, detail="'backend' must be 'pt', 'vllm', or 'custom-vllm'")
 
         llm = getattr(app.state, "llm_handler", None)
         if llm is None:

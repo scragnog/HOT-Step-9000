@@ -35,11 +35,16 @@ def _apg_core(pred_cond, pred_uncond, guidance_scale, **ctx):
     momentum_buffer = ctx.get("momentum_buffer")
     if ctx.get("disable_momentum", False):
         momentum_buffer = None
+    norm_threshold = ctx.get("norm_threshold", 2.5)
+    erg_scale = ctx.get("erg_scale", 1.0)
+    # ERG: scale the effective guidance to control prediction diversity
+    effective_scale = guidance_scale * erg_scale if erg_scale != 1.0 else guidance_scale
     return apg_forward(
         pred_cond=pred_cond,
         pred_uncond=pred_uncond,
-        guidance_scale=guidance_scale,
+        guidance_scale=effective_scale,
         momentum_buffer=momentum_buffer,
+        norm_threshold=norm_threshold,
         dims=[1],
     )
 

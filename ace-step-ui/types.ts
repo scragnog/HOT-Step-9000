@@ -90,7 +90,7 @@ export interface GenerationParams {
   lmTopP: number;
   lmNegativePrompt: string;
   lmRepetitionPenalty?: number;
-  lmBackend?: 'pt' | 'vllm';
+  lmBackend?: 'pt' | 'vllm' | 'custom-vllm';
   lmModel?: string;
 
   // Expert Parameters
@@ -106,6 +106,7 @@ export interface GenerationParams {
   coverNoiseStrength?: number;
   enableNormalization?: boolean;
   normalizationDb?: number;
+  vocoderModel?: string;
   latentShift?: number;
   latentRescale?: number;
   taskType?: string;
@@ -147,6 +148,9 @@ export interface GenerationParams {
   temporalSmoothing?: number;
 
   // Advanced Guidance Parameters
+  guidanceIntervalDecay?: number;
+  minGuidanceScale?: number;
+  referenceAsCover?: boolean;
   guidanceScaleText?: number;
   guidanceScaleLyric?: number;
   apgMomentum?: number;

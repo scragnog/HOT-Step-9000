@@ -40,7 +40,7 @@ const ESSENTIA_BIN = path.join(PROJECT_ROOT, 'Essentia', 'essentia_streaming_ext
  * Returns: { bpm: number, key: string, scale: string } or error
  */
 router.post('/', async (req: Request, res: Response) => {
-    const { audioUrl } = req.body;
+    const { audioUrl, engine = 'essentia' } = req.body;
     if (!audioUrl) {
         return res.status(400).json({ error: 'audioUrl is required' });
     }
@@ -81,27 +81,42 @@ router.post('/', async (req: Request, res: Response) => {
     }
 
     try {
-        // Run Essentia CLI
-        const result = await new Promise<string>((resolve, reject) => {
-            execFile(
-                ESSENTIA_BIN,
-                [inputPath, tmpFile],
-                { timeout: 120_000, maxBuffer: 10 * 1024 * 1024 },
-                (error, _stdout, stderr) => {
-                    // Essentia writes info to stderr even on success — check if output file exists
-                    if (error && !error.killed) {
-                        // Check if the file was created despite the "error"
-                        fs.access(tmpFile).then(() => resolve('ok')).catch(() => reject(error));
-                    } else {
-                        resolve('ok');
+        let data: any = null;
+        if (engine === 'librosa') {
+            const result = await new Promise<string>((resolve, reject) => {
+                const pyScript = path.join(PROJECT_ROOT, 'acestep', 'librosa_analyze.py');
+                execFile(
+                    'python',
+                    [pyScript, inputPath],
+                    { timeout: 120_000, maxBuffer: 10 * 1024 * 1024 },
+                    (error, stdout, stderr) => {
+                        if (error) reject(error);
+                        else resolve(stdout);
                     }
-                }
-            );
-        });
-
-        // Parse the JSON output
-        const raw = await fs.readFile(tmpFile, 'utf-8');
-        const data = JSON.parse(raw);
+                );
+            });
+            data = JSON.parse(result);
+        } else {
+            // Run Essentia CLI
+            await new Promise<string>((resolve, reject) => {
+                execFile(
+                    ESSENTIA_BIN,
+                    [inputPath, tmpFile],
+                    { timeout: 120_000, maxBuffer: 10 * 1024 * 1024 },
+                    (error, _stdout, stderr) => {
+                        // Essentia writes info to stderr even on success — check if output file exists
+                        if (error && !error.killed) {
+                            // Check if the file was created despite the "error"
+                            fs.access(tmpFile).then(() => resolve('ok')).catch(() => reject(error));
+                        } else {
+                            resolve('ok');
+                        }
+                    }
+                );
+            });
+            const raw = await fs.readFile(tmpFile, 'utf-8');
+            data = JSON.parse(raw);
+        }
 
         const bpm = Math.round(data?.rhythm?.bpm ?? 0);
         const keyData = data?.tonal?.key_edma ?? {};

@@ -40,6 +40,9 @@ class ServiceGenerateMixin:
         guidance_mode: str = "",
         cfg_interval_start: float = 0.0,
         cfg_interval_end: float = 1.0,
+        guidance_interval_decay: float = 0.0,
+        min_guidance_scale: float = 3.0,
+        reference_as_cover: bool = False,
         shift: float = 1.0,
         audio_code_hints: Optional[Union[str, List[str]]] = None,
         infer_method: str = "ode",
@@ -51,6 +54,13 @@ class ServiceGenerateMixin:
         pag_scale: float = 0.2,
         scheduler: str = "linear",
         progress=None,
+        # Advanced guidance parameters
+        guidance_scale_text: float = 0.0,
+        guidance_scale_lyric: float = 0.0,
+        apg_momentum: float = 0.0,
+        apg_norm_threshold: float = 2.5,
+        omega_scale: float = 1.0,
+        erg_scale: float = 1.0,
     ) -> Dict[str, Any]:
         """Generate music latents and metadata from text/audio conditioning inputs.
 
@@ -118,6 +128,10 @@ class ServiceGenerateMixin:
             cover_noise_strength=cover_noise_strength,
         )
         payload = self._unpack_service_processed_data(self.preprocess_batch(batch))
+        if reference_as_cover:
+            # Emulate Scromfy's Audio Cover Strength instead of standard style-transfer
+            payload["is_covers"] = torch.ones_like(payload["is_covers"])
+            
         seed_param = self._resolve_service_seed_param(normalized["seed_list"])
         self._ensure_silence_latent_on_device()
         generate_kwargs = self._build_service_generate_kwargs(
@@ -131,6 +145,8 @@ class ServiceGenerateMixin:
             guidance_mode=guidance_mode if guidance_mode else ("adg" if use_adg else "apg"),
             cfg_interval_start=cfg_interval_start,
             cfg_interval_end=cfg_interval_end,
+            guidance_interval_decay=guidance_interval_decay,
+            min_guidance_scale=min_guidance_scale,
             shift=shift,
             timesteps=timesteps,
             use_pag=use_pag,
@@ -139,6 +155,12 @@ class ServiceGenerateMixin:
             pag_scale=pag_scale,
             scheduler=scheduler,
             progress=progress,
+            guidance_scale_text=guidance_scale_text,
+            guidance_scale_lyric=guidance_scale_lyric,
+            apg_momentum=apg_momentum,
+            apg_norm_threshold=apg_norm_threshold,
+            omega_scale=omega_scale,
+            erg_scale=erg_scale,
         )
         try:
             if getattr(self, "steering_enabled", False):

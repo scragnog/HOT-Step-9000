@@ -302,6 +302,12 @@ class GenerateMusicMixin:
                 pag_end=pag_end,
                 pag_scale=pag_scale,
                 scheduler=scheduler,
+                guidance_scale_text=guidance_scale_text,
+                guidance_scale_lyric=guidance_scale_lyric,
+                apg_momentum=apg_momentum,
+                apg_norm_threshold=apg_norm_threshold,
+                omega_scale=omega_scale,
+                erg_scale=erg_scale,
             )
             outputs = service_run["outputs"]
             infer_steps_for_progress = service_run["infer_steps_for_progress"]

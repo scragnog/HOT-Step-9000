@@ -306,7 +306,7 @@ export interface GenerationParams {
   lmTopK?: number;
   lmTopP?: number;
   lmNegativePrompt?: string;
-  lmBackend?: 'pt' | 'vllm';
+  lmBackend?: 'pt' | 'vllm' | 'custom-vllm';
   lmModel?: string;
 
   // Expert Parameters
@@ -657,7 +657,7 @@ export const generateApi = {
     switched: boolean;
   }> => api('/api/model/lm/switch', { method: 'POST', body: { model }, token }),
 
-  switchLmBackend: (backend: 'pt' | 'vllm', token: string): Promise<{
+  switchLmBackend: (backend: 'pt' | 'vllm' | 'custom-vllm', token: string): Promise<{
     message: string;
     backend: string;
     switched: boolean;

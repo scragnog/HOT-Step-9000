@@ -401,6 +401,12 @@ def create_app() -> FastAPI:
 
         return {"artists": result}
 
+    @app.get("/api/vocoders")
+    async def get_vocoders():
+        """List available Vocoder enhancement checkpoints."""
+        from acestep.core.vocoder_service import vocoder_service
+        return {"vocoders": vocoder_service.get_available_vocoders()}
+
     return app
 
 

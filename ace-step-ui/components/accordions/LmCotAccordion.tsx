@@ -11,8 +11,8 @@ interface LmCotAccordionProps {
     onThinkingToggle: () => void;
     loraLoaded: boolean;
     // LM Backend
-    lmBackend: 'pt' | 'vllm';
-    onLmBackendChange: (val: 'pt' | 'vllm') => void;
+    lmBackend: 'pt' | 'vllm' | 'custom-vllm';
+    onLmBackendChange: (val: 'pt' | 'vllm' | 'custom-vllm') => void;
     // LM Model
     lmModel: string;
     onLmModelChange: (val: string) => void;
@@ -121,9 +121,10 @@ export const LmCotAccordion: React.FC<LmCotAccordionProps> = ({
                     {/* LM Backend */}
                     <div className="space-y-1.5">
                         <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{t('lmBackendLabel')}</label>
-                        <select value={lmBackend} onChange={(e) => onLmBackendChange(e.target.value as 'pt' | 'vllm')} className={selectClass}>
+                        <select value={lmBackend} onChange={(e) => onLmBackendChange(e.target.value as 'pt' | 'vllm' | 'custom-vllm')} className={selectClass}>
                             <option value="pt">{t('lmBackendPt')}</option>
                             <option value="vllm">{t('lmBackendVllm')}</option>
+                            <option value="custom-vllm">Custom VLLM</option>
                         </select>
                         <p className="text-[10px] text-zinc-500">{t('lmBackendHint')}</p>
                     </div>
