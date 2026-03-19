@@ -189,6 +189,22 @@ export const GuidanceSettingsAccordion: React.FC<GuidanceSettingsAccordionProps>
                     {/* PAG Sub-Controls */}
                     {guidanceMode === 'pag' && (
                         <div className="space-y-3 p-3 bg-amber-50/50 dark:bg-amber-900/10 border border-amber-200/50 dark:border-amber-500/20 rounded-xl">
+                            <div className="flex items-center justify-between">
+                                <p className="text-[10px] font-semibold text-amber-400 uppercase tracking-wider">PAG Controls</p>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        onPagStartChange(0.30);
+                                        onPagEndChange(0.70);
+                                        onPagScaleChange(0.25);
+                                    }}
+                                    className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-amber-400 hover:text-amber-300 hover:bg-amber-500/20 transition-colors"
+                                    title="Reset PAG parameters to recommended defaults"
+                                >
+                                    <RotateCcw className="w-3 h-3" />
+                                    Reset
+                                </button>
+                            </div>
                             <EditableSlider
                                 label="PAG Start"
                                 value={pagStart}
