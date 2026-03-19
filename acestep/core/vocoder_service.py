@@ -69,10 +69,16 @@ class VocoderService:
         if was_resampled:
             vocoded_wav = torchaudio.functional.resample(vocoded_wav, target_sr, original_sr)
             
-        if added_batch:
-            vocoded_wav = vocoded_wav.squeeze(0).squeeze(0)
-        elif vocoded_wav.dim() == 3 and vocoded_wav.size(0) == 1:
-            # Drop the batch dimension [1, C, T] -> [C, T]
+        # Force output to [Channels, Time] or [Time]
+        if vocoded_wav.dim() == 3:
+            if vocoded_wav.size(1) == 1:
+                # [2, 1, T] -> [2, T] (stereo returned as 2 mono batches)
+                vocoded_wav = vocoded_wav.squeeze(1)
+            elif vocoded_wav.size(0) == 1:
+                # [1, 2, T] -> [2, T] (just in case)
+                vocoded_wav = vocoded_wav.squeeze(0)
+                
+        if added_batch and vocoded_wav.dim() == 2:
             vocoded_wav = vocoded_wav.squeeze(0)
             
         return vocoded_wav.cpu()
