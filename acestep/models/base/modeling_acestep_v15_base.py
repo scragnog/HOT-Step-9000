@@ -1930,6 +1930,9 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         momentum_buffer = MomentumBuffer(momentum=-apg_momentum if apg_momentum > 0 else -0.75)
         if apg_momentum > 0:
             logger.info(f"[generate_audio] APG momentum: {-apg_momentum:.2f}")
+        # Treat 0 as "use default" for norm_threshold (old UI clients have 0.0 persisted)
+        if apg_norm_threshold <= 0:
+            apg_norm_threshold = 2.5
         if apg_norm_threshold != 2.5:
             logger.info(f"[generate_audio] APG norm threshold: {apg_norm_threshold:.1f}")
         if omega_scale != 1.0:
