@@ -3,6 +3,8 @@
 import json
 import dataclasses
 import os
+import shutil
+import tempfile
 from typing import Any, Dict, Optional, Tuple
 
 from loguru import logger
@@ -12,6 +14,112 @@ from acestep.debug_utils import debug_log
 from acestep.core.generation.handler.lora.lokr_config import LoKRConfig
 
 LOKR_WEIGHTS_FILENAME = "lokr_weights.safetensors"
+
+
+def _try_prepare_bare_peft_safetensors(safetensors_path: str) -> Optional[str]:
+    """Detect a bare PEFT LoRA safetensors file and prepare a temp loading directory.
+
+    Some LoRA adapters (e.g. ComfyUI exports) ship as a single ``.safetensors``
+    file with PEFT-compatible weight keys (``lora_down.weight``, ``lora_up.weight``)
+    but *no* ``adapter_config.json`` and *no* embedded metadata.
+
+    This function:
+    1. Opens the file and checks for PEFT-style key naming
+    2. Infers rank, alpha, target_modules, and DoRA from the weight structure
+    3. Creates a temporary directory with ``adapter_config.json`` + a hard-link
+       (or copy) of the weights as ``adapter_model.safetensors``
+    4. Returns the temp directory path (caller must clean up), or ``None`` if
+       the file doesn't look like a PEFT LoRA.
+    """
+    if not os.path.isfile(safetensors_path) or not safetensors_path.lower().endswith(".safetensors"):
+        return None
+
+    try:
+        from safetensors import safe_open
+    except ImportError:
+        return None
+
+    try:
+        with safe_open(safetensors_path, framework="pt", device="cpu") as sf:
+            keys = list(sf.keys())
+
+            # Quick check: does this look like PEFT LoRA?
+            lora_down_keys = [k for k in keys if "lora_down.weight" in k]
+            if not lora_down_keys:
+                return None
+
+            # --- Infer rank from first lora_down weight shape ---
+            first_down = sf.get_tensor(lora_down_keys[0])
+            rank = first_down.shape[0]
+
+            # --- Infer alpha from scalar alpha tensors ---
+            alpha_keys = [k for k in keys if k.endswith(".alpha")]
+            lora_alpha = float(rank)  # default: alpha == rank
+            if alpha_keys:
+                alpha_val = sf.get_tensor(alpha_keys[0])
+                lora_alpha = float(alpha_val.item())
+
+            # --- Detect DoRA ---
+            use_dora = any("dora_scale" in k for k in keys)
+
+            # --- Infer target modules from key naming ---
+            target_modules = set()
+            for k in lora_down_keys:
+                # Key pattern: base_model.model.layers.N.<module_path>.lora_down.weight
+                parts = k.split(".")
+                try:
+                    idx = parts.index("lora_down")
+                    target_modules.add(parts[idx - 1])
+                except (ValueError, IndexError):
+                    pass
+
+            if not target_modules:
+                return None
+
+    except Exception as exc:
+        logger.debug(f"Failed to inspect safetensors for PEFT detection: {exc}")
+        return None
+
+    # --- Build temp dir with adapter_config.json + linked weights ---
+    try:
+        tmp_dir = tempfile.mkdtemp(prefix="peft_adapter_")
+        config = {
+            "peft_type": "LORA",
+            "auto_mapping": None,
+            "base_model_name_or_path": "",
+            "bias": "none",
+            "fan_in_fan_out": False,
+            "inference_mode": True,
+            "init_lora_weights": True,
+            "layers_to_transform": None,
+            "layers_pattern": None,
+            "lora_alpha": lora_alpha,
+            "lora_dropout": 0,
+            "modules_to_save": None,
+            "r": rank,
+            "revision": None,
+            "target_modules": sorted(target_modules),
+            "task_type": None,
+            "use_dora": use_dora,
+        }
+        config_path = os.path.join(tmp_dir, "adapter_config.json")
+        with open(config_path, "w") as f:
+            json.dump(config, f, indent=2)
+
+        dest_weights = os.path.join(tmp_dir, "adapter_model.safetensors")
+        try:
+            os.link(safetensors_path, dest_weights)  # Hard link (instant, no extra space)
+        except OSError:
+            shutil.copy2(safetensors_path, dest_weights)  # Fallback: full copy
+
+        logger.info(
+            f"Inferred PEFT config from bare safetensors: r={rank}, alpha={lora_alpha}, "
+            f"targets={sorted(target_modules)}, dora={use_dora} → {tmp_dir}"
+        )
+        return tmp_dir
+    except Exception as exc:
+        logger.warning(f"Failed to create temp PEFT adapter directory: {exc}")
+        return None
 
 
 def _is_lokr_safetensors(weights_path: str) -> bool:
@@ -305,6 +413,7 @@ def add_lora(self, lora_path: str, adapter_name: str | None = None) -> str:
         return f"❌ LoRA path not found: {lora_path}"
 
     lokr_weights_path = _resolve_lokr_weights_path(lora_path)
+    _bare_peft_tmp_dir = None  # Track temp dir for cleanup
     if lokr_weights_path is None:
         # If user selected a .safetensors file directly (e.g. via file picker),
         # check whether the parent directory is a PEFT adapter directory.
@@ -319,10 +428,25 @@ def add_lora(self, lora_path: str, adapter_name: str | None = None) -> str:
 
         config_file = os.path.join(lora_path, "adapter_config.json")
         if not os.path.exists(config_file):
-            return (
-                "❌ Invalid adapter: expected PEFT LoRA directory containing adapter_config.json "
-                f"or LoKr artifact {LOKR_WEIGHTS_FILENAME} in {lora_path}"
-            )
+            # Fallback: check for bare PEFT LoRA safetensors (e.g. ComfyUI exports)
+            # that have lora_down/lora_up keys but no adapter_config.json.
+            bare_st = lora_path if os.path.isfile(lora_path) else None
+            if bare_st is None and os.path.isdir(lora_path):
+                # Pick first .safetensors in the directory
+                for name in sorted(os.listdir(lora_path)):
+                    if name.lower().endswith(".safetensors"):
+                        bare_st = os.path.join(lora_path, name)
+                        break
+            if bare_st:
+                _bare_peft_tmp_dir = _try_prepare_bare_peft_safetensors(bare_st)
+            if _bare_peft_tmp_dir:
+                logger.info(f"Using inferred PEFT config from bare safetensors: {bare_st}")
+                lora_path = _bare_peft_tmp_dir
+            else:
+                return (
+                    "❌ Invalid adapter: expected PEFT LoRA directory containing adapter_config.json "
+                    f"or LoKr artifact {LOKR_WEIGHTS_FILENAME} in {lora_path}"
+                )
 
     try:
         from peft import PeftModel
@@ -339,7 +463,7 @@ def add_lora(self, lora_path: str, adapter_name: str | None = None) -> str:
     if effective_name in _active_loras:
         return f"❌ Adapter name already in use: {effective_name}. Use a different name or remove it first."
 
-    try:
+    try:  # noqa: SIM117 — need finally for _bare_peft_tmp_dir cleanup
         decoder = self.model.decoder
         is_peft = PeftModel is not None and isinstance(decoder, PeftModel)
 
@@ -427,6 +551,13 @@ def add_lora(self, lora_path: str, adapter_name: str | None = None) -> str:
     except Exception as e:
         logger.exception("Failed to load LoRA adapter")
         return f"❌ Failed to load LoRA: {str(e)}"
+    finally:
+        # Clean up temporary PEFT directory created for bare safetensors
+        if _bare_peft_tmp_dir and os.path.isdir(_bare_peft_tmp_dir):
+            try:
+                shutil.rmtree(_bare_peft_tmp_dir, ignore_errors=True)
+            except Exception:
+                pass
 
 
 def load_lora(self, lora_path: str) -> str:

@@ -85,11 +85,28 @@ def _extract_adapter_delta(self, lora_path: str) -> dict:
     # Determine adapter type
     is_peft = False
     lokr_weights_path = None
+    _bare_peft_tmp_dir = None
     if os.path.isdir(lora_path):
         if os.path.exists(os.path.join(lora_path, "adapter_config.json")):
             is_peft = True
         st_files = sorted(glob.glob(os.path.join(lora_path, "*.safetensors")))
-        if st_files:
+        if not is_peft and st_files:
+            # No adapter_config.json — try bare PEFT detection before assuming LoKr
+            from acestep.core.generation.handler.lora.lifecycle import _try_prepare_bare_peft_safetensors
+            for sf in st_files:
+                tmp = _try_prepare_bare_peft_safetensors(sf)
+                if tmp:
+                    _bare_peft_tmp_dir = tmp
+                    lora_path = tmp
+                    is_peft = True
+                    break
+            if not is_peft:
+                lokr_first = [f for f in st_files if "lokr" in os.path.basename(f).lower()]
+                lokr_weights_path = lokr_first[0] if lokr_first else st_files[0]
+        elif not is_peft and not st_files:
+            pass  # will fall through to error
+        elif is_peft and st_files:
+            # Also set lokr_weights_path for trigger word extraction below
             lokr_first = [f for f in st_files if "lokr" in os.path.basename(f).lower()]
             lokr_weights_path = lokr_first[0] if lokr_first else st_files[0]
     elif lora_path.endswith(".safetensors"):
@@ -100,7 +117,16 @@ def _extract_adapter_delta(self, lora_path: str) -> dict:
             lora_path = parent
             is_peft = True
         else:
-            lokr_weights_path = lora_path
+            # Try bare PEFT detection before assuming LoKr
+            from acestep.core.generation.handler.lora.lifecycle import _try_prepare_bare_peft_safetensors
+            tmp = _try_prepare_bare_peft_safetensors(lora_path)
+            if tmp:
+                _bare_peft_tmp_dir = tmp
+                lokr_weights_path = lora_path  # preserve for trigger word extraction
+                lora_path = tmp
+                is_peft = True
+            else:
+                lokr_weights_path = lora_path
 
     # Reset dynamo state — nano-vllm's global config changes
     # (capture_scalar_outputs, @torch.compile decorators) contaminate
@@ -227,6 +253,15 @@ def _extract_adapter_delta(self, lora_path: str) -> dict:
 
     delta_mb = sum(v.numel() * 4 for v in delta.values()) / (1024**2)
     logger.info(f"Extracted adapter delta: {len(delta)} keys, {delta_mb:.1f}MB (fp32 on CPU)")
+
+    # Clean up temporary PEFT directory created for bare safetensors
+    if _bare_peft_tmp_dir and os.path.isdir(_bare_peft_tmp_dir):
+        try:
+            import shutil
+            shutil.rmtree(_bare_peft_tmp_dir, ignore_errors=True)
+        except Exception:
+            pass
+
     return {"delta": delta, "type": adapter_type, "safetensors_file": lokr_weights_path}
 
 
