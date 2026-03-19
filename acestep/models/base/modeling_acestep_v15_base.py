@@ -1842,6 +1842,13 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         cover_noise_strength: float = 0.0,
         on_step_callback=None,
         scheduler: str = "linear",
+        # Advanced guidance parameters (forwarded via **kwargs or explicit)
+        guidance_scale_text: float = 0.0,
+        guidance_scale_lyric: float = 0.0,
+        apg_momentum: float = 0.0,
+        apg_norm_threshold: float = 2.5,
+        omega_scale: float = 1.0,
+        erg_scale: float = 1.0,
         **kwargs,
     ):
         if attention_mask is None:
@@ -1850,6 +1857,17 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         time_costs = {}
         start_time = time.time()
         total_start_time = start_time
+
+        # Scale text/lyric hidden states for independent guidance control
+        if guidance_scale_text > 0 and diffusion_guidance_sale > 0:
+            text_factor = guidance_scale_text / diffusion_guidance_sale
+            text_hidden_states = text_hidden_states * text_factor
+            logger.info(f"[generate_audio] Text guidance scale: {guidance_scale_text:.1f} (factor: {text_factor:.2f})")
+        if guidance_scale_lyric > 0 and diffusion_guidance_sale > 0:
+            lyric_factor = guidance_scale_lyric / diffusion_guidance_sale
+            lyric_hidden_states = lyric_hidden_states * lyric_factor
+            logger.info(f"[generate_audio] Lyric guidance scale: {guidance_scale_lyric:.1f} (factor: {lyric_factor:.2f})")
+
         encoder_hidden_states, encoder_attention_mask, context_latents = self.prepare_condition(
             text_hidden_states=text_hidden_states,
             text_attention_mask=text_attention_mask,
@@ -1909,7 +1927,15 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         noise = self.prepare_noise(context_latents, seed)
         bsz, device, dtype = context_latents.shape[0], context_latents.device, context_latents.dtype
         past_key_values = EncoderDecoderCache(DynamicCache(), DynamicCache())
-        momentum_buffer = MomentumBuffer()
+        momentum_buffer = MomentumBuffer(momentum=-apg_momentum if apg_momentum > 0 else -0.75)
+        if apg_momentum > 0:
+            logger.info(f"[generate_audio] APG momentum: {-apg_momentum:.2f}")
+        if apg_norm_threshold != 2.5:
+            logger.info(f"[generate_audio] APG norm threshold: {apg_norm_threshold:.1f}")
+        if omega_scale != 1.0:
+            logger.info(f"[generate_audio] Omega scale: {omega_scale:.1f}")
+        if erg_scale != 1.0:
+            logger.info(f"[generate_audio] ERG scale: {erg_scale:.1f}")
         
         # Cover noise initialization: blend noise with src_latents
         if cover_noise_strength > 0.0:
@@ -1956,6 +1982,10 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         pag_scale = kwargs.get('pag_scale', 1.0)
         pag_start = kwargs.get('pag_start', 0.0)
         pag_end = kwargs.get('pag_end', 1.0)
+
+        # Scale encoder hidden states for omega_scale (prompt reweighting)
+        if omega_scale != 1.0:
+            encoder_hidden_states = encoder_hidden_states * omega_scale
 
         # main task condition
         do_cfg_guidance = diffusion_guidance_sale > 1.0
@@ -2040,6 +2070,8 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
                                     momentum_buffer=momentum_buf,
                                     disable_momentum=True,
                                     latents=xt_inner, sigma=t_val,
+                                    norm_threshold=apg_norm_threshold,
+                                    erg_scale=erg_scale,
                                 )
                         else:
                             vt_inner = p_cond
@@ -2150,6 +2182,8 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
                                 latents=xt, sigma=t_curr,
                                 dt=dt_val,
                                 step_idx=step_idx, total_steps=infer_steps,
+                                norm_threshold=apg_norm_threshold,
+                                erg_scale=erg_scale,
                             )
                         else:
                             current_cfg = diffusion_guidance_sale
@@ -2164,6 +2198,8 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
                                 latents=xt, sigma=t_curr,
                                 dt=dt_val,
                                 step_idx=step_idx, total_steps=infer_steps,
+                                norm_threshold=apg_norm_threshold,
+                                erg_scale=erg_scale,
                             )
                     else:
                         vt = pred_cond

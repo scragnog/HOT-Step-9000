@@ -136,6 +136,7 @@ interface GenerateBody {
   masteringParams?: Record<string, any>;
   enableNormalization?: boolean;
   normalizationDb?: number;
+  vocoderModel?: string;
   latentShift?: number;
   latentRescale?: number;
   taskType?: string;
@@ -185,6 +186,9 @@ interface GenerateBody {
   temporalSmoothing?: number;
 
   // Advanced Guidance Parameters
+  guidanceIntervalDecay?: number;
+  minGuidanceScale?: number;
+  referenceAsCover?: boolean;
   guidanceScaleText?: number;
   guidanceScaleLyric?: number;
   apgMomentum?: number;
@@ -310,6 +314,7 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
         // Latent and normalization controls apply to ALL task types (post-DiT, pre-VAE decode).
         latent_shift: params.latentShift ?? 0.0,
         latent_rescale: params.latentRescale ?? 1.0,
+        vocoder_model: params.vocoderModel || '',
         ...(params.autoMaster !== undefined ? { auto_master: params.autoMaster } : {}),
         ...(params.masteringParams ? { mastering_params: {
           ...params.masteringParams,
@@ -325,6 +330,9 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
         guidance_mode: params.guidanceMode || '',
         cfg_interval_start: params.cfgIntervalStart || 0.0,
         cfg_interval_end: params.cfgIntervalEnd || 1.0,
+        guidance_interval_decay: params.guidanceIntervalDecay || 0.0,
+        min_guidance_scale: params.minGuidanceScale ?? 3.0,
+        reference_as_cover: params.referenceAsCover || false,
         infer_method: params.inferMethod || 'ode',
         scheduler: params.scheduler || 'linear',
         shift: params.shift,

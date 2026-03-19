@@ -144,6 +144,9 @@ class GenerationParams:
     guidance_scale: float = 7.0
     use_adg: bool = False
     guidance_mode: str = ""
+    guidance_interval_decay: float = 0.0
+    min_guidance_scale: float = 3.0
+    reference_as_cover: bool = False
     cfg_interval_start: float = 0.0
     cfg_interval_end: float = 1.0
     shift: float = 1.0
@@ -197,6 +200,9 @@ class GenerationParams:
     # Quality scoring
     get_scores: bool = False
     score_scale: float = 0.1
+
+    # Vocoder post-pass
+    vocoder_model: str = ""
 
     # Steering Parameters
     steering_enabled: bool = False
@@ -744,6 +750,17 @@ def generate_music(
             # Get audio tensor and metadata
             audio_tensor = dit_audio.get("tensor")
             sample_rate = dit_audio.get("sample_rate", 48000)
+
+            # --- VOCODER POST-PASS ---
+            if hasattr(params, 'vocoder_model') and params.vocoder_model and str(params.vocoder_model).lower() not in ["", "none", "null"]:
+                try:
+                    from acestep.core.vocoder_service import vocoder_service
+                    logger.info(f"[VocoderService] Applying enhancement with model {params.vocoder_model}")
+                    if progress:
+                        progress(0.85, desc="Applying Vocoder Enhancement...")
+                    audio_tensor = vocoder_service.apply_vocoder(audio_tensor, params.vocoder_model, sample_rate)
+                except Exception as e:
+                    logger.error(f"[VocoderService] Failed to apply vocoder: {e}")
 
             # --- NORMALIZATION & LOGGING ---
             if params.enable_normalization and params.normalization_db <= 0.0:

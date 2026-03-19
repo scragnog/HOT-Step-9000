@@ -328,12 +328,12 @@ export const GuidanceSettingsAccordion: React.FC<GuidanceSettingsAccordionProps>
                                     onChange={(v) => onApgNormThresholdChange?.(v)}
                                     formatDisplay={(v) => v.toFixed(1)}
                                     helpText={
-                                        (apgNormThreshold ?? 0) === 0
-                                            ? 'Default — no gradient clamping'
-                                            : (apgNormThreshold ?? 0) <= 2
-                                                ? 'Tight clamp — strongly limits guidance corrections'
-                                                : (apgNormThreshold ?? 0) <= 5
-                                                    ? 'Moderate — prevents extreme corrections'
+                                        (apgNormThreshold ?? 2.5) <= 1
+                                            ? 'Tight clamp — strongly limits guidance corrections'
+                                            : (apgNormThreshold ?? 2.5) <= 3
+                                                ? 'Default range — balanced gradient clamping'
+                                                : (apgNormThreshold ?? 2.5) <= 5
+                                                    ? 'Moderate — permits larger corrections'
                                                     : 'Permissive — only limits very large corrections'
                                     }
                                     title="Caps the magnitude of APG guidance corrections. Prevents individual steps from overshooting, which can cause artifacts. Lower values = more conservative guidance, higher values = more freedom."

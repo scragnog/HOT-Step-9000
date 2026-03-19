@@ -12,7 +12,9 @@ interface CoverRepaintSettingsProps {
     tempoScale: number;
     setTempoScale: (val: number) => void;
     pitchShift: number;
-    setPitchShift: (val: number) => void;
+    onPitchShiftChange: (val: number) => void;
+    extractionEngine?: 'essentia' | 'librosa';
+    onExtractionEngineChange?: (val: 'essentia' | 'librosa') => void;
     bpm: number | null;
     keyScale: string | null;
     detectedBpm: number | null;
@@ -24,6 +26,8 @@ interface CoverRepaintSettingsProps {
     setEnableNormalization: (val: boolean) => void;
     normalizationDb: number;
     setNormalizationDb: (val: number) => void;
+    vocoderModel?: string;
+    setVocoderModel?: (val: string) => void;
     latentShift: number;
     setLatentShift: (val: number) => void;
     latentRescale: number;
@@ -53,7 +57,9 @@ export const CoverRepaintSettings: React.FC<CoverRepaintSettingsProps> = ({
     tempoScale,
     setTempoScale,
     pitchShift,
-    setPitchShift,
+    onPitchShiftChange,
+    extractionEngine,
+    onExtractionEngineChange,
     bpm,
     keyScale,
     detectedBpm,
@@ -65,6 +71,8 @@ export const CoverRepaintSettings: React.FC<CoverRepaintSettingsProps> = ({
     setEnableNormalization,
     normalizationDb,
     setNormalizationDb,
+    vocoderModel,
+    setVocoderModel,
     latentShift,
     setLatentShift,
     latentRescale,
@@ -84,6 +92,18 @@ export const CoverRepaintSettings: React.FC<CoverRepaintSettingsProps> = ({
     embedded = false,
 }) => {
     const { t } = useI18n();
+
+    const [availableVocoders, setAvailableVocoders] = React.useState<string[]>([]);
+    React.useEffect(() => {
+        fetch('/api/models/vocoders')
+            .then(res => res.json())
+            .then(data => {
+                if (data && data.vocoders) {
+                    setAvailableVocoders(data.vocoders);
+                }
+            })
+            .catch(err => console.error('Failed to load vocoders', err));
+    }, []);
 
     // Show cover/repaint section for tasks that use source audio controls
     // (not text2music and not complete — complete uses source audio but no cover controls)
@@ -179,7 +199,7 @@ export const CoverRepaintSettings: React.FC<CoverRepaintSettingsProps> = ({
                                         min={-12}
                                         max={12}
                                         step={1}
-                                        onChange={setPitchShift}
+                                        onChange={onPitchShiftChange}
                                         formatDisplay={(val) => val === 0 ? '0' : val > 0 ? `+${val} ♯` : `${val} ♭`}
                                         helpText={t('pitchShiftHelp')}
                                         title={t('pitchShiftTooltip')}
@@ -187,14 +207,29 @@ export const CoverRepaintSettings: React.FC<CoverRepaintSettingsProps> = ({
                                 </div>
                             )}
 
-                            {/* Source Analysis Info — show user inputs + computed output */}
+                            {/* Source Analysis Info & Extraction Engine Settings */}
                             {showTempoAndPitch && bpm !== 0 && keyScale && (
-                                <div className="rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/30 px-3 py-2 text-[11px] space-y-1">
-                                    <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-medium">
-                                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" />
-                                        </svg>
-                                        Base: {bpm} BPM, {keyScale}
+                                <div className="rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/30 px-3 py-2 text-[11px] space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400 font-medium">
+                                            <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2z" />
+                                            </svg>
+                                            Base: {bpm} BPM, {keyScale}
+                                        </div>
+                                        {extractionEngine && onExtractionEngineChange && (
+                                            <div className="flex items-center gap-1">
+                                                <span className="text-[9px] text-emerald-600/70 dark:text-emerald-400/50 uppercase font-bold tracking-wider">Engine:</span>
+                                                <select
+                                                    value={extractionEngine}
+                                                    onChange={(e) => onExtractionEngineChange(e.target.value as 'essentia' | 'librosa')}
+                                                    className="bg-white dark:bg-black/20 border border-emerald-200 dark:border-emerald-800/50 rounded px-1.5 py-0.5 text-[10px] text-emerald-700 dark:text-emerald-300 focus:outline-none cursor-pointer"
+                                                >
+                                                    <option value="essentia">Essentia</option>
+                                                    <option value="librosa">Librosa</option>
+                                                </select>
+                                            </div>
+                                        )}
                                     </div>
                                     {(tempoScale !== 1.0 || pitchShift !== 0) && (
                                         <div className="text-emerald-600 dark:text-emerald-500">
@@ -372,6 +407,26 @@ export const CoverRepaintSettings: React.FC<CoverRepaintSettingsProps> = ({
                                 title={t('normalizationDbTooltip')}
                             />
                         )}
+
+                        {/* Vocoder Selection */}
+                        <div className="flex flex-col gap-2 py-1">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Vocoder Enhancement</span>
+                                    <p className="text-[10px] text-zinc-500">Apply a high-quality vocoder (HiFi-GAN) for improved timbre and clarity instead of the default decode pass.</p>
+                                </div>
+                            </div>
+                            <select
+                                value={vocoderModel || ''}
+                                onChange={(e) => setVocoderModel?.(e.target.value)}
+                                className="w-full h-8 px-2 py-1 text-xs font-medium text-zinc-700 dark:text-zinc-200 bg-white dark:bg-black/40 border border-zinc-200 dark:border-white/10 rounded-lg outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500 transition-shadow"
+                            >
+                                <option value="">None (Default VAE Decode)</option>
+                                {availableVocoders.map(model => (
+                                    <option key={model} value={model}>{model}</option>
+                                ))}
+                            </select>
+                        </div>
 
                         {/* Latent Shift & Latent Rescale side-by-side */}
                         <div className="grid grid-cols-2 gap-3">

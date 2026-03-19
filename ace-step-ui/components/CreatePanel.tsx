@@ -136,7 +136,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [inferenceSteps, setInferenceSteps] = usePersistedState('ace-inferenceSteps', 12);
   const [inferMethod, setInferMethod] = usePersistedState<'ode' | 'euler' | 'heun' | 'dpm2m' | 'rk4' | 'jkass_quality' | 'jkass_fast'>('ace-inferMethod', 'ode');
   const [scheduler, setScheduler] = usePersistedState<string>('ace-scheduler', 'linear');
-  const [lmBackend, setLmBackend] = useState<'pt' | 'vllm'>('pt');
+  const [lmBackend, setLmBackend] = useState<'pt' | 'vllm' | 'custom-vllm'>('pt');
   const [lmModel, setLmModel] = usePersistedState('ace-lmModel', 'acestep-5Hz-lm-0.6B');
   const [shift, setShift] = usePersistedState('ace-shift', 3.0);
 
@@ -170,11 +170,13 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [coverNoiseStrength, setCoverNoiseStrength] = usePersistedState('ace-coverNoiseStrength', 0.15);
   const [tempoScale, setTempoScale] = usePersistedState('ace-tempoScale', 1.0);
   const [pitchShift, setPitchShift] = usePersistedState('ace-pitchShift', 0);
-  const [autoMaster, setAutoMaster] = usePersistedState('ace-autoMaster', true);
-  const [masteringParams, setMasteringParams] = usePersistedState<MasteringParamsType | null>('ace-masteringParams', null);
+  const [extractionEngine, setExtractionEngine] = usePersistedState<'essentia'|'librosa'>('ace-extractionEngine', 'essentia');
+  const [autoMaster, setAutoMaster] = usePersistedState('ace-autoMaster', false);
+  const [masteringParams, setMasteringParams] = usePersistedState<Record<string, any>>('ace-masteringParams', {});
   const [showMasteringConsole, setShowMasteringConsole] = useState(false);
   const [enableNormalization, setEnableNormalization] = usePersistedState('ace-enableNormalization', true);
   const [normalizationDb, setNormalizationDb] = usePersistedState('ace-normalizationDb', -1.0);
+  const [vocoderModel, setVocoderModel] = usePersistedState('ace-vocoderModel', '');
   const [latentShift, setLatentShift] = usePersistedState('ace-latentShift', 0.0);
   const [latentRescale, setLatentRescale] = usePersistedState('ace-latentRescale', 1.0);
   const [taskType, setTaskType] = usePersistedState('ace-taskType', 'text2music');
@@ -188,6 +190,9 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [pagScale, setPagScale] = usePersistedState('ace-pagScale', 0.2);
   const [cfgIntervalStart, setCfgIntervalStart] = usePersistedState('ace-cfgIntervalStart', 0.0);
   const [cfgIntervalEnd, setCfgIntervalEnd] = usePersistedState('ace-cfgIntervalEnd', 1.0);
+  const [guidanceIntervalDecay, setGuidanceIntervalDecay] = usePersistedState('ace-guidanceIntervalDecay', 0.0);
+  const [minGuidanceScale, setMinGuidanceScale] = usePersistedState('ace-minGuidanceScale', 3.0);
+  const [referenceAsCover, setReferenceAsCover] = usePersistedState('ace-referenceAsCover', false);
 
   // Anti-Autotune spectral smoothing
   const [antiAutotune, setAntiAutotune] = usePersistedState('ace-antiAutotune', 0.0);
@@ -201,7 +206,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [guidanceScaleText, setGuidanceScaleText] = usePersistedState('ace-guidanceScaleText', 0.0);
   const [guidanceScaleLyric, setGuidanceScaleLyric] = usePersistedState('ace-guidanceScaleLyric', 0.0);
   const [apgMomentum, setApgMomentum] = usePersistedState('ace-apgMomentum', 0.0);
-  const [apgNormThreshold, setApgNormThreshold] = usePersistedState('ace-apgNormThreshold', 0.0);
+  const [apgNormThreshold, setApgNormThreshold] = usePersistedState('ace-apgNormThreshold', 2.5);
   const [omegaScale, setOmegaScale] = usePersistedState('ace-omegaScale', 1.0);
   const [ergScale, setErgScale] = usePersistedState('ace-ergScale', 1.0);
   const [customTimesteps, setCustomTimesteps] = useState('');
@@ -304,7 +309,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     fetch('/api/models/env-config')
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data?.lmBackend === 'vllm' || data?.lmBackend === 'pt') {
+        if (data?.lmBackend === 'vllm' || data?.lmBackend === 'pt' || data?.lmBackend === 'custom-vllm') {
           setLmBackend(data.lmBackend);
         }
       })
@@ -1003,6 +1008,11 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
         loraLoaded,
         advancedAdapters,
         adapterSlots: adapterSlots.map(s => ({ ...s })),
+        autoMaster,
+        masteringParams,
+        enableNormalization,
+        normalizationDb,
+        vocoderModel,
       });
 
       // Wait for this generation to complete before proceeding
@@ -1354,7 +1364,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     }
   }, [token, isLmSwitching]);
 
-  const handleLmBackendChange = useCallback(async (targetBackend: 'pt' | 'vllm') => {
+  const handleLmBackendChange = useCallback(async (targetBackend: 'pt' | 'vllm' | 'custom-vllm') => {
     if (targetBackend === lmBackend) return;
     setLmBackend(targetBackend); // Immediate visual feedback
     if (!token || isLmSwitching) return;
@@ -1367,7 +1377,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     } catch (err: any) {
       console.error('LM backend switch failed:', err.message);
       // Revert on failure
-      setLmBackend(lmBackend === 'pt' ? 'pt' : 'vllm');
+      setLmBackend(lmBackend === 'custom-vllm' ? 'custom-vllm' : (lmBackend === 'pt' ? 'pt' : 'vllm'));
     } finally {
       setIsLmSwitching(false);
     }
@@ -1959,7 +1969,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ audioUrl: sourceAudioUrl }),
+        body: JSON.stringify({ audioUrl: sourceAudioUrl, engine: extractionEngine }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -2009,7 +2019,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       }, 500);
       return () => clearTimeout(t);
     }
-  }, [sourceAudioUrl]);
+  }, [sourceAudioUrl, extractionEngine]);
 
   // Calculate effective BPM and Key Scale based on user modifications (Cover Settings)
   // These apply to Cover, Repaint, and Audio2Audio, using the editable bpm/keyScale as the base.
@@ -2124,6 +2134,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           masteringParams: (overrides?.autoMaster ?? autoMaster) && masteringParams ? masteringParams : undefined,
           enableNormalization,
           normalizationDb,
+          vocoderModel,
           latentShift,
           latentRescale,
           taskType,
@@ -2135,6 +2146,9 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           pagScale: guidanceMode === 'pag' ? pagScale : undefined,
           cfgIntervalStart,
           cfgIntervalEnd,
+          guidanceIntervalDecay,
+          minGuidanceScale,
+          referenceAsCover,
           antiAutotune,
           beatStability: inferMethod === 'jkass_fast' ? beatStability : undefined,
           frequencyDamping: inferMethod === 'jkass_fast' ? frequencyDamping : undefined,
@@ -2199,11 +2213,13 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
 
   const outputSummary = useMemo(() => {
     const parts: string[] = [];
-    if (autoMaster) parts.push('Master');
+    if (getScores) parts.push('Scored');
+    if (getLrc) parts.push('LRC');
+    if (autoMaster) parts.push('Mastered');
     if (enableNormalization) parts.push(`Norm ${normalizationDb}dB`);
+    if (vocoderModel) parts.push(`Vocoder`);
     return parts.length > 0 ? parts.join(' · ') : 'Off';
-  }, [autoMaster, enableNormalization, normalizationDb]);
-
+  }, [autoMaster, enableNormalization, normalizationDb, getScores, getLrc, vocoderModel]);
   const coverSummary = useMemo(() => {
     return `Strength ${audioCoverStrength} · Noise ${coverNoiseStrength}`;
   }, [audioCoverStrength, coverNoiseStrength]);
@@ -2279,7 +2295,12 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       adapterFolder,
       steeringEnabled,
       steeringLoaded,
-      steeringAlphas
+      steeringAlphas,
+      autoMaster,
+      masteringParams,
+      enableNormalization,
+      normalizationDb,
+      vocoderModel,
     };
 
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -2337,14 +2358,17 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
         if (json.sourceAudioUrl !== undefined) setSourceAudioUrl(json.sourceAudioUrl);
         if (json.referenceAudioTitle !== undefined) setReferenceAudioTitle(json.referenceAudioTitle);
         if (json.sourceAudioTitle !== undefined) setSourceAudioTitle(json.sourceAudioTitle);
+        if (json.autoMaster !== undefined) setAutoMaster(json.autoMaster);
+        if (json.masteringParams !== undefined) setMasteringParams(json.masteringParams);
+        if (json.enableNormalization !== undefined) setEnableNormalization(json.enableNormalization);
+        if (json.normalizationDb !== undefined) setNormalizationDb(json.normalizationDb);
+        if (json.vocoderModel !== undefined) setVocoderModel(json.vocoderModel);
         if (json.audioCodes !== undefined) setAudioCodes(json.audioCodes);
         if (json.repaintingStart !== undefined) setRepaintingStart(json.repaintingStart);
         if (json.repaintingEnd !== undefined) setRepaintingEnd(json.repaintingEnd);
         if (json.instruction !== undefined) setInstruction(json.instruction);
         if (json.audioCoverStrength !== undefined) setAudioCoverStrength(json.audioCoverStrength);
         if (json.coverNoiseStrength !== undefined) setCoverNoiseStrength(json.coverNoiseStrength);
-        if (json.enableNormalization !== undefined) setEnableNormalization(json.enableNormalization);
-        if (json.normalizationDb !== undefined) setNormalizationDb(json.normalizationDb);
         if (json.latentShift !== undefined) setLatentShift(json.latentShift);
         if (json.latentRescale !== undefined) setLatentRescale(json.latentRescale);
         if (json.taskType !== undefined) setTaskType(json.taskType);
@@ -2583,6 +2607,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
             <AudioSelectionSection
               useReferenceAudio={false}
               setUseReferenceAudio={setUseReferenceAudio}
+              referenceAsCover={referenceAsCover}
+              setReferenceAsCover={setReferenceAsCover}
               taskType={taskType}
 
               referenceAudioUrl={referenceAudioUrl}
@@ -2701,6 +2727,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                   <AudioSelectionSection
                     useReferenceAudio={useReferenceAudio}
                     setUseReferenceAudio={setUseReferenceAudio}
+                    referenceAsCover={referenceAsCover}
+                    setReferenceAsCover={setReferenceAsCover}
                     taskType={taskType}
                     referenceAudioUrl={referenceAudioUrl}
                     referenceAudioTitle={referenceAudioTitle}
@@ -2792,7 +2820,9 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                     tempoScale={tempoScale}
                     setTempoScale={setTempoScale}
                     pitchShift={pitchShift}
-                    setPitchShift={setPitchShift}
+                    onPitchShiftChange={setPitchShift}
+                    extractionEngine={extractionEngine}
+                    onExtractionEngineChange={setExtractionEngine as (val: 'essentia'|'librosa')=>void}
                     bpm={bpm}
                     keyScale={keyScale}
                     detectedBpm={detectedBpm}
@@ -2803,6 +2833,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                     setEnableNormalization={setEnableNormalization}
                     normalizationDb={normalizationDb}
                     setNormalizationDb={setNormalizationDb}
+                    vocoderModel={vocoderModel}
+                    setVocoderModel={setVocoderModel}
                     latentShift={latentShift}
                     setLatentShift={setLatentShift}
                     latentRescale={latentRescale}
@@ -3053,7 +3085,9 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                 tempoScale={tempoScale}
                 setTempoScale={setTempoScale}
                 pitchShift={pitchShift}
-                setPitchShift={setPitchShift}
+                onPitchShiftChange={setPitchShift}
+                extractionEngine={extractionEngine}
+                onExtractionEngineChange={setExtractionEngine as (val: 'essentia'|'librosa')=>void}
                 bpm={bpm}
                 keyScale={keyScale}
                 detectedBpm={detectedBpm}
@@ -3064,6 +3098,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                 setEnableNormalization={setEnableNormalization}
                 normalizationDb={normalizationDb}
                 setNormalizationDb={setNormalizationDb}
+                vocoderModel={vocoderModel}
+                setVocoderModel={setVocoderModel}
                 latentShift={latentShift}
                 setLatentShift={setLatentShift}
                 latentRescale={latentRescale}

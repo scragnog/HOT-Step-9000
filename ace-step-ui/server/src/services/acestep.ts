@@ -410,7 +410,7 @@ export interface GenerationParams {
   lmTopK?: number;
   lmTopP?: number;
   lmNegativePrompt?: string;
-  lmBackend?: 'pt' | 'vllm';
+  lmBackend?: 'pt' | 'vllm' | 'custom-vllm';
   lmModel?: string;
 
   // Expert Parameters

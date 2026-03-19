@@ -1803,6 +1803,8 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         non_cover_text_attention_mask: Optional[torch.FloatTensor] = None,
         cfg_interval_start: float = 0.0,
         cfg_interval_end: float = 1.0,
+        guidance_interval_decay: float = 0.0,
+        min_guidance_scale: float = 3.0,
         precomputed_lm_hints_25Hz: Optional[torch.FloatTensor] = None,
         audio_codes: Optional[torch.FloatTensor] = None,
         use_progress_bar: bool = True,
@@ -1811,6 +1813,13 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         timesteps: Optional[torch.Tensor] = None,
         cover_noise_strength: float = 0.0,
         scheduler: str = "linear",
+        # Advanced guidance parameters
+        guidance_scale_text: float = 0.0,
+        guidance_scale_lyric: float = 0.0,
+        apg_momentum: float = 0.0,
+        apg_norm_threshold: float = 2.5,
+        omega_scale: float = 1.0,
+        erg_scale: float = 1.0,
         **kwargs,
     ):
         # Extract step progress callback (passed by handler layer)
@@ -1822,6 +1831,17 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         time_costs = {}
         start_time = time.time()
         total_start_time = start_time
+
+        # Scale text/lyric hidden states for independent guidance control
+        if guidance_scale_text > 0 and diffusion_guidance_sale > 0:
+            text_factor = guidance_scale_text / diffusion_guidance_sale
+            text_hidden_states = text_hidden_states * text_factor
+            logger.info(f"[generate_audio] Text guidance scale: {guidance_scale_text:.1f} (factor: {text_factor:.2f})")
+        if guidance_scale_lyric > 0 and diffusion_guidance_sale > 0:
+            lyric_factor = guidance_scale_lyric / diffusion_guidance_sale
+            lyric_hidden_states = lyric_hidden_states * lyric_factor
+            logger.info(f"[generate_audio] Lyric guidance scale: {guidance_scale_lyric:.1f} (factor: {lyric_factor:.2f})")
+
         encoder_hidden_states, encoder_attention_mask, context_latents = self.prepare_condition(
             text_hidden_states=text_hidden_states,
             text_attention_mask=text_attention_mask,
@@ -1886,7 +1906,15 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         noise = self.prepare_noise(context_latents, seed)
         bsz, device, dtype = context_latents.shape[0], context_latents.device, context_latents.dtype
         past_key_values = EncoderDecoderCache(DynamicCache(), DynamicCache())
-        momentum_buffer = MomentumBuffer()
+        momentum_buffer = MomentumBuffer(momentum=-apg_momentum if apg_momentum > 0 else -0.75)
+        if apg_momentum > 0:
+            logger.info(f"[generate_audio] APG momentum: {-apg_momentum:.2f}")
+        if apg_norm_threshold != 2.5:
+            logger.info(f"[generate_audio] APG norm threshold: {apg_norm_threshold:.1f}")
+        if omega_scale != 1.0:
+            logger.info(f"[generate_audio] Omega scale: {omega_scale:.1f}")
+        if erg_scale != 1.0:
+            logger.info(f"[generate_audio] ERG scale: {erg_scale:.1f}")
         
         # Cover noise initialization: blend noise with src_latents
         if cover_noise_strength > 0.0:
@@ -1922,6 +1950,10 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
             # src_latents
             context_latents = torch.cat([context_latents, context_latents], dim=0)
             attention_mask = torch.cat([attention_mask, attention_mask], dim=0)
+
+        # Scale encoder hidden states for omega_scale (prompt reweighting)
+        if omega_scale != 1.0:
+            encoder_hidden_states = encoder_hidden_states * omega_scale
         
         from acestep.core.generation.solvers import get_solver, VALID_SOLVERS
         from acestep.core.generation.guidance import get_guidance, VALID_GUIDANCE
@@ -1941,7 +1973,8 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         if needs_model_fn:
             def _make_model_fn(decoder, do_cfg, attention_mask, encoder_hs, encoder_am,
                                context_lat, guidance_scale, g_fn, cfg_start, cfg_end,
-                               momentum_buf, bsz_val, device_val, dtype_val):
+                               momentum_buf, bsz_val, device_val, dtype_val,
+                               step_meta=None, decay_val=0.0, min_scale_val=3.0):
                 def model_fn(xt_inner, t_val):
                     x_in = torch.cat([xt_inner, xt_inner], dim=0) if do_cfg else xt_inner
                     t_tensor = t_val * torch.ones((x_in.shape[0],), device=device_val, dtype=dtype_val)
@@ -1956,11 +1989,19 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
                     if do_cfg:
                         p_cond, p_uncond = vt_inner.chunk(2)
                         if apply_cfg:
+                            current_cfg = guidance_scale
+                            if decay_val > 0.0 and step_meta is not None:
+                                progress = step_meta["idx"] / max(step_meta["total"] - 1, 1)
+                                decay_amount = (guidance_scale - min_scale_val) * progress * decay_val
+                                current_cfg = max(min_scale_val, guidance_scale - decay_amount)
+
                             vt_inner = g_fn(
-                                p_cond, p_uncond, guidance_scale,
+                                p_cond, p_uncond, current_cfg,
                                 momentum_buffer=momentum_buf,
                                 disable_momentum=True,
                                 latents=xt_inner, sigma=t_val,
+                                norm_threshold=apg_norm_threshold,
+                                erg_scale=erg_scale,
                             )
                         else:
                             vt_inner = p_cond
@@ -1976,8 +2017,10 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
 
         solver_state = {}
         _switched_to_non_cover = False
+        step_metadata = {"idx": 0, "total": infer_steps}
         with torch.no_grad():
             for step_idx, (t_curr, t_prev) in enumerate(iterator):
+                step_metadata["idx"] = step_idx
                 # Fire step progress callback for UI updates
                 if on_step_callback is not None:
                     on_step_callback(step_idx=step_idx, total_steps=infer_steps)
@@ -1999,6 +2042,7 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
                             encoder_hidden_states, encoder_attention_mask, context_latents,
                             diffusion_guidance_sale, guidance_fn, cfg_interval_start, cfg_interval_end,
                             momentum_buffer, bsz, device, dtype,
+                            step_meta=step_metadata, decay_val=guidance_interval_decay, min_scale_val=min_guidance_scale
                         )
 
                 # Main decoder forward pass
@@ -2023,12 +2067,20 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
                     pred_cond, pred_null_cond = vt.chunk(2)
                     if apply_cfg_guidance:
                         dt_val = (t_curr - t_prev) if isinstance(t_prev, (int, float)) else float(t_curr - t_prev)
+                        current_cfg = diffusion_guidance_sale
+                        if guidance_interval_decay > 0.0:
+                            progress = step_idx / max(infer_steps - 1, 1)
+                            decay_amount = (diffusion_guidance_sale - min_guidance_scale) * progress * guidance_interval_decay
+                            current_cfg = max(min_guidance_scale, diffusion_guidance_sale - decay_amount)
+                            
                         vt = guidance_fn(
-                            pred_cond, pred_null_cond, diffusion_guidance_sale,
+                            pred_cond, pred_null_cond, current_cfg,
                             momentum_buffer=momentum_buffer,
                             latents=xt, sigma=t_curr,
                             dt=dt_val,
                             step_idx=step_idx, total_steps=infer_steps,
+                            norm_threshold=apg_norm_threshold,
+                            erg_scale=erg_scale,
                         )
                     else:
                         vt = pred_cond

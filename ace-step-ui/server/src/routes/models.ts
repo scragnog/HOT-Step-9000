@@ -69,6 +69,16 @@ router.get('/', async (_req, res: Response) => {
     }
 });
 
+// GET /api/models/vocoders - List available vocoders
+router.get('/vocoders', async (_req, res: Response) => {
+    try {
+        const result = await proxyToAceStep('/api/vocoders', 'GET');
+        res.json(result);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
 // GET /api/models/status - Lightweight status check (active model only)
 router.get('/status', async (_req, res: Response) => {
     try {

@@ -71,6 +71,8 @@ class ServiceGenerateExecuteMixin:
         guidance_mode: str,
         cfg_interval_start: float,
         cfg_interval_end: float,
+        guidance_interval_decay: float,
+        min_guidance_scale: float,
         shift: float,
         timesteps: Optional[List[float]],
         use_pag: bool = False,
@@ -79,6 +81,13 @@ class ServiceGenerateExecuteMixin:
         pag_scale: float = 0.2,
         scheduler: str = "linear",
         progress=None,
+        # Advanced guidance parameters
+        guidance_scale_text: float = 0.0,
+        guidance_scale_lyric: float = 0.0,
+        apg_momentum: float = 0.0,
+        apg_norm_threshold: float = 2.5,
+        omega_scale: float = 1.0,
+        erg_scale: float = 1.0,
     ) -> Dict[str, Any]:
         """Build kwargs passed to model generation backends."""
         kwargs = {
@@ -104,6 +113,8 @@ class ServiceGenerateExecuteMixin:
             "guidance_mode": guidance_mode,
             "cfg_interval_start": cfg_interval_start,
             "cfg_interval_end": cfg_interval_end,
+            "guidance_interval_decay": guidance_interval_decay,
+            "min_guidance_scale": min_guidance_scale,
             "shift": shift,
             # PAG (Perturbed-Attention Guidance)
             "use_pag": use_pag,
@@ -111,6 +122,13 @@ class ServiceGenerateExecuteMixin:
             "pag_end": pag_end,
             "pag_scale": pag_scale,
             "scheduler": scheduler,
+            # Advanced guidance parameters
+            "guidance_scale_text": guidance_scale_text,
+            "guidance_scale_lyric": guidance_scale_lyric,
+            "apg_momentum": apg_momentum,
+            "apg_norm_threshold": apg_norm_threshold,
+            "omega_scale": omega_scale,
+            "erg_scale": erg_scale,
         }
         if timesteps is not None:
             kwargs["timesteps"] = torch.tensor(timesteps, dtype=torch.float32, device=self.device)
