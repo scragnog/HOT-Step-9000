@@ -1,11 +1,13 @@
 import React from 'react';
-import { Sparkles, Music2 } from 'lucide-react';
+import { Sparkles, Music2, Mic } from 'lucide-react';
 import { useI18n } from '../../context/I18nContext';
 import { VOCAL_LANGUAGE_KEYS } from '../../utils/constants';
 
 interface AutoWriteSectionProps {
   songDescription: string;
   setSongDescription: (val: string) => void;
+  lyrics: string;
+  setLyrics: (val: string) => void;
   vocalLanguage: string;
   setVocalLanguage: (val: string) => void;
   instrumental: boolean;
@@ -13,13 +15,16 @@ interface AutoWriteSectionProps {
 }
 
 /**
- * The Auto-Write task type section. Replaces Simple Mode.
- * Shows a song description textarea, vocal language selector, and instrumental toggle.
- * The LM will generate lyrics, style, title, BPM, key, and all metadata from the description.
+ * The Auto-Write task type section.
+ * Shows a song description textarea plus — when not instrumental — a lyrics textarea.
+ * The LM generates caption, BPM, key, time signature, and duration from the description.
+ * Lyrics are provided by the user (CoT lyrics generation is not yet implemented).
  */
 export const AutoWriteSection: React.FC<AutoWriteSectionProps> = ({
   songDescription,
   setSongDescription,
+  lyrics,
+  setLyrics,
   vocalLanguage,
   setVocalLanguage,
   instrumental,
@@ -44,16 +49,40 @@ export const AutoWriteSection: React.FC<AutoWriteSectionProps> = ({
             placeholder={instrumental
               ? "e.g. A chill lo-fi instrumental with jazzy piano chords and vinyl crackle..."
               : "e.g. An upbeat electronic pop song about summer nights with catchy synth hooks and dreamy female vocals..."}
-            rows={4}
-            className="w-full resize-y min-h-[80px] bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg p-3 text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-pink-400 dark:focus:border-pink-500 transition-colors"
+            rows={3}
+            className="w-full resize-y min-h-[60px] bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg p-3 text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-pink-400 dark:focus:border-pink-500 transition-colors"
           />
           <p className="text-[10px] text-zinc-400 dark:text-zinc-600 mt-1.5 leading-relaxed">
             {instrumental
-              ? 'The AI will generate style, title, BPM, and all metadata from your description.'
-              : 'The AI will generate lyrics, style, title, BPM, and all metadata from your description. Include vocal style (e.g. "female vocals", "raspy male singer") in your description.'}
+              ? 'The AI will generate style, BPM, key, and all metadata from your description.'
+              : 'Describe the style, mood, and vocal character. The AI will generate the musical arrangement. Include vocal hints (e.g. "female vocals", "raspy male singer").'}
           </p>
         </div>
       </div>
+
+      {/* Lyrics textarea — only when not instrumental */}
+      {!instrumental && (
+        <div className="bg-white dark:bg-suno-card rounded-xl border border-zinc-200 dark:border-white/5 overflow-hidden">
+          <div className="px-3 py-2.5 border-b border-zinc-100 dark:border-white/5 flex items-center gap-2">
+            <Mic size={14} className="text-purple-500" />
+            <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wide">
+              {t('lyrics') || 'Lyrics'}
+            </span>
+          </div>
+          <div className="p-3">
+            <textarea
+              value={lyrics}
+              onChange={(e) => setLyrics(e.target.value)}
+              placeholder={"[Verse]\nYour lyrics here...\n\n[Chorus]\n..."}
+              rows={6}
+              className="w-full resize-y min-h-[100px] bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg p-3 text-sm text-zinc-900 dark:text-white placeholder:text-zinc-400 dark:placeholder:text-zinc-600 focus:outline-none focus:border-purple-400 dark:focus:border-purple-500 transition-colors font-mono"
+            />
+            <p className="text-[10px] text-zinc-400 dark:text-zinc-600 mt-1.5 leading-relaxed">
+              Write your lyrics using structure tags like [Verse], [Chorus], [Bridge]. Leave empty for vocalise/humming.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Quick settings */}
       <div className="bg-white dark:bg-suno-card rounded-xl border border-zinc-200 dark:border-white/5 p-3 space-y-3">

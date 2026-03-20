@@ -2085,7 +2085,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
               ? (isVocalTrack ? lyrics : '')
               : lyrics),
           lyrics: isAutoWrite
-            ? ''
+            ? (instrumental ? '' : lyrics)
             : (taskType === 'extract'
               ? (isVocalTrack ? lyrics : '')
               : lyrics),
@@ -2525,6 +2525,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           <AutoWriteSection
             songDescription={songDescription}
             setSongDescription={setSongDescription}
+            lyrics={lyrics}
+            setLyrics={setLyrics}
             vocalLanguage={vocalLanguage}
             setVocalLanguage={setVocalLanguage}
             instrumental={instrumental}
