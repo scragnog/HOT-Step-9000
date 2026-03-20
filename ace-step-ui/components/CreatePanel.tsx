@@ -2075,17 +2075,10 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
 
         // Auto-Write: use simple mode path — LM generates everything from description
         const isAutoWrite = taskType === 'auto-write';
-        const autoWritePrompt = (() => {
-          if (!isAutoWrite) return undefined;
-          const desc = songDescription.trim();
-          if (!vocalGender) return desc;
-          const genderHint = vocalGender === 'male' ? t('maleVocals') : t('femaleVocals');
-          return desc ? `${desc}\n${genderHint}` : genderHint;
-        })();
 
         onGenerate({
           customMode: !isAutoWrite,
-          songDescription: isAutoWrite ? autoWritePrompt : undefined,
+          songDescription: isAutoWrite ? songDescription.trim() : undefined,
           prompt: isAutoWrite
             ? ''
             : (taskType === 'extract'
@@ -2107,16 +2100,16 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
             ? !isVocalTrack
             : instrumental,
           vocalLanguage,
-          bpm: effectiveBpm,
+          bpm: isAutoWrite ? 0 : effectiveBpm,
           keyScale: effectiveKeyScale,
           timeSignature: taskType === 'extract' ? '' : timeSignature,
-          duration,
+          duration: isAutoWrite ? -1 : duration,
           inferenceSteps: overrides?.inferenceSteps ?? inferenceSteps,
           guidanceScale,
           batchSize,
           randomSeed: randomSeed || i > 0 || currentTrack !== tracksToExtract[0],
           seed: jobSeed,
-          thinking: overrides?.thinking ?? thinking,
+          thinking: isAutoWrite ? true : (overrides?.thinking ?? thinking),
           audioFormat,
           inferMethod,
           scheduler,
@@ -2176,9 +2169,9 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           omegaScale: omegaScale !== 1.0 ? omegaScale : undefined,
           ergScale: ergScale !== 1.0 ? ergScale : undefined,
           customTimesteps: customTimesteps.trim() || undefined,
-          useCotMetas,
-          useCotCaption,
-          useCotLanguage,
+          useCotMetas: isAutoWrite ? false : useCotMetas,
+          useCotCaption: isAutoWrite ? true : useCotCaption,
+          useCotLanguage: isAutoWrite ? true : useCotLanguage,
           autogen,
           constrainedDecodingDebug,
           allowLmBatch,
@@ -2534,12 +2527,6 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
             setSongDescription={setSongDescription}
             vocalLanguage={vocalLanguage}
             setVocalLanguage={setVocalLanguage}
-            vocalGender={vocalGender}
-            setVocalGender={setVocalGender}
-            duration={duration}
-            setDuration={setDuration}
-            bpm={bpm}
-            setBpm={setBpm}
           />
         )}
 
