@@ -278,6 +278,16 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
     console.log('[COVER DEBUG] sourceAudioUrl:', params.sourceAudioUrl);
     console.log('[COVER DEBUG] resolved src_audio_path:', params.sourceAudioUrl ? resolveAudioPath(params.sourceAudioUrl) : 'N/A');
     console.log('[COVER DEBUG] taskType:', params.taskType);
+    console.log('[AUTO-WRITE DEBUG]', {
+      customMode: params.customMode,
+      songDescription: params.songDescription?.substring(0, 80),
+      instrumental: params.instrumental,
+      thinking: params.thinking,
+      useCotCaption: params.useCotCaption,
+      useCotLanguage: params.useCotLanguage,
+      prompt_will_be: params.customMode ? params.style?.substring(0, 80) : (params.songDescription || params.style)?.substring(0, 80),
+      lyrics_will_be: params.instrumental ? '(empty - instrumental)' : (params.lyrics || '').substring(0, 40),
+    });
     const acestepResponse = await fetch(`${config.acestep.apiUrl}/release_task`, {
       method: 'POST',
       headers: {
