@@ -44,7 +44,7 @@ export const TaskTypeSelector: React.FC<TaskTypeSelectorProps> = ({
                     }}
                     className="min-w-0 max-w-[60%] bg-zinc-100 dark:bg-black/30 border border-zinc-200 dark:border-white/10 rounded-lg px-2.5 py-1.5 text-xs font-medium text-zinc-900 dark:text-white focus:outline-none focus:border-pink-500 dark:focus:border-pink-500 transition-colors cursor-pointer [&>option]:bg-white [&>option]:dark:bg-zinc-800 [&>option]:text-zinc-900 [&>option]:dark:text-white"
                 >
-                    <option value="auto-write">Auto-Write ✨</option>
+                    <option value="auto-write">Simple Mode ✨</option>
                     <option value="text2music">{t('textToMusic')}</option>
                     <option value="cover">{t('coverTask')}</option>
                     <option value="repaint">{t('repaintTask')}</option>
