@@ -490,6 +490,11 @@
         }
 
         btnUpdate.addEventListener('click', async () => {
+            // Cancel auto-launch countdown if running
+            if (window._autoLaunchInterval) {
+                clearInterval(window._autoLaunchInterval);
+                window._autoLaunchInterval = null;
+            }
             isUpdating = true;
             btnLaunch.disabled = true;
             btnUpdate.disabled = true;
@@ -621,8 +626,22 @@
                 if (state.backend && !state.apiUp) {
                     btnLaunch.disabled = false;
                     btnUpdate.disabled = false;
-                    btnLaunch.textContent = "Start summoning bangers";
                     btnUpdate.textContent = "Update from GitHub";
+                    // Start auto-launch countdown (10s)
+                    if (!window._autoLaunchStarted) {
+                        window._autoLaunchStarted = true;
+                        window._autoLaunchRemaining = 10;
+                        btnLaunch.textContent = `Start summoning bangers (${window._autoLaunchRemaining}s)`;
+                        window._autoLaunchInterval = setInterval(() => {
+                            window._autoLaunchRemaining--;
+                            if (window._autoLaunchRemaining <= 0) {
+                                clearInterval(window._autoLaunchInterval);
+                                btnLaunch.click();
+                            } else {
+                                btnLaunch.textContent = `Start summoning bangers (${window._autoLaunchRemaining}s)`;
+                            }
+                        }, 1000);
+                    }
                 }
             }
             if (state.backend) { setIcon('i-backend', 'done'); setRow('s-backend', 'done'); }
