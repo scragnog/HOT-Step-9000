@@ -59,11 +59,12 @@ export const AutoWriteSection: React.FC<AutoWriteSectionProps> = ({
       <div className="bg-white dark:bg-suno-card rounded-xl border border-zinc-200 dark:border-white/5 p-3 space-y-3">
         {/* Instrumental toggle */}
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Music2 size={14} className="text-zinc-400" />
-            <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
-              {instrumental ? t('instrumental') : t('withVocals') || 'With Vocals'}
-            </span>
+          <div>
+            <div className="flex items-center gap-2">
+              <Music2 size={14} className="text-zinc-400" />
+              <span className="text-xs font-medium text-zinc-600 dark:text-zinc-300">{t('instrumental')}</span>
+            </div>
+            <p className="text-[10px] text-zinc-400 dark:text-zinc-500 mt-0.5 ml-[22px]">No vocals or lyrics</p>
           </div>
           <button
             type="button"
