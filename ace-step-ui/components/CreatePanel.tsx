@@ -2109,7 +2109,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           batchSize,
           randomSeed: randomSeed || i > 0 || currentTrack !== tracksToExtract[0],
           seed: jobSeed,
-          thinking: isAutoWrite ? true : (overrides?.thinking ?? thinking),
+          thinking: overrides?.thinking ?? thinking,
           audioFormat,
           inferMethod,
           scheduler,
