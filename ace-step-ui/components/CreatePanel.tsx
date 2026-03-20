@@ -2073,19 +2073,35 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
 
         const isVocalTrack = currentTrack === 'vocals' || currentTrack === 'backing_vocals';
 
+        // Auto-Write: use simple mode path — LM generates everything from description
+        const isAutoWrite = taskType === 'auto-write';
+        const autoWritePrompt = (() => {
+          if (!isAutoWrite) return undefined;
+          const desc = songDescription.trim();
+          if (!vocalGender) return desc;
+          const genderHint = vocalGender === 'male' ? t('maleVocals') : t('femaleVocals');
+          return desc ? `${desc}\n${genderHint}` : genderHint;
+        })();
+
         onGenerate({
-          customMode,
-          songDescription: undefined,
-          prompt: taskType === 'extract'
-            ? (isVocalTrack ? lyrics : '')
-            : lyrics,
-          lyrics: taskType === 'extract'
-            ? (isVocalTrack ? lyrics : '')
-            : lyrics,
-          style: taskType === 'extract' ? style : styleWithGender,
-          title: taskType === 'extract'
-            ? `${(currentTrack || 'extract').charAt(0).toUpperCase() + (currentTrack || 'extract').slice(1).replace('_', ' ')}${sourceAudioTitle ? ` - ${sourceAudioTitle}` : ''}`
-            : (bulkCount > 1 ? `${title} (${i + 1})` : title),
+          customMode: !isAutoWrite,
+          songDescription: isAutoWrite ? autoWritePrompt : undefined,
+          prompt: isAutoWrite
+            ? ''
+            : (taskType === 'extract'
+              ? (isVocalTrack ? lyrics : '')
+              : lyrics),
+          lyrics: isAutoWrite
+            ? ''
+            : (taskType === 'extract'
+              ? (isVocalTrack ? lyrics : '')
+              : lyrics),
+          style: isAutoWrite ? '' : (taskType === 'extract' ? style : styleWithGender),
+          title: isAutoWrite
+            ? ''
+            : (taskType === 'extract'
+              ? `${(currentTrack || 'extract').charAt(0).toUpperCase() + (currentTrack || 'extract').slice(1).replace('_', ' ')}${sourceAudioTitle ? ` - ${sourceAudioTitle}` : ''}`
+              : (bulkCount > 1 ? `${title} (${i + 1})` : title)),
           ditModel: selectedModel,
           instrumental: taskType === 'extract'
             ? !isVocalTrack
@@ -2137,7 +2153,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           vocoderModel,
           latentShift,
           latentRescale,
-          taskType,
+          taskType: isAutoWrite ? 'text2music' : taskType,
           useAdg: guidanceMode === 'adg',
           guidanceMode,
           usePag: guidanceMode === 'pag',
@@ -2226,8 +2242,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const handleExportJson = () => {
     const data = {
       model: selectedModel,
-      customMode,
-      songDescription: undefined,
+      customMode: taskType !== 'auto-write',
+      songDescription: taskType === 'auto-write' ? songDescription : undefined,
       prompt: lyrics,
       style,
       title,
