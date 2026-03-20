@@ -15,7 +15,7 @@ interface AutoWriteSectionProps {
 }
 
 /**
- * The Auto-Write task type section.
+ * The Simple Mode task type section.
  * Shows a song description textarea plus — when not instrumental — a lyrics textarea.
  * The LM generates caption, BPM, key, time signature, and duration from the description.
  * Lyrics are provided by the user (CoT lyrics generation is not yet implemented).
