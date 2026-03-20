@@ -11,6 +11,8 @@ interface GenerateFooterProps {
   activeJobCount: number;
   /** Whether the currently selected model is a turbo model (hides presets) */
   isTurboModel: boolean;
+  /** Whether auto-write task type is selected (hides presets — thinking is mandatory) */
+  isAutoWrite?: boolean;
 }
 
 interface PresetButton {
@@ -31,6 +33,7 @@ export const GenerateFooter: React.FC<GenerateFooterProps> = ({
   isAuthenticated,
   activeJobCount,
   isTurboModel: isTurbo,
+  isAutoWrite = false,
 }) => {
   const { t } = useI18n();
   const [elapsedSecs, setElapsedSecs] = useState(0);
@@ -79,8 +82,8 @@ export const GenerateFooter: React.FC<GenerateFooterProps> = ({
   return (
     <div className="p-4 mt-auto sticky bottom-0 bg-zinc-50/95 dark:bg-suno-panel/95 backdrop-blur-sm z-10 border-t border-zinc-200 dark:border-white/5 space-y-3">
 
-      {/* Advanced Summoning Modes accordion — hidden for turbo models */}
-      {!isTurbo && (
+      {/* Advanced Summoning Modes accordion — hidden for turbo models and auto-write */}
+      {!isTurbo && !isAutoWrite && (
         <div className="rounded-xl border border-zinc-200 dark:border-white/5 overflow-hidden">
           <button
             type="button"

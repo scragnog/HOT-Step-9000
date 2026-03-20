@@ -2527,6 +2527,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
             setSongDescription={setSongDescription}
             vocalLanguage={vocalLanguage}
             setVocalLanguage={setVocalLanguage}
+            instrumental={instrumental}
+            setInstrumental={setInstrumental}
           />
         )}
 
@@ -3196,6 +3198,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
         isAuthenticated={isAuthenticated}
         activeJobCount={activeJobCount}
         isTurboModel={isTurboModel(selectedModel)}
+        isAutoWrite={taskType === 'auto-write'}
       />
     </div>
   );
