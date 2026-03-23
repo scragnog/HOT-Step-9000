@@ -1442,7 +1442,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   // Auto-reload persisted adapters into the backend after startup.
   // The backend loses all loaded adapters on restart, but adapterSlots is
   // now persisted via usePersistedState. When the backend becomes available
-  // (fetchedModels populated), we reload each persisted adapter.
+  // (fetchedModels populated), we check if the backend already has adapters
+  // loaded (browser refresh) or needs them reloaded (server restart).
   const adapterAutoReloadDoneRef = useRef(false);
   useEffect(() => {
     if (adapterAutoReloadDoneRef.current) return;
@@ -1456,6 +1457,28 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     const slotsToReload = [...adapterSlots];
 
     (async () => {
+      // First, check if the backend already has adapters loaded.
+      // On a browser refresh (server still running), adapters are already in
+      // memory — reloading them would corrupt tensors during active generations.
+      try {
+        const backendStatus = await generateApi.getLoraStatus(token);
+        const backendHasAdapters = backendStatus?.advanced?.slots
+          && backendStatus.advanced.slots.length > 0;
+
+        if (backendHasAdapters) {
+          // Backend already has adapters — just sync frontend state from backend
+          console.log('[AutoReload] Backend already has adapters loaded, syncing state (skipping reload)');
+          setAdapterSlots(backendStatus.advanced!.slots);
+          setLoraLoaded(true);
+          setAdapterTriggerWord((backendStatus as any).trigger_word || '');
+          return;
+        }
+      } catch {
+        // Can't reach backend — proceed with reload attempt anyway
+      }
+
+      // Backend has no adapters — this is a server restart, reload them
+      console.log('[AutoReload] No adapters in backend, restoring from previous session...');
       setIsLoraLoading(true);
       setAdapterLoadingMessage('Restoring adapters from previous session...');
       // Clear slots so they get rebuilt from fresh backend status
