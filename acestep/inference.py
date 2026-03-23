@@ -809,6 +809,38 @@ def generate_music(
             # - "dit": generates only metas (single phase)
             infer_type = "llm_dit" if need_audio_codes and params.thinking else "dit"
 
+            # ── Pre-LM duration estimation for Custom VLLM + thinking ────────
+            # When infer_type is "llm_dit", the LM generates *audio codes*
+            # constrained to `target_duration` in this call.  Custom VLLM's
+            # CausalTransformer produces systematically wrong duration estimates
+            # before the codes are generated, so if operating in thinking mode
+            # with custom-vllm we must override `audio_duration` NOW — the
+            # post-LM fallback block runs too late (codes already baked).
+            is_custom_vllm = (
+                llm_handler is not None
+                and getattr(llm_handler, 'llm_backend', '') == 'custom-vllm'
+            )
+            user_wants_auto_duration = (params.duration is None or params.duration <= 0)
+            if (
+                is_custom_vllm
+                and user_wants_auto_duration
+                and infer_type == "llm_dit"
+                and (audio_duration is None or float(audio_duration or 0) <= 0)
+            ):
+                pre_estimated = _estimate_duration_from_lyrics(
+                    lyrics=params.lyrics or "",
+                    bpm=float(bpm) if bpm else None,
+                )
+                if pre_estimated is not None:
+                    logger.info(
+                        f"[custom-vllm pre-LM duration] Estimating duration from lyrics: "
+                        f"{pre_estimated:.0f}s — passing as target_duration to constrain code generation"
+                    )
+                    audio_duration = int(pre_estimated)
+                    # Also seed user_metadata so the LM metadata phase uses this duration
+                    user_metadata['duration'] = int(pre_estimated)
+                    user_metadata_to_pass = user_metadata
+
             # Use chunk size from config, or default to batch_size if not set
             max_inference_batch_size = int(config.lm_batch_chunk_size) if config.lm_batch_chunk_size > 0 else actual_batch_size
             num_chunks = math.ceil(actual_batch_size / max_inference_batch_size)
@@ -848,6 +880,7 @@ def generate_music(
                     batch_size=chunk_size,
                     seeds=chunk_seeds,
                     progress=progress,
+
                 )
 
                 # Check if LM generation failed
