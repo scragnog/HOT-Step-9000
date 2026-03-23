@@ -1420,4 +1420,44 @@ router.post('/format', authMiddleware, async (req: AuthenticatedRequest, res: Re
   }
 });
 
+// ---- Mastering proxy ----
+// Proxies mastering requests to the Python API, resolving /audio/ URLs to
+// filesystem paths so matchering reference files are accessible to Python.
+router.post('/mastering/apply', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const { audio_path, mastering_params } = req.body;
+    if (!audio_path) {
+      return res.status(400).json({ error: 'audio_path is required' });
+    }
+
+    // Resolve paths for Python
+    const resolvedAudioPath = resolveAudioPath(audio_path);
+    const resolvedParams = { ...mastering_params };
+    if (resolvedParams.reference_file) {
+      resolvedParams.reference_file = resolveAudioPath(resolvedParams.reference_file);
+    }
+
+    const pythonApiBase = config.acestep.apiUrl;
+    const resp = await fetch(`${pythonApiBase}/v1/mastering/apply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        audio_path: resolvedAudioPath,
+        mastering_params: resolvedParams,
+      }),
+    });
+
+    if (!resp.ok) {
+      const errText = await resp.text();
+      return res.status(resp.status).json({ error: errText });
+    }
+
+    const data = await resp.json();
+    res.json(data);
+  } catch (error) {
+    console.error('[Mastering Proxy] Error:', error);
+    res.status(500).json({ error: (error as Error).message });
+  }
+});
+
 export default router;

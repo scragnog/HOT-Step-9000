@@ -2305,16 +2305,25 @@ function AppContent() {
         isOpen={showRemasterConsole}
         onClose={() => { setShowRemasterConsole(false); setRemasterSong(null); }}
         currentParams={remasterSong?.generationParams?.masteringParams || null}
+        onUploadReference={async (file: File) => {
+          if (!token) throw new Error('Please sign in to upload audio');
+          const result = await generateApi.uploadAudio(file, token);
+          return result.url;
+        }}
         onParamsChange={async (params) => {
           if (!remasterSong) return;
-          const originalUrl = remasterSong.generationParams?.originalAudioUrl;
-          if (!originalUrl) { showToast('No original audio available for re-mastering', 'error'); return; }
+          // Use original audio if available (already mastered), otherwise use current audioUrl
+          const originalUrl = remasterSong.generationParams?.originalAudioUrl || remasterSong.audioUrl;
+          if (!originalUrl) { showToast('No audio available for re-mastering', 'error'); return; }
           try {
-            showToast('Re-mastering...', 'info');
-            const PYTHON_API = `http://${window.location.hostname}:8001`;
-            const resp = await fetch(`${PYTHON_API}/v1/mastering/apply`, {
+            showToast(params.mode === 'matchering' ? 'Matchering in progress…' : 'Re-mastering...', 'info');
+            // Route through Node proxy for path resolution (matchering reference_file)
+            const resp = await fetch('/api/generate/mastering/apply', {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: {
+                'Content-Type': 'application/json',
+                ...(token ? { Authorization: `Bearer ${token}` } : {}),
+              },
               body: JSON.stringify({ audio_path: originalUrl, mastering_params: params }),
             });
             if (!resp.ok) throw new Error(`Re-master failed: ${resp.status}`);
@@ -2324,9 +2333,10 @@ function AppContent() {
             const outputPath = data.output_path as string;
             // Build audio URL for the node server
             const audioUrl = `/audio/${outputPath.split(/\/audio\/|\\audio\\|\\audio\//).pop() || ''}`;
+            const suffix = params.mode === 'matchering' ? 'Matchered' : 'Remastered';
             if (token) {
               const newSong = await songsApi.createSong({
-                title: `${remasterSong.title} (Remastered)`,
+                title: `${remasterSong.title} (${suffix})`,
                 lyrics: remasterSong.lyrics,
                 style: remasterSong.style,
                 tags: remasterSong.tags,
@@ -2340,9 +2350,9 @@ function AppContent() {
                   masteringParams: params,
                 },
               } as any, token);
-              showToast(`Re-mastered! New track: ${newSong.song.title}`, 'success');
+              showToast(`${suffix}! New track: ${newSong.song.title}`, 'success');
             } else {
-              showToast(`Re-mastered! Output: ${outputPath}`, 'success');
+              showToast(`${suffix}! Output: ${outputPath}`, 'success');
             }
             refreshSongsList();
             setShowRemasterConsole(false);

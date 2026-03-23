@@ -194,6 +194,7 @@ interface MasteringConsoleModalProps {
     onClose: () => void;
     onParamsChange: (params: MasteringParams) => void;
     currentParams: MasteringParams | null;
+    onUploadReference?: (file: File) => Promise<string>;
 }
 
 // ---- Main Component ----
@@ -203,6 +204,7 @@ export const MasteringConsoleModal: React.FC<MasteringConsoleModalProps> = ({
     onClose,
     onParamsChange,
     currentParams,
+    onUploadReference,
 }) => {
     const [presets, setPresets] = useState<MasteringPreset[]>([]);
     const [selectedPresetId, setSelectedPresetId] = useState<string>('default');
@@ -211,6 +213,11 @@ export const MasteringConsoleModal: React.FC<MasteringConsoleModalProps> = ({
     const [saveDialogOpen, setSaveDialogOpen] = useState(false);
     const [saveName, setSaveName] = useState('');
     const [dirty, setDirty] = useState(false);
+    const [masteringMode, setMasteringMode] = useState<'builtin' | 'matchering'>('builtin');
+    const [referenceFile, setReferenceFile] = useState<string>('');
+    const [referenceName, setReferenceName] = useState<string>('');
+    const [stemMatchering, setStemMatchering] = useState(false);
+    const [uploading, setUploading] = useState(false);
 
     // Load presets on open
     useEffect(() => {
@@ -251,11 +258,30 @@ export const MasteringConsoleModal: React.FC<MasteringConsoleModalProps> = ({
         });
     }, []);
 
+    // Reset matchering state when modal opens
+    useEffect(() => {
+        if (isOpen) {
+            const mode = currentParams?.mode === 'matchering' ? 'matchering' : 'builtin';
+            setMasteringMode(mode);
+            setReferenceFile(currentParams?.reference_file || '');
+            setReferenceName(currentParams?.reference_name || '');
+            setStemMatchering(currentParams?.stem_matchering || false);
+        }
+    }, [isOpen]);
+
     const handleApply = useCallback(() => {
-        onParamsChange(params);
-        localStorage.setItem('globalMasteringParams', JSON.stringify(params));
+        const finalParams = masteringMode === 'matchering'
+            ? {
+                mode: 'matchering' as const,
+                reference_file: referenceFile,
+                reference_name: referenceName,
+                stem_matchering: stemMatchering,
+            }
+            : { ...params, mode: 'builtin' as const };
+        onParamsChange(finalParams);
+        localStorage.setItem('globalMasteringParams', JSON.stringify(finalParams));
         onClose();
-    }, [params, onParamsChange, onClose]);
+    }, [params, masteringMode, referenceFile, referenceName, stemMatchering, onParamsChange, onClose]);
 
     const handleReset = useCallback(() => {
         const defaultPreset = presets.find(p => p.id === 'default');
@@ -347,6 +373,111 @@ export const MasteringConsoleModal: React.FC<MasteringConsoleModalProps> = ({
                         </div>
                     ) : (
                         <>
+                            {/* Mastering Method Selector */}
+                            <div className="space-y-2">
+                                <label className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-wider">Mastering Method</label>
+                                <div className="flex bg-zinc-200 dark:bg-zinc-800 rounded-lg p-0.5">
+                                    <button
+                                        onClick={() => setMasteringMode('builtin')}
+                                        className={`flex-1 px-3 py-2 text-xs font-bold rounded-md transition-colors ${masteringMode === 'builtin' ? 'bg-white dark:bg-zinc-600 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
+                                    >
+                                        🎛️ Built-in (Parametric)
+                                    </button>
+                                    <button
+                                        onClick={() => setMasteringMode('matchering')}
+                                        className={`flex-1 px-3 py-2 text-xs font-bold rounded-md transition-colors ${masteringMode === 'matchering' ? 'bg-white dark:bg-zinc-600 text-zinc-900 dark:text-white shadow-sm' : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'}`}
+                                    >
+                                        🎯 Matchering (Reference)
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Matchering Mode */}
+                            {masteringMode === 'matchering' && (
+                                <div className="space-y-3 p-4 rounded-xl bg-gradient-to-br from-pink-50 to-purple-50 dark:from-pink-900/10 dark:to-purple-900/10 border border-pink-200 dark:border-pink-500/20">
+                                    <div className="text-xs text-zinc-600 dark:text-zinc-400">
+                                        Upload a reference track to match its EQ, dynamics, and loudness characteristics automatically.
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <input
+                                            type="file"
+                                            accept="audio/*"
+                                            id="remaster-matchering-upload"
+                                            className="hidden"
+                                            onChange={async (e) => {
+                                                const file = e.target.files?.[0];
+                                                if (file && onUploadReference) {
+                                                    try {
+                                                        setUploading(true);
+                                                        const url = await onUploadReference(file);
+                                                        setReferenceFile(url);
+                                                        setReferenceName(file.name);
+                                                        setDirty(true);
+                                                    } catch (err) {
+                                                        console.error('Failed to upload matchering ref:', err);
+                                                    } finally {
+                                                        setUploading(false);
+                                                    }
+                                                }
+                                                e.target.value = '';
+                                            }}
+                                        />
+                                        <label
+                                            htmlFor="remaster-matchering-upload"
+                                            className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-lg border cursor-pointer transition-all ${uploading
+                                                ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-400 border-zinc-200 dark:border-white/10 cursor-wait'
+                                                : 'bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 border-zinc-200 dark:border-white/10 hover:border-pink-400 dark:hover:border-pink-500/50 hover:text-pink-600 dark:hover:text-pink-400 hover:shadow-md'
+                                            }`}
+                                        >
+                                            {uploading ? (
+                                                <><span className="w-3 h-3 border-2 border-zinc-400 border-t-transparent rounded-full animate-spin" /> Uploading...</>
+                                            ) : (
+                                                <>📁 Upload Reference Track</>
+                                            )}
+                                        </label>
+                                        {referenceFile && (
+                                            <div className="flex-1 flex items-center gap-2 min-w-0">
+                                                <span className="truncate text-xs text-pink-600 dark:text-pink-400 font-semibold">
+                                                    ✓ {referenceName || 'Reference loaded'}
+                                                </span>
+                                                <button
+                                                    onClick={() => { setReferenceFile(''); setReferenceName(''); setDirty(true); }}
+                                                    className="flex-shrink-0 p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-900/20 text-zinc-400 hover:text-red-500 transition-colors"
+                                                    title="Remove reference"
+                                                >
+                                                    <X size={12} />
+                                                </button>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Stem Matchering toggle */}
+                                    {referenceFile && (
+                                        <div className="flex items-center justify-between py-2 mt-1 border-t border-pink-200 dark:border-pink-500/20">
+                                            <div className="flex-1">
+                                                <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">Stem Matchering</span>
+                                                <p className="text-[10px] text-zinc-500 dark:text-zinc-400">Separate both tracks into stems, match per-stem, then recombine. Better tonal fidelity, longer processing.</p>
+                                            </div>
+                                            <button
+                                                onClick={() => { setStemMatchering(!stemMatchering); setDirty(true); }}
+                                                className={`w-10 h-5 rounded-full flex items-center transition-colors duration-200 px-0.5 border ${stemMatchering ? 'bg-pink-600 border-pink-700' : 'bg-zinc-300 dark:bg-black/40 border-zinc-200 dark:border-white/5'}`}
+                                            >
+                                                <div className={`w-4 h-4 rounded-full bg-white transform transition-transform duration-200 shadow-sm ${stemMatchering ? 'translate-x-5' : 'translate-x-0'}`} />
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {!referenceFile && !uploading && (
+                                        <div className="text-[10px] text-amber-600 dark:text-amber-400 font-medium">
+                                            ⚠️ A reference track is required for matchering.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
+
+                            {/* Built-in Parametric Controls */}
+                            {masteringMode === 'builtin' && (
+                                <>
                             {/* Presets */}
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between">
@@ -522,6 +653,8 @@ export const MasteringConsoleModal: React.FC<MasteringConsoleModalProps> = ({
                                     color="from-rose-500 to-red-500"
                                 />
                             </Section>
+                                </>  
+                            )}
                         </>
                     )}
                 </div>
@@ -537,9 +670,10 @@ export const MasteringConsoleModal: React.FC<MasteringConsoleModalProps> = ({
                     <div className="flex-1" />
                     <button
                         onClick={handleApply}
-                        className="px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold text-sm shadow-lg hover:shadow-xl transition-all flex items-center gap-2"
+                        disabled={masteringMode === 'matchering' && !referenceFile}
+                        className={`px-6 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold text-sm shadow-lg hover:shadow-xl transition-all flex items-center gap-2 ${masteringMode === 'matchering' && !referenceFile ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
-                        <Save size={14} /> Apply
+                        <Save size={14} /> {masteringMode === 'matchering' ? 'Apply Matchering' : 'Apply'}
                     </button>
                 </div>
             </div>

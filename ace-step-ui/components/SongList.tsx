@@ -1185,6 +1185,7 @@ const SongItem: React.FC<SongItemProps> = ({
                                     onCoverSong={() => onCoverSong?.()}
                                     onUpscaleToHQ={onUpscaleToHQ}
                                     onDownloadFormat={() => onDownloadFormat?.()}
+                                    onRemaster={onOpenRemaster}
                                 />
                             </div>
                         </div>

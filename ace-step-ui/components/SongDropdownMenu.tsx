@@ -35,6 +35,7 @@ interface SongDropdownMenuProps {
     onUseAsReference?: () => void;
     onCoverSong?: () => void;
     onUpscaleToHQ?: () => void;
+    onRemaster?: () => void;
 }
 
 interface MenuItemProps {
@@ -82,7 +83,8 @@ export const SongDropdownMenu: React.FC<SongDropdownMenuProps> = ({
     onDelete,
     onUseAsReference,
     onCoverSong,
-    onUpscaleToHQ
+    onUpscaleToHQ,
+    onRemaster
 }) => {
     const { t } = useI18n();
     const menuRef = useRef<HTMLDivElement>(null);
@@ -192,6 +194,14 @@ export const SongDropdownMenu: React.FC<SongDropdownMenuProps> = ({
                     icon={<ArrowUpCircle size={14} />}
                     label={t('upscaleToHQ') || 'Upscale to HQ'}
                     onClick={() => handleAction(onUpscaleToHQ)}
+                />
+            )}
+            {onRemaster && (
+                <MenuItem
+                    icon={<Wand2 size={14} />}
+                    label="Remaster"
+                    onClick={() => handleAction(onRemaster)}
+                    disabled={!song.audioUrl}
                 />
             )}
             {onReusePrompt && (

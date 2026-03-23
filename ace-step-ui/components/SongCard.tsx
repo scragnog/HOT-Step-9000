@@ -452,6 +452,7 @@ export const SongCard: React.FC<SongCardProps> = ({
                                     onCoverSong={() => onCoverSong?.()}
                                     onUpscaleToHQ={onUpscaleToHQ}
                                     onDownloadFormat={() => onDownloadFormat?.()}
+                                    onRemaster={onOpenRemaster}
                                 />
                             </div>
                         </div>

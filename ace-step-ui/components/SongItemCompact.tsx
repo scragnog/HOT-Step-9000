@@ -265,6 +265,7 @@ export const SongItemCompact: React.FC<SongItemCompactProps> = ({
                             onCoverSong={() => onCoverSong?.()}
                             onUpscaleToHQ={onUpscaleToHQ}
                             onDownloadFormat={() => onDownloadFormat?.()}
+                            onRemaster={onOpenRemaster}
                         />
                     </div>
                 )}
