@@ -8,6 +8,7 @@ backward-compatible Gradio UI support.
 
 import math
 import os
+import re
 import tempfile
 from typing import Optional, Union, List, Dict, Any, Tuple
 from dataclasses import dataclass, field, asdict
@@ -615,6 +616,56 @@ def _run_stem_matchering(
     return combined
 
 
+def _estimate_duration_from_lyrics(
+    lyrics: str,
+    bpm: Optional[float] = None,
+    instrumental_overhead: float = 0.30,
+) -> Optional[float]:
+    """Estimate song duration from lyrics word count and BPM.
+
+    Used as a fallback when the LM produces unreasonable duration values
+    (e.g. Custom VLLM mode systematically underestimates duration).
+
+    Formula:
+        wpm = 50 + (bpm / 4)           # BPM-adjusted words-per-minute
+        singing_sec = (words / wpm) * 60
+        total = singing_sec * (1 + instrumental_overhead)
+
+    Args:
+        lyrics: Raw lyrics text (may contain section headers like [Verse 1]).
+        bpm: Beats per minute. Defaults to 120 if None.
+        instrumental_overhead: Extra fraction for intros/outros/breaks (default 0.30 = 30%).
+
+    Returns:
+        Estimated duration in seconds, or None if lyrics are empty.
+    """
+    if not lyrics or not lyrics.strip():
+        return None
+
+    # Strip section headers like [Verse 1], [Chorus], [Bridge], etc.
+    cleaned = re.sub(r'\[.*?\]', '', lyrics)
+    # Count words (split on whitespace)
+    words = cleaned.split()
+    word_count = len(words)
+
+    if word_count == 0:
+        return None
+
+    # BPM-adjusted singing rate:
+    #   Slower BPM → slower delivery, faster BPM → faster delivery
+    #   At 120 BPM: ~80 wpm, at 192 BPM: ~98 wpm, at 60 BPM: ~65 wpm
+    effective_bpm = bpm if bpm and bpm > 0 else 120.0
+    wpm = 50.0 + (effective_bpm / 4.0)
+
+    singing_sec = (word_count / wpm) * 60.0
+    total_sec = singing_sec * (1.0 + instrumental_overhead)
+
+    # Clamp to sensible bounds
+    total_sec = max(30.0, min(total_sec, 600.0))
+
+    return total_sec
+
+
 @_get_spaces_gpu_decorator(duration=180)
 def generate_music(
     dit_handler,
@@ -875,6 +926,35 @@ def generate_music(
                     params.cot_caption = caption
                 if not params.lyrics:
                     params.cot_lyrics = lyrics
+
+            # ── Custom VLLM duration fallback ──────────────────────────────
+            # Custom VLLM's CausalTransformer produces systematically shorter
+            # duration values than nanovllm / PyTorch (~1:05 vs ~2:50 for the
+            # same lyrics).  When the user selected "Auto" duration (None),
+            # validate the LM's estimate against a lyrics-based calculation
+            # and override if unreasonably short.
+            if (
+                llm_handler is not None
+                and getattr(llm_handler, 'llm_backend', '') == 'custom-vllm'
+                and params.duration is None  # user selected "Auto"
+                and audio_duration is not None
+            ):
+                estimated = _estimate_duration_from_lyrics(
+                    lyrics=params.lyrics or "",
+                    bpm=float(bpm) if bpm else None,
+                )
+                if estimated is not None:
+                    lm_dur = float(audio_duration)
+                    # Override if LM duration is less than 60% of the estimate
+                    if lm_dur < estimated * 0.60:
+                        logger.info(
+                            f"[custom-vllm duration fallback] LM duration {lm_dur:.0f}s is "
+                            f"too short vs lyrics estimate {estimated:.0f}s — overriding "
+                            f"to {int(estimated)}s"
+                        )
+                        audio_duration = int(estimated)
+                        if not params.duration:
+                            params.cot_duration = audio_duration
 
             # set cot caption and language if needed
             if params.use_cot_caption:
