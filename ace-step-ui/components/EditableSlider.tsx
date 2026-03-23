@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 
 interface EditableSliderProps {
   label: string;
@@ -7,6 +7,16 @@ interface EditableSliderProps {
   max: number;
   step: number;
   onChange: (value: number) => void;
+  /**
+   * Called only when the user commits a value (pointer release on slider,
+   * Enter/blur on text input).  When provided, `onChange` is NOT called
+   * during slider drag — the component manages its own visual state
+   * internally and fires this callback once on release.
+   *
+   * Use this for expensive operations (e.g. API calls that trigger
+   * backend weight recomputation).
+   */
+  onChangeCommitted?: (value: number) => void;
   formatDisplay?: (value: number) => string;
   helpText?: string;
   tooltip?: string;
@@ -23,6 +33,7 @@ export const EditableSlider: React.FC<EditableSliderProps> = ({
   max,
   step,
   onChange,
+  onChangeCommitted,
   formatDisplay,
   helpText,
   tooltip,
@@ -33,6 +44,13 @@ export const EditableSlider: React.FC<EditableSliderProps> = ({
 }) => {
   const [inputValue, setInputValue] = useState(value.toString());
   const [isEditing, setIsEditing] = useState(false);
+
+  // Internal drag state — only used when onChangeCommitted is provided
+  const [dragValue, setDragValue] = useState<number | null>(null);
+  const isDragging = useRef(false);
+
+  // The value used for all visual rendering (fill bar, thumb, display text)
+  const effectiveValue = dragValue ?? value;
 
   useEffect(() => {
     if (!isEditing) {
@@ -49,7 +67,8 @@ export const EditableSlider: React.FC<EditableSliderProps> = ({
     const numValue = parseFloat(inputValue);
     if (!isNaN(numValue)) {
       const clampedValue = Math.max(min, Math.min(max, numValue));
-      onChange(clampedValue);
+      // Use onChangeCommitted for text input commits too
+      (onChangeCommitted || onChange)(clampedValue);
       setInputValue(clampedValue.toString());
     } else {
       setInputValue(value.toString());
@@ -65,7 +84,27 @@ export const EditableSlider: React.FC<EditableSliderProps> = ({
     }
   };
 
-  const displayValue = formatDisplay ? formatDisplay(value) : (value === min && autoLabel ? autoLabel : value.toString());
+  const handleRangeChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (disabled) return;
+    const v = Number(e.target.value);
+    if (onChangeCommitted) {
+      // Committed mode: update local drag state only, don't call parent
+      setDragValue(v);
+      isDragging.current = true;
+    } else {
+      onChange(v);
+    }
+  };
+
+  const handleRangeCommit = () => {
+    if (onChangeCommitted && isDragging.current && dragValue !== null) {
+      onChangeCommitted(dragValue);
+      setDragValue(null);
+      isDragging.current = false;
+    }
+  };
+
+  const displayValue = formatDisplay ? formatDisplay(effectiveValue) : (effectiveValue === min && autoLabel ? autoLabel : effectiveValue.toString());
 
   return (
     <div className={`space-y-2 ${disabled ? 'opacity-50' : ''}`}>
@@ -107,18 +146,20 @@ export const EditableSlider: React.FC<EditableSliderProps> = ({
           min={min}
           max={max}
           step={step}
-          value={value}
-          onChange={(e) => !disabled && onChange(Number(e.target.value))}
+          value={effectiveValue}
+          onChange={handleRangeChange}
+          onPointerUp={handleRangeCommit}
+          onTouchEnd={handleRangeCommit}
           className={`absolute inset-0 w-full h-full opacity-0 ${disabled ? 'cursor-not-allowed' : 'cursor-pointer'}`}
           disabled={disabled}
         />
         <div
           className="absolute top-0 left-0 h-full bg-gradient-to-r from-pink-400 to-rose-500 dark:from-pink-500 dark:to-rose-600 rounded-full pointer-events-none transition-all duration-150"
-          style={{ width: `${Math.max(0, Math.min(100, ((value - min) / (max - min)) * 100))}%` }}
+          style={{ width: `${Math.max(0, Math.min(100, ((effectiveValue - min) / (max - min)) * 100))}%` }}
         />
         <div
           className="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white dark:bg-zinc-200 rounded-full shadow-md border-2 border-pink-500 pointer-events-none transition-all duration-150"
-          style={{ left: `clamp(0px, calc(${((value - min) / (max - min)) * 100}% - 8px), calc(100% - 16px))` }}
+          style={{ left: `clamp(0px, calc(${((effectiveValue - min) / (max - min)) * 100}% - 8px), calc(100% - 16px))` }}
         />
       </div>
       {(disabled && disabledReason) ? (
