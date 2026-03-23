@@ -222,6 +222,36 @@ if exist "checkpoints\music_vocoder\diffusion_pytorch_model.safetensors" (
 echo.
 
 :: -------------------------------------------------------------------
+:: 5c. Optional: Download SDXL Turbo (AI Cover Art)
+:: -------------------------------------------------------------------
+echo  ============================================================
+echo    Optional: AI Cover Art Model (SDXL Turbo)
+echo  ============================================================
+echo.
+echo    SDXL Turbo generates relevant album cover art after each
+echo    song generation. You can enable this in Settings.
+echo    Size: ~3.5 GB
+echo.
+
+set /p COVERART_CHOICE="  Download AI cover art model? [Y/n] (default=n): "
+if "%COVERART_CHOICE%"=="" set COVERART_CHOICE=n
+if /i "!COVERART_CHOICE!"=="Y" (
+    echo.
+    echo  Downloading SDXL Turbo from HuggingFace...
+    python -c "from huggingface_hub import snapshot_download; snapshot_download('stabilityai/sdxl-turbo', variant='fp16')"
+    if errorlevel 1 (
+        echo  WARNING: Failed to download SDXL Turbo model.
+        echo  It will be downloaded automatically on first use.
+    ) else (
+        echo  SDXL Turbo model downloaded successfully.
+    )
+) else (
+    echo  Skipping SDXL Turbo download. It will auto-download on first use
+    echo  if you enable AI Cover Art in Settings.
+)
+echo.
+
+:: -------------------------------------------------------------------
 :: 6. Install UI dependencies (Node.js / npm)
 :: -------------------------------------------------------------------
 echo  [6/6] Setting up React UI...

@@ -53,6 +53,7 @@ dependencies = [
     "pyloudnorm",
     "audio-separator",
     "onnxruntime",
+    "Pillow",
     "psutil>=5.9.0",
     "huggingface_hub[hf_xet]",
     "xxhash",

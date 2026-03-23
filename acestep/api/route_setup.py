@@ -25,6 +25,7 @@ from acestep.api.http.steering_routes import register_steering_routes
 from acestep.api.http.stems_routes import register_stems_routes
 from acestep.api.http.system_routes import register_system_routes
 from acestep.api.http.mastering_routes import register_mastering_routes
+from acestep.api.http.cover_art_routes import register_cover_art_routes
 from acestep.openrouter_adapter import create_openrouter_router
 
 
@@ -201,6 +202,11 @@ def configure_api_routes(
     )
 
     register_mastering_routes(
+        app=app,
+        get_project_root=get_project_root,
+    )
+
+    register_cover_art_routes(
         app=app,
         get_project_root=get_project_root,
     )
