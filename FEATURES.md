@@ -1038,3 +1038,45 @@ The ADaMoSHiFiGANV1 model is available from the official ACE-Step repository:
 - **Files:** `config.json` (940 B) + `diffusion_pytorch_model.safetensors` (206 MB)
 - **Location:** `checkpoints/music_vocoder/`
 
+---
+
+## AI Cover Art
+
+Optional AI-generated album artwork using SDXL Turbo. When enabled in Settings, each generated song receives a unique 512×512 cover image based on its title, style, and lyrics — generated locally on your GPU after audio completes. Failures are non-fatal; songs are always saved regardless of whether cover art generation succeeds.
+
+### What's included
+
+| File | Description |
+|------|-------------|
+| `acestep/core/cover_art.py` | `CoverArtGenerator` class — lazy-loads SDXL Turbo, builds prompts from song metadata, generates 512×512 WebP images, CUDA OOM → CPU fallback, auto-unloads model to free VRAM |
+| `acestep/api/http/cover_art_routes.py` | `POST /v1/cover_art/generate` endpoint — accepts song metadata, runs generation in thread executor, returns URL path |
+| `acestep/api/route_setup.py` | Registers cover art routes |
+| `acestep/api/http/audio_route.py` | Added `.webp` to allowed media types |
+| `ace-step-ui/server/src/routes/generate.ts` | Post-INSERT cover art call — downloads generated image, uploads to storage, updates `cover_url` in DB (non-fatal try/catch) |
+| `ace-step-ui/services/api.ts` | `generateCoverArt` field in `GenerationParams` interface |
+| `ace-step-ui/App.tsx` | Reads `generate_cover_art` from `localStorage`, passes to generation params, uses `cover_url` from DB when available |
+| `ace-step-ui/components/SettingsModal.tsx` | "AI Cover Art" toggle in the Generation section |
+| `install.bat` | Optional SDXL Turbo model download during installation |
+| `requirements.txt`, `pyproject.toml` | Added `Pillow` dependency |
+
+### How it works
+
+1. **Enable:** Open **Settings → Generation** and toggle **AI Cover Art** on (off by default)
+2. **Generation Flow:** After a song's audio is generated and saved to the database, the Node server calls `POST /v1/cover_art/generate` on the Python backend with the song's title, style, and lyrics
+3. **Prompt Building:** The generator extracts the first 3 style phrases (genre/mood keywords), cleans the title (strips artist prefixes), and pulls 4 theme keywords from the lyrics — kept under CLIP's 77-token limit
+4. **Image Generation:** SDXL Turbo generates a 512×512 image in a single inference step (~0.3s on a modern GPU), saved as WebP
+5. **VRAM Management:** The SDXL Turbo pipeline is loaded on demand and unloaded immediately after generation to free ~3.5GB of VRAM for subsequent audio generation
+6. **CPU Fallback:** If CUDA runs out of memory, the generator automatically retries on CPU
+7. **Non-Fatal:** Any failure during cover art generation is caught and logged — the song is always saved successfully regardless
+8. **Display:** Songs with AI-generated covers display their custom artwork instead of the default stock photos
+
+### Model
+
+- **Model:** [`stabilityai/sdxl-turbo`](https://huggingface.co/stabilityai/sdxl-turbo) (~3.5 GB)
+- **Auto-download:** Downloaded automatically on first use if not installed via `install.bat`
+- **Location:** Hugging Face cache (`~/.cache/huggingface/`)
+
+### Dependencies
+
+- **Required:** `Pillow` (image handling), `diffusers` (already present for audio generation)
+- **Optional:** CUDA GPU (falls back to CPU if unavailable or OOM)
