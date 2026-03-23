@@ -945,11 +945,20 @@ def generate_music(
                 )
                 if estimated is not None:
                     lm_dur = float(audio_duration)
-                    # Override if LM duration is less than 60% of the estimate
+                    # Override if LM duration is unreasonably short or long
                     if lm_dur < estimated * 0.60:
                         logger.info(
                             f"[custom-vllm duration fallback] LM duration {lm_dur:.0f}s is "
                             f"too short vs lyrics estimate {estimated:.0f}s — overriding "
+                            f"to {int(estimated)}s"
+                        )
+                        audio_duration = int(estimated)
+                        if not params.duration:
+                            params.cot_duration = audio_duration
+                    elif lm_dur > estimated * 1.60:
+                        logger.info(
+                            f"[custom-vllm duration fallback] LM duration {lm_dur:.0f}s is "
+                            f"too long vs lyrics estimate {estimated:.0f}s — overriding "
                             f"to {int(estimated)}s"
                         )
                         audio_duration = int(estimated)
