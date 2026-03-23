@@ -191,23 +191,46 @@ class GenerateMusicMixin:
         logger.info("[generate_music] Starting generation...")
 
         # --- Trigger word auto-injection ---
-        # When a LoKR adapter with a trigger word is loaded, automatically
-        # apply it to the caption according to the trained tag_position.
-        trigger_word = getattr(self, "_adapter_trigger_word", "")
-        tag_position = getattr(self, "_adapter_tag_position", "")
-        if trigger_word and self.lora_loaded:
-            caption_stripped = captions.strip() if captions else ""
-            # Don't inject if the user already included the trigger word
-            if trigger_word.lower() not in caption_stripped.lower():
-                if tag_position == "replace":
-                    captions = trigger_word
-                    logger.info(f"[generate_music] Trigger word replaced caption → '{trigger_word}'")
-                elif tag_position == "append":
-                    captions = f"{caption_stripped}, {trigger_word}" if caption_stripped else trigger_word
-                    logger.info(f"[generate_music] Trigger word appended → '{captions}'")
+        # In advanced multi-adapter mode each slot may have its own trigger
+        # word and tag_position.  Iterate all slots and compose them in order.
+        # In basic mode fall back to the legacy _adapter_trigger_word attr.
+        adapter_slots: dict = getattr(self, "_adapter_slots", {})
+        if adapter_slots and self.lora_loaded:
+            for _slot_id in sorted(adapter_slots.keys()):
+                slot_info = adapter_slots[_slot_id]
+                tw = slot_info.get("trigger_word", "")
+                tp = slot_info.get("tag_position", "prepend") or "prepend"
+                if not tw:
+                    continue
+                current = captions.strip() if captions else ""
+                if tw.lower() in current.lower():
+                    logger.info(f"[generate_music] Slot {_slot_id} trigger word '{tw}' already present, skipping")
+                    continue
+                if tp == "replace":
+                    captions = tw
+                    logger.info(f"[generate_music] Slot {_slot_id} trigger word replaced caption → '{tw}'")
+                elif tp == "append":
+                    captions = f"{current}, {tw}" if current else tw
+                    logger.info(f"[generate_music] Slot {_slot_id} trigger word appended → '{captions}'")
                 else:  # prepend (default)
-                    captions = f"{trigger_word}, {caption_stripped}" if caption_stripped else trigger_word
-                    logger.info(f"[generate_music] Trigger word prepended → '{captions}'")
+                    captions = f"{tw}, {current}" if current else tw
+                    logger.info(f"[generate_music] Slot {_slot_id} trigger word prepended → '{captions}'")
+        else:
+            # Basic mode: single _adapter_trigger_word
+            trigger_word = getattr(self, "_adapter_trigger_word", "")
+            tag_position = getattr(self, "_adapter_tag_position", "")
+            if trigger_word and self.lora_loaded:
+                caption_stripped = captions.strip() if captions else ""
+                if trigger_word.lower() not in caption_stripped.lower():
+                    if tag_position == "replace":
+                        captions = trigger_word
+                        logger.info(f"[generate_music] Trigger word replaced caption → '{trigger_word}'")
+                    elif tag_position == "append":
+                        captions = f"{caption_stripped}, {trigger_word}" if caption_stripped else trigger_word
+                        logger.info(f"[generate_music] Trigger word appended → '{captions}'")
+                    else:  # prepend (default)
+                        captions = f"{trigger_word}, {caption_stripped}" if caption_stripped else trigger_word
+                        logger.info(f"[generate_music] Trigger word prepended → '{captions}'")
 
         if progress:
             progress(0.51, desc="Preparing inputs...")

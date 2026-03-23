@@ -480,16 +480,21 @@ def load_lora_slot(self, lora_path: str, slot: Optional[int] = None) -> str:
         self.lora_loaded = True
         self._merged_dirty = True
 
-        # Extract trigger word metadata from safetensors header
+        # Extract trigger word metadata from safetensors header and store per-slot
         safetensors_file = result.get("safetensors_file")
         if safetensors_file:
             from acestep.core.generation.handler.lora.lifecycle import _read_trigger_word_from_safetensors
             tw, tp = _read_trigger_word_from_safetensors(safetensors_file)
             if tw:
+                self._adapter_slots[slot]["trigger_word"] = tw
+                self._adapter_slots[slot]["tag_position"] = tp or "prepend"
+                # Keep legacy single attr for basic-mode compat
                 self._adapter_trigger_word = tw
                 self._adapter_tag_position = tp or "prepend"
                 logger.info(f"Adapter trigger word: '{tw}' (position: {tp or 'prepend'})")
             else:
+                self._adapter_slots[slot]["trigger_word"] = ""
+                self._adapter_slots[slot]["tag_position"] = ""
                 self._adapter_trigger_word = ""
                 self._adapter_tag_position = ""
 
