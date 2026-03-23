@@ -354,6 +354,7 @@ def run_stem_matchering(
         # stem, so the recombined sum is much quieter than the full
         # reference mix.  Fix: measure reference LUFS and match it.
         import pyloudnorm as pyln
+        from pedalboard import Pedalboard, Limiter, Gain
 
         meter = pyln.Meter(target_sr)
 
@@ -371,18 +372,27 @@ def run_stem_matchering(
 
         if not np.isinf(ref_lufs) and not np.isinf(combined_lufs):
             gain_db = ref_lufs - combined_lufs
-            linear_gain = 10.0 ** (gain_db / 20.0)
             print(f"  LUFS matching: combined={combined_lufs:.1f}, reference={ref_lufs:.1f}, gain={gain_db:+.1f} dB")
-            combined = combined * linear_gain
         else:
+            gain_db = 0.0
             print(f"  LUFS measurement failed (combined={combined_lufs}, ref={ref_lufs}), skipping normalization")
 
-        # True-peak ceiling limiter at -0.5 dBTP
-        ceiling_linear = 10 ** (-0.5 / 20)
-        peak = np.max(np.abs(combined))
-        if peak > ceiling_linear:
-            print(f"  Limiting: peak {peak:.4f} → ceiling {ceiling_linear:.4f} (-0.5 dBTP)")
-            combined = combined * (ceiling_linear / peak)
+        # Apply gain + brickwall limiter in one pass via Pedalboard.
+        # Unlike simple peak normalization (which scales the ENTIRE signal
+        # down equally and kills loudness), a real limiter only catches
+        # transient peaks while preserving the overall perceived loudness.
+        board = Pedalboard([
+            Gain(gain_db=gain_db),
+            Limiter(threshold_db=-0.5, release_ms=100.0),
+        ])
+        # Pedalboard expects [channels, samples]
+        combined_T = combined.T.copy()  # [channels, samples]
+        combined_T = board(combined_T, target_sr)
+        combined = combined_T.T  # back to [samples, channels]
+
+        final_lufs = meter.integrated_loudness(combined)
+        final_peak = np.max(np.abs(combined))
+        print(f"  Final: LUFS={final_lufs:.1f}, peak={final_peak:.4f}")
 
         # Save result
         sf.write(output_path, combined, target_sr, subtype="PCM_16")
