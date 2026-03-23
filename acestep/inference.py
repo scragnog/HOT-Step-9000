@@ -358,6 +358,263 @@ def _update_metadata_from_lm(
     return bpm, key_scale, time_signature, audio_duration, vocal_language, caption, lyrics
 
 
+# ---------------------------------------------------------------------------
+# Stem-by-stem matchering pipeline
+# ---------------------------------------------------------------------------
+
+_ROFORMER_SW_MODEL = "BS-Roformer-SW.ckpt"
+_RAW_STEM_TYPES = ("vocals", "drums", "bass", "guitar", "piano", "other")
+_MERGE_INTO_OTHER = ("guitar", "piano", "other")
+_MATCHERING_GROUPS = ("vocals", "drums", "bass", "other")
+
+
+def _classify_stem(filename_lower: str) -> str:
+    for stem in _RAW_STEM_TYPES:
+        if stem in filename_lower:
+            return stem
+    return "other"
+
+
+def _separate_to_stems(audio_path: str, output_dir: str, label: str = "") -> tuple:
+    """Separate audio into stems and merge guitar/piano/other → 'other'.
+
+    Returns (stems_dict, sample_rate).
+    """
+    from contextlib import contextmanager
+    import soundfile as sf
+    import numpy as np
+
+    @contextmanager
+    def _float32_dtype():
+        try:
+            prev = torch.get_default_dtype()
+            torch.set_default_dtype(torch.float32)
+            try:
+                yield
+            finally:
+                torch.set_default_dtype(prev)
+        except Exception:
+            yield
+
+    from audio_separator.separator import Separator
+    from pathlib import Path
+
+    prefix = f"[{label}] " if label else ""
+    logger.info(f"{prefix}Loading BS-Roformer-SW for stem separation")
+    sep = Separator()
+    sep.output_format = "wav"
+    sep.output_dir = output_dir
+
+    with _float32_dtype():
+        sep.load_model(model_filename=_ROFORMER_SW_MODEL)
+        files = sep.separate(audio_path)
+
+    stems = {}
+    stem_sr = None
+    for fp in files:
+        fp_path = Path(fp) if Path(fp).is_absolute() else Path(output_dir) / fp
+        fp_str = str(fp_path)
+        stem_type = _classify_stem(fp_path.stem.lower())
+        info = sf.info(fp_str)
+        if stem_sr is None:
+            stem_sr = info.samplerate
+        stems[stem_type] = fp_str
+        logger.info(f"  {prefix}{stem_type}: {fp_path.name} ({info.duration:.1f}s, {info.samplerate}Hz)")
+
+    stem_sr = stem_sr or 44100
+
+    # Merge guitar + piano + other into single "other" stem
+    to_merge = [(st, stems[st]) for st in _MERGE_INTO_OTHER if st in stems]
+    if to_merge:
+        combined = None
+        for st, path in to_merge:
+            data, sr = sf.read(path, dtype="float32")
+            if data.ndim == 1:
+                data = np.column_stack((data, data))
+            if sr != stem_sr:
+                import librosa
+                data = librosa.resample(data.T, orig_sr=sr, target_sr=stem_sr).T
+            if combined is None:
+                combined = data.copy()
+            else:
+                if data.shape[0] < combined.shape[0]:
+                    data = np.pad(data, ((0, combined.shape[0] - data.shape[0]), (0, 0)))
+                elif data.shape[0] > combined.shape[0]:
+                    combined = np.pad(combined, ((0, data.shape[0] - combined.shape[0]), (0, 0)))
+                combined += data
+
+        merge_names = [s[0] for s in to_merge]
+        logger.info(f"  {prefix}Merged {'+'.join(merge_names)} → other")
+        merged_path = os.path.join(output_dir, "merged_other.wav")
+        sf.write(merged_path, combined, stem_sr)
+
+        new_stems = {k: stems[k] for k in ("vocals", "drums", "bass") if k in stems}
+        new_stems["other"] = merged_path
+        stems = new_stems
+
+    return stems, stem_sr
+
+
+def _run_stem_matchering(
+    generation_path: str,
+    reference_path: str,
+    temp_dir: str,
+    target_sr: int,
+    progress=None,
+) -> "np.ndarray":
+    """Full stem-by-stem matchering pipeline.
+
+    Returns the mastered audio as a numpy array of shape (samples, channels).
+    """
+    import matchering as mg
+    import soundfile as sf
+    import numpy as np
+    import pyloudnorm as pyln
+    from pedalboard import Pedalboard, Limiter, Gain
+
+    ref_stem_dir = os.path.join(temp_dir, "ref_stems")
+    gen_stem_dir = os.path.join(temp_dir, "gen_stems")
+    matched_dir = os.path.join(temp_dir, "matched_stems")
+    os.makedirs(ref_stem_dir, exist_ok=True)
+    os.makedirs(gen_stem_dir, exist_ok=True)
+    os.makedirs(matched_dir, exist_ok=True)
+
+    # Step 1: Separate reference
+    if progress:
+        progress(0.91, desc="Stem matchering: separating reference...")
+    ref_stems, ref_sr = _separate_to_stems(reference_path, ref_stem_dir, label="REF")
+
+    # Step 2: Separate generation
+    if progress:
+        progress(0.93, desc="Stem matchering: separating generation...")
+    gen_stems, gen_sr = _separate_to_stems(generation_path, gen_stem_dir, label="GEN")
+
+    # Step 3: Match each stem pair
+    if progress:
+        progress(0.95, desc="Stem matchering: matching stems...")
+    matched_stems = {}
+    for stem_type in _MATCHERING_GROUPS:
+        gen_stem = gen_stems.get(stem_type)
+        ref_stem = ref_stems.get(stem_type)
+
+        if not gen_stem:
+            logger.info(f"  [{stem_type}] No gen stem — skipping")
+            continue
+        if not ref_stem:
+            logger.info(f"  [{stem_type}] No ref stem — using unmatched")
+            matched_stems[stem_type] = gen_stem
+            continue
+
+        # Check for near-silence
+        target_data, _ = sf.read(gen_stem, dtype="float32")
+        rms = np.sqrt(np.mean(target_data ** 2))
+        if rms < 1e-5:
+            logger.info(f"  [{stem_type}] Near-silent (RMS={rms:.2e}) — skipping matchering")
+            matched_stems[stem_type] = gen_stem
+            continue
+
+        ref_data, _ = sf.read(ref_stem, dtype="float32")
+        ref_rms = np.sqrt(np.mean(ref_data ** 2))
+        if ref_rms < 1e-5:
+            logger.info(f"  [{stem_type}] Ref near-silent — using unmatched")
+            matched_stems[stem_type] = gen_stem
+            continue
+
+        out_path = os.path.join(matched_dir, f"{stem_type}_matched.wav")
+        try:
+            mg.process(
+                target=gen_stem,
+                reference=ref_stem,
+                results=[mg.pcm16(out_path)],
+            )
+            matched_stems[stem_type] = out_path
+            logger.info(f"  [{stem_type}] ✓ Matched")
+        except Exception as e:
+            logger.warning(f"  [{stem_type}] Matchering failed ({e}), using unmatched")
+            matched_stems[stem_type] = gen_stem
+
+    # Step 4: Recombine matched stems
+    if progress:
+        progress(0.97, desc="Stem matchering: recombining...")
+
+    gen_data, gen_orig_sr = sf.read(generation_path, dtype="float32")
+    if gen_data.ndim == 1:
+        gen_data = np.column_stack((gen_data, gen_data))
+    target_samples = gen_data.shape[0]
+
+    combined = None
+    for stem_type, stem_path in matched_stems.items():
+        data, sr = sf.read(stem_path, dtype="float32")
+        if data.ndim == 1:
+            data = np.column_stack((data, data))
+        if sr != target_sr:
+            import librosa
+            data = librosa.resample(data.T, orig_sr=sr, target_sr=target_sr).T
+        if data.shape[0] < target_samples:
+            data = np.pad(data, ((0, target_samples - data.shape[0]), (0, 0)))
+        elif data.shape[0] > target_samples:
+            data = data[:target_samples]
+        if combined is None:
+            combined = data.copy()
+        else:
+            combined += data
+
+    if combined is None:
+        raise RuntimeError("No stems to combine after stem matchering")
+
+    # LUFS-match the recombined result to the reference track
+    meter = pyln.Meter(target_sr)
+    ref_full, ref_sr_file = sf.read(reference_path, dtype="float32")
+    if ref_full.ndim == 1:
+        ref_full = np.column_stack((ref_full, ref_full))
+    if ref_sr_file != target_sr:
+        import librosa
+        ref_full = librosa.resample(ref_full.T, orig_sr=ref_sr_file, target_sr=target_sr).T
+    ref_lufs = meter.integrated_loudness(ref_full)
+    combined_lufs = meter.integrated_loudness(combined)
+
+    if not np.isinf(ref_lufs) and not np.isinf(combined_lufs):
+        gain_db = ref_lufs - combined_lufs
+        logger.info(f"  LUFS matching: combined={combined_lufs:.1f}, ref={ref_lufs:.1f}, gain={gain_db:+.1f} dB")
+    else:
+        gain_db = 0.0
+        logger.info(f"  LUFS measurement failed, skipping normalization")
+
+    # Gain + brickwall limiter via Pedalboard
+    board = Pedalboard([
+        Gain(gain_db=gain_db),
+        Limiter(threshold_db=-0.5, release_ms=100.0),
+    ])
+    combined = board(combined.T.copy(), target_sr).T
+
+    # Step 5: Final full-mix matchering polish pass
+    if progress:
+        progress(0.98, desc="Stem matchering: final polish...")
+    try:
+        recombined_path = os.path.join(temp_dir, "recombined.wav")
+        polished_path = os.path.join(temp_dir, "polished.wav")
+        sf.write(recombined_path, combined, target_sr, subtype="PCM_16")
+
+        mg.process(
+            target=recombined_path,
+            reference=reference_path,
+            results=[mg.pcm16(polished_path)],
+        )
+
+        polished, pol_sr = sf.read(polished_path, dtype="float32")
+        if polished.ndim == 1:
+            polished = np.column_stack((polished, polished))
+        if pol_sr != target_sr:
+            import librosa
+            polished = librosa.resample(polished.T, orig_sr=pol_sr, target_sr=target_sr).T
+        combined = polished
+        logger.info("  ✓ Final full-mix matchering polish complete")
+    except Exception as e:
+        logger.warning(f"  Final matchering polish failed ({e}), using stem-only result")
+
+    return combined
+
+
 @_get_spaces_gpu_decorator(duration=180)
 def generate_music(
     dit_handler,
@@ -789,15 +1046,15 @@ def generate_music(
                         import matchering as mg
                         import soundfile as sf
                         import numpy as np
-                        logger.info("[AutoMaster] Running Matchering pipeline")
                         
                         ref_path = params.mastering_params.get("reference_file") or params.mastering_params.get("reference")
                         if not ref_path or not os.path.exists(ref_path):
                             raise ValueError(f"Matchering reference file not found: {ref_path}")
-                            
+                        
+                        use_stem_matchering = params.mastering_params.get("stem_matchering", False)
+                        
                         with tempfile.TemporaryDirectory() as temp_dir:
                             temp_target = os.path.join(temp_dir, "temp_target.wav")
-                            temp_out = os.path.join(temp_dir, "temp_out.wav")
                             
                             temp_tensor = audio_tensor.clone()
                             if temp_tensor.dim() == 1:
@@ -810,23 +1067,26 @@ def generate_music(
                             # sf.write expects (frames, channels)
                             sf.write(temp_target, temp_tensor.T.cpu().numpy(), sample_rate)
                             
-                            mg.process(
-                                target=temp_target,
-                                reference=ref_path, 
-                                results=[mg.pcm16(temp_out)]
-                            )
-                            
-                            # Read the mastered file back in
-                            mastered, out_sr = sf.read(temp_out)
-                            if len(mastered.shape) == 1:
-                                mastered = np.column_stack((mastered, mastered))
-                            
-                            # Matchering typically outputs at 44100 Hz; resample to pipeline rate if needed
-                            if out_sr != sample_rate:
-                                import librosa
-                                logger.info(f"[AutoMaster] Resampling Matchering output from {out_sr}Hz to {sample_rate}Hz")
-                                # librosa.resample expects (channels, frames) for multi-channel
-                                mastered = librosa.resample(mastered.T, orig_sr=out_sr, target_sr=sample_rate).T
+                            if use_stem_matchering:
+                                logger.info("[AutoMaster] Running STEM Matchering pipeline")
+                                mastered = _run_stem_matchering(
+                                    temp_target, ref_path, temp_dir, sample_rate, progress
+                                )
+                            else:
+                                logger.info("[AutoMaster] Running standard Matchering pipeline")
+                                temp_out = os.path.join(temp_dir, "temp_out.wav")
+                                mg.process(
+                                    target=temp_target,
+                                    reference=ref_path,
+                                    results=[mg.pcm16(temp_out)]
+                                )
+                                mastered, out_sr = sf.read(temp_out)
+                                if len(mastered.shape) == 1:
+                                    mastered = np.column_stack((mastered, mastered))
+                                if out_sr != sample_rate:
+                                    import librosa
+                                    logger.info(f"[AutoMaster] Resampling from {out_sr}Hz to {sample_rate}Hz")
+                                    mastered = librosa.resample(mastered.T, orig_sr=out_sr, target_sr=sample_rate).T
                             
                             audio_tensor = torch.from_numpy(mastered.T).float()
                             logger.info(f"[AutoMaster] Audio {idx} matchering complete")
