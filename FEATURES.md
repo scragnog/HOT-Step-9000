@@ -717,17 +717,54 @@ The **Browse** button on both basic and advanced adapter panels now opens a nati
 
 ---
 
-<!-- 
-## [Next Feature Name]
+## Redmond Mode (DPO Quality Refinement)
 
-Brief description.
+One-click quality enhancement via the [AceStep_Refine_Redmond](https://huggingface.co/artificialguybr/AceStep_Refine_Redmond) adapter by [artificialguybr](https://huggingface.co/artificialguybr). Merges a DPO-trained quality adapter directly into the DiT decoder weights *below* the adapter slot system, improving musicality, arrangement, and vocal quality across all generations without consuming an adapter slot.
 
 ### What's included
-- ...
+
+| File | Description |
+|------|-------------|
+| `acestep/core/generation/handler/redmond_mode.py` | **[NEW]** Core delta-merge engine — extracts adapter delta, stores raw base, applies `raw + scale × delta` to decoder weights. Runtime toggle/scale/reset. |
+| `acestep/api/startup_model_init.py` | Auto-download from HuggingFace and merge at startup when `ACESTEP_REDMOND_MODE=true` |
+| `acestep/core/generation/handler/init_service_orchestrator.py` | Resets Redmond state on model switch, re-applies after new model loads |
+| `acestep/api/http/lora_routes.py` | 3 API endpoints: `POST /v1/redmond/toggle`, `POST /v1/redmond/scale`, `GET /v1/redmond/status` |
+| `install.bat` | Optional download section (5d) for manual install |
+| `launch.bat` | Reads `ACESTEP_REDMOND_MODE` / `ACESTEP_REDMOND_SCALE` from `.env`, writes to `loading-config.js` |
+| `loading.html` | Toggle checkbox on the loading screen |
+| `ace-step-ui/components/SettingsModal.tsx` | Toggle switch + scale slider (0.0–1.5) with "Merging weights..." loading indicator |
+| `ace-step-ui/vite.config.ts` | Direct Vite proxy to Python API (bypasses Express) |
 
 ### How it works
-- ...
--->
+
+1. **Architecture:** Operates below the adapter slot system. The slot system sees Redmond-enhanced weights as its baseline, so all 4 adapter slots remain available for artist/style adapters that stack on top.
+
+```
+Raw Base Decoder → + (scale × Redmond delta) → Enhanced base
+                                                     ↓
+                          Adapter Slot System: base + artist deltas → Final weights
+```
+
+2. **Auto-download:** On first enable, the adapter is automatically downloaded from HuggingFace (~132 MB). No manual install required.
+3. **Startup merge:** When `ACESTEP_REDMOND_MODE=true` in `.env`, the adapter is merged during model initialization (~6s). The delta is extracted once and cached in memory.
+4. **Runtime toggle:** Toggle on/off in Settings — recomputes decoder weights in ~1s. Any loaded artist adapters are automatically re-applied on top.
+5. **Scale slider:** Adjust merge intensity (0.0–1.5, default 0.70). Higher values = stronger quality refinement. Changes trigger weight recomputation.
+6. **Model switch safety:** Delta is cleared and re-extracted when switching DiT models, ensuring compatibility.
+7. **Quantization guard:** Automatically skipped for quantized models (incompatible with weight-space merging).
+
+### Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `ACESTEP_REDMOND_MODE` | `false` | Enable Redmond Mode at startup |
+| `ACESTEP_REDMOND_SCALE` | `0.7` | Initial merge scale (0.0–2.0) |
+
+### Credits
+
+Redmond Mode uses the **AceStep_Refine_Redmond** adapter created by [artificialguybr](https://huggingface.co/artificialguybr):
+- **Model:** [artificialguybr/AceStep_Refine_Redmond](https://huggingface.co/artificialguybr/AceStep_Refine_Redmond)
+- **Type:** PEFT LoRA adapter trained with Direct Preference Optimization (DPO)
+- **Size:** ~132 MB (safetensors)
 
 ---
 
