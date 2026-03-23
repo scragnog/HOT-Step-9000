@@ -124,6 +124,28 @@ def initialize_models_at_startup(
     app.state._initialized = True
     print(f"[API Server] Primary model loaded: {get_model_name(config_path)}")
 
+    # ── Redmond Mode: merge DPO quality adapter into decoder ────────
+    redmond_enabled = env_bool("ACESTEP_REDMOND_MODE", False)
+    redmond_scale = float(os.getenv("ACESTEP_REDMOND_SCALE", "0.7"))
+    redmond_path = os.path.join(checkpoint_dir, "redmond-refine", "standard")
+
+    if redmond_enabled and handler.quantization is None and os.path.isdir(redmond_path):
+        print(f"[API Server] Redmond Mode: merging quality adapter at scale {redmond_scale:.2f}...")
+        try:
+            from acestep.core.generation.handler.redmond_mode import apply_redmond_at_startup
+            result = apply_redmond_at_startup(handler, redmond_path, redmond_scale)
+            print(f"[API Server] {result}")
+        except Exception as exc:
+            print(f"[API Server] Warning: Redmond Mode failed to apply: {exc}")
+    elif redmond_enabled and handler.quantization is not None:
+        print("[API Server] Redmond Mode: skipped (not compatible with quantized models)")
+    elif redmond_enabled and not os.path.isdir(redmond_path):
+        print(f"[API Server] Redmond Mode: adapter not found at {redmond_path}")
+        print("[API Server]   Download via install.bat or from: https://huggingface.co/artificialguybr/AceStep_Refine_Redmond")
+    else:
+        # Store adapter path for potential runtime activation
+        handler._redmond_adapter_path = redmond_path if os.path.isdir(redmond_path) else ""
+
     if handler2 and config_path2:
         model2_name = get_model_name(config_path2)
         if model2_name:

@@ -107,6 +107,79 @@
             color: #e0e0e8;
         }
 
+        /* Redmond Mode toggle switch */
+        .toggle-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: .5rem 0;
+            margin-bottom: .4rem;
+        }
+
+        .toggle-row .toggle-info {
+            flex: 1;
+        }
+
+        .toggle-row .toggle-label {
+            font-size: .78rem;
+            color: #e0e0e8;
+            font-weight: 500;
+        }
+
+        .toggle-row .toggle-desc {
+            font-size: .65rem;
+            color: #666;
+            margin-top: .15rem;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 38px;
+            height: 20px;
+            flex-shrink: 0;
+            margin-left: .75rem;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            inset: 0;
+            background: #333;
+            border-radius: 20px;
+            transition: background .25s;
+        }
+
+        .toggle-slider::before {
+            content: '';
+            position: absolute;
+            width: 16px;
+            height: 16px;
+            left: 2px;
+            bottom: 2px;
+            background: #fff;
+            border-radius: 50%;
+            transition: transform .25s;
+        }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background: #a78bfa;
+        }
+
+        .toggle-switch input:checked + .toggle-slider::before {
+            transform: translateX(18px);
+        }
+
+        .toggle-row.unavailable {
+            opacity: 0.4;
+            pointer-events: none;
+        }
+
         .actions {
             display: flex;
             gap: 1rem;
@@ -323,6 +396,17 @@
                     <option value="pt">PyTorch (native)</option>
                 </select>
             </div>
+            <!-- Redmond Mode Toggle -->
+            <div class="toggle-row" id="redmondRow" style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid rgba(255,255,255,.06)">
+                <div class="toggle-info">
+                    <div class="toggle-label">🔴 Redmond Mode</div>
+                    <div class="toggle-desc" id="redmondDesc">DPO quality refinement — merges into base model at startup</div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="redmondToggle">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
             <div class="env-updated" id="envUpdated">✓ Models saved to .env</div>
             <div class="actions">
                 <button type="button" class="btn btn-secondary" id="btnUpdate" disabled>Waiting for backend...</button>
@@ -382,6 +466,9 @@
         if (typeof CURRENT_MODEL === 'undefined') var CURRENT_MODEL = 'acestep-v15-base';
         if (typeof CURRENT_LM_MODEL === 'undefined') var CURRENT_LM_MODEL = 'acestep-5Hz-lm-0.6B';
         if (typeof CURRENT_LM_BACKEND === 'undefined') var CURRENT_LM_BACKEND = 'vllm';
+        if (typeof CURRENT_REDMOND_MODE === 'undefined') var CURRENT_REDMOND_MODE = 'false';
+        if (typeof CURRENT_REDMOND_SCALE === 'undefined') var CURRENT_REDMOND_SCALE = '0.7';
+        if (typeof REDMOND_AVAILABLE === 'undefined') var REDMOND_AVAILABLE = 'false';
 
         document.getElementById('frontend-port').textContent = `(port ${VITE_PORT})`;
 
@@ -415,6 +502,18 @@
         const lmBackendSelect = document.getElementById('lmBackendSelect');
         lmBackendSelect.value = CURRENT_LM_BACKEND;
 
+        // Set Redmond Mode toggle from saved config
+        const redmondToggle = document.getElementById('redmondToggle');
+        const redmondRow = document.getElementById('redmondRow');
+        const redmondDesc = document.getElementById('redmondDesc');
+        const redmondAvailable = REDMOND_AVAILABLE === 'true';
+        redmondToggle.checked = CURRENT_REDMOND_MODE === 'true';
+        if (!redmondAvailable) {
+            redmondRow.classList.add('unavailable');
+            redmondDesc.textContent = 'Not installed — download via install.bat';
+            redmondToggle.disabled = true;
+        }
+
         // ---- Buttons & Events ----
         const btnLaunch = document.getElementById('btnLaunch');
         const btnUpdate = document.getElementById('btnUpdate');
@@ -441,6 +540,7 @@
                             ACESTEP_CONFIG_PATH: configPath,
                             ACESTEP_LM_MODEL_PATH: lmModelPath,
                             ACESTEP_LM_BACKEND: lmBackend,
+                            ACESTEP_REDMOND_MODE: redmondToggle.checked ? 'true' : 'false',
                         }),
                     });
                     if (resp.ok) return true;

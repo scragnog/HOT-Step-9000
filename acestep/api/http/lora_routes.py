@@ -79,6 +79,16 @@ class AudioDiffRequest(BaseModel):
     amplify: float = Field(default=3.0, ge=1.0, le=20.0, description="Amplification factor for the diff signal")
 
 
+class RedmondToggleRequest(BaseModel):
+    """Enable or disable Redmond Mode (DPO quality refinement)."""
+    enabled: bool = Field(..., description="Whether to enable Redmond Mode")
+
+
+class RedmondScaleRequest(BaseModel):
+    """Set Redmond Mode scale."""
+    scale: float = Field(..., ge=0.0, le=2.0, description="Redmond scale (0.0-2.0)")
+
+
 # ── Helpers ─────────────────────────────────────────────────────────────
 
 def _require_initialized_handler(app: FastAPI) -> AceStepHandler:
@@ -476,3 +486,38 @@ def register_lora_routes(
             return wrap_response(result)
         except Exception as exc:
             return wrap_response(None, code=500, error=f"Failed to compute audio diff: {str(exc)}")
+
+    # ── Redmond Mode endpoints ─────────────────────────────────────
+
+    @app.post("/v1/redmond/toggle")
+    async def toggle_redmond_endpoint(request: RedmondToggleRequest, _: None = Depends(verify_api_key)):
+        """Enable or disable Redmond Mode (DPO quality refinement)."""
+        handler = _require_initialized_handler(app)
+        try:
+            from acestep.core.generation.handler.redmond_mode import toggle_redmond_mode
+            result = toggle_redmond_mode(handler, request.enabled)
+            if _is_success_message(result):
+                return wrap_response({"message": result, "enabled": request.enabled})
+            return wrap_response(None, code=400, error=result)
+        except Exception as exc:
+            return wrap_response(None, code=500, error=f"Failed to toggle Redmond Mode: {str(exc)}")
+
+    @app.post("/v1/redmond/scale")
+    async def set_redmond_scale_endpoint(request: RedmondScaleRequest, _: None = Depends(verify_api_key)):
+        """Set Redmond Mode scale (0.0-2.0)."""
+        handler = _require_initialized_handler(app)
+        try:
+            from acestep.core.generation.handler.redmond_mode import set_redmond_scale
+            result = set_redmond_scale(handler, request.scale)
+            if _is_success_message(result):
+                return wrap_response({"message": result, "scale": request.scale})
+            return wrap_response(None, code=400, error=result)
+        except Exception as exc:
+            return wrap_response(None, code=500, error=f"Failed to set Redmond scale: {str(exc)}")
+
+    @app.get("/v1/redmond/status")
+    async def get_redmond_status_endpoint(_: None = Depends(verify_api_key)):
+        """Get current Redmond Mode state."""
+        handler = _require_initialized_handler(app)
+        from acestep.core.generation.handler.redmond_mode import get_redmond_status
+        return wrap_response(get_redmond_status(handler))
