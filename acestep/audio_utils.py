@@ -145,6 +145,10 @@ class AudioSaver:
         # Ensure memory is contiguous
         audio_tensor = audio_tensor.contiguous()
         
+        # Ensure parent directory exists (prevents WinError 2 / ENOENT
+        # when the caller hasn't pre-created the output directory)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
         # Select backend and save
         try:
             if format in ["mp3", "opus", "aac"]:
@@ -175,7 +179,14 @@ class AudioSaver:
                     
                     cmd.append(str(output_path))
                     
-                    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                    try:
+                        subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
+                    except FileNotFoundError:
+                        raise FileNotFoundError(
+                            f"ffmpeg not found on system PATH — required for '{format}' audio format. "
+                            f"Install ffmpeg (https://ffmpeg.org/download.html) and ensure it is on your PATH, "
+                            f"or switch to 'flac' or 'wav' format which do not require ffmpeg."
+                        )
                     logger.debug(f"[AudioSaver] Saved audio to {output_path} ({format}, {sample_rate}Hz) via ffmpeg subprocess")
                 finally:
                     # Clean up temp wav file
