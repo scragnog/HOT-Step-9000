@@ -451,6 +451,11 @@
         }
 
         btnLaunch.addEventListener('click', async () => {
+            // Cancel auto-launch countdown if running
+            if (window._autoLaunchInterval) {
+                clearInterval(window._autoLaunchInterval);
+                window._autoLaunchInterval = null;
+            }
             btnLaunch.disabled = true;
             btnUpdate.disabled = true;
             btnLaunch.textContent = "Saving...";
