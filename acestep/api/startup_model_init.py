@@ -137,11 +137,29 @@ def initialize_models_at_startup(
             print(f"[API Server] {result}")
         except Exception as exc:
             print(f"[API Server] Warning: Redmond Mode failed to apply: {exc}")
-    elif redmond_enabled and handler.quantization is not None:
-        print("[API Server] Redmond Mode: skipped (not compatible with quantized models)")
-    elif redmond_enabled and not os.path.isdir(redmond_path):
-        print(f"[API Server] Redmond Mode: adapter not found at {redmond_path}")
-        print("[API Server]   Download via install.bat or from: https://huggingface.co/artificialguybr/AceStep_Refine_Redmond")
+    elif redmond_enabled and handler.quantization is None and not os.path.isdir(redmond_path):
+        # Auto-download the adapter
+        print("[API Server] Redmond Mode: adapter not found, downloading...")
+        print("[API Server]   Source: artificialguybr/AceStep_Refine_Redmond")
+        try:
+            from huggingface_hub import snapshot_download
+            redmond_parent = os.path.join(checkpoint_dir, "redmond-refine")
+            os.makedirs(redmond_parent, exist_ok=True)
+            snapshot_download(
+                "artificialguybr/AceStep_Refine_Redmond",
+                allow_patterns="standard/*",
+                local_dir=redmond_parent,
+            )
+            if os.path.isdir(redmond_path):
+                print("[API Server] Redmond Mode: download complete, merging...")
+                from acestep.core.generation.handler.redmond_mode import apply_redmond_at_startup
+                result = apply_redmond_at_startup(handler, redmond_path, redmond_scale)
+                print(f"[API Server] {result}")
+            else:
+                print("[API Server] Warning: Redmond adapter download succeeded but standard/ folder not found")
+        except Exception as exc:
+            print(f"[API Server] Warning: Redmond adapter download failed: {exc}")
+            print("[API Server]   You can download manually via install.bat")
     else:
         # Store adapter path for potential runtime activation
         handler._redmond_adapter_path = redmond_path if os.path.isdir(redmond_path) else ""

@@ -162,7 +162,8 @@ def apply_redmond_at_startup(handler: Any, adapter_path: str, scale: float = 0.7
 def toggle_redmond_mode(handler: Any, enabled: bool) -> str:
     """Enable or disable Redmond Mode at runtime.
 
-    Recomputes decoder weights and re-applies any loaded adapter slots.
+    If enabling and the adapter hasn't been loaded yet, auto-downloads
+    and merges it. Recomputes decoder weights and re-applies adapter slots.
 
     Args:
         handler: AceStepHandler instance.
@@ -171,9 +172,46 @@ def toggle_redmond_mode(handler: Any, enabled: bool) -> str:
     Returns:
         Status message string.
     """
-    if not hasattr(handler, "_redmond_delta") or handler._redmond_delta is None:
-        return "❌ Redmond adapter not loaded. Download it first."
-    if not hasattr(handler, "_raw_base_decoder") or handler._raw_base_decoder is None:
+    has_delta = hasattr(handler, "_redmond_delta") and handler._redmond_delta is not None
+    has_raw = hasattr(handler, "_raw_base_decoder") and handler._raw_base_decoder is not None
+
+    # If enabling but delta not loaded, try to load (auto-download if needed)
+    if enabled and not has_delta:
+        adapter_path = getattr(handler, "_redmond_adapter_path", "")
+
+        # Try to find/download the adapter
+        if not adapter_path or not os.path.isdir(adapter_path):
+            # Construct default path and auto-download
+            project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+            checkpoint_dir = os.path.join(project_root, "checkpoints")
+            adapter_path = os.path.join(checkpoint_dir, "redmond-refine", "standard")
+
+            if not os.path.isdir(adapter_path):
+                logger.info("[Redmond] Adapter not found, downloading...")
+                try:
+                    from huggingface_hub import snapshot_download
+                    redmond_parent = os.path.join(checkpoint_dir, "redmond-refine")
+                    os.makedirs(redmond_parent, exist_ok=True)
+                    snapshot_download(
+                        "artificialguybr/AceStep_Refine_Redmond",
+                        allow_patterns="standard/*",
+                        local_dir=redmond_parent,
+                    )
+                except Exception as exc:
+                    return f"❌ Failed to download Redmond adapter: {exc}"
+
+        if not os.path.isdir(adapter_path):
+            return "❌ Redmond adapter not available"
+
+        # Load and merge
+        result = apply_redmond_at_startup(handler, adapter_path, getattr(handler, "_redmond_scale", 0.7))
+        if result.startswith("❌"):
+            return result
+        return f"✅ Redmond Mode enabled (downloaded and merged)"
+
+    if not has_delta:
+        return "❌ Redmond adapter not loaded."
+    if not has_raw:
         return "❌ Raw base decoder not available."
 
     prev = handler._redmond_enabled
