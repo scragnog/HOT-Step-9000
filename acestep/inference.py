@@ -936,7 +936,7 @@ def generate_music(
             if (
                 llm_handler is not None
                 and getattr(llm_handler, 'llm_backend', '') == 'custom-vllm'
-                and params.duration is None  # user selected "Auto"
+                and (params.duration is None or params.duration <= 0)  # user selected "Auto"
                 and audio_duration is not None
             ):
                 estimated = _estimate_duration_from_lyrics(
