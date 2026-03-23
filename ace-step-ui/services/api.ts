@@ -386,6 +386,9 @@ export interface GenerationParams {
     delta_keys: number;
     group_scales: { self_attn: number; cross_attn: number; mlp: number };
   }>;
+
+  // AI Cover Art
+  generateCoverArt?: boolean;
 }
 
 export interface GenerationJob {

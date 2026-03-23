@@ -199,6 +199,9 @@ interface GenerateBody {
   // Iterative Refinement
   refinePasses?: number;
   refineStrength?: number;
+
+  // AI Cover Art
+  generateCoverArt?: boolean;
 }
 
 router.post('/upload-audio', authMiddleware, audioUpload.single('audio'), async (req: AuthenticatedRequest, res: Response) => {
@@ -901,6 +904,44 @@ router.get('/status/:jobId', authMiddleware, async (req: AuthenticatedRequest, r
                 );
 
                 localPaths.push(storedPath);
+
+                // --- AI Cover Art (post-generation, non-fatal) ---
+                if (params.generateCoverArt) {
+                  try {
+                    const coverApiUrl = `${config.acestep.apiUrl}/v1/cover_art/generate`;
+                    console.log(`[CoverArt] Requesting cover for song ${songId}...`);
+                    const coverRes = await (await import('node-fetch')).default(coverApiUrl, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ACESTEP_API_KEY || '' },
+                      body: JSON.stringify({
+                        title: songTitle,
+                        style: params.style || '',
+                        lyrics: params.lyrics || '',
+                        song_id: songId,
+                      }),
+                    });
+                    if (coverRes.ok) {
+                      const coverData = await coverRes.json() as any;
+                      if (coverData.cover_url) {
+                        // Download the generated cover image and store it locally
+                        const coverImageUrl = `${config.acestep.apiUrl}${coverData.cover_url}`;
+                        const coverImgRes = await (await import('node-fetch')).default(coverImageUrl);
+                        if (coverImgRes.ok) {
+                          const coverBuffer = Buffer.from(await coverImgRes.arrayBuffer());
+                          const coverKey = `${req.user!.id}/${songId}_cover.webp`;
+                          await storage.upload(coverKey, coverBuffer, 'image/webp');
+                          const coverStoredPath = storage.getPublicUrl(coverKey);
+                          await pool.query('UPDATE songs SET cover_url = ? WHERE id = ?', [coverStoredPath, songId]);
+                          console.log(`[CoverArt] Cover saved for song ${songId}: ${coverStoredPath}`);
+                        }
+                      }
+                    } else {
+                      console.warn(`[CoverArt] Python API returned ${coverRes.status}`);
+                    }
+                  } catch (coverErr) {
+                    console.warn('[CoverArt] Cover art generation failed (non-fatal):', (coverErr as Error).message);
+                  }
+                }
               } catch (downloadError) {
                 console.error(`Failed to download audio ${i + 1}:`, downloadError);
                 // Still create song record with remote URL
