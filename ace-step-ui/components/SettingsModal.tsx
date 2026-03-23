@@ -432,6 +432,24 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
                                     className="w-20 px-2 py-1.5 text-sm font-mono text-center rounded-lg border border-zinc-300 dark:border-zinc-600 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white focus:outline-none focus:border-indigo-500"
                                 />
                             </div>
+                            {/* AI Cover Art */}
+                            <div className="flex items-center justify-between pt-2 border-t border-zinc-200 dark:border-zinc-700/50">
+                                <div>
+                                    <p className="text-sm text-zinc-900 dark:text-white font-medium">AI Cover Art</p>
+                                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Generate relevant album art with AI after each song (SDXL Turbo)</p>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        const current = localStorage.getItem('generate_cover_art') === 'true';
+                                        const next = !current;
+                                        localStorage.setItem('generate_cover_art', String(next));
+                                        setHqPresetSteps(prev => prev);
+                                    }}
+                                    className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${localStorage.getItem('generate_cover_art') === 'true' ? 'bg-indigo-600' : 'bg-zinc-300 dark:bg-zinc-600'}`}
+                                >
+                                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${localStorage.getItem('generate_cover_art') === 'true' ? 'translate-x-5' : 'translate-x-0'}`} />
+                                </button>
+                            </div>
                     </div>
 
                     {/* Audio Export Section */}
