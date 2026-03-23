@@ -44,6 +44,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
     });
     const [mp3Bitrate, setMp3Bitrate] = useState(() => localStorage.getItem('mp3_export_bitrate') || 'V0');
     const [opusBitrate, setOpusBitrate] = useState(() => localStorage.getItem('opus_export_bitrate') || '128');
+    const [generateCoverArt, setGenerateCoverArt] = useState(() => localStorage.getItem('generate_cover_art') === 'true');
 
     if (!isOpen || !user) {
         if (isEditProfileOpen && user) {
@@ -440,14 +441,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
                                 </div>
                                 <button
                                     onClick={() => {
-                                        const current = localStorage.getItem('generate_cover_art') === 'true';
-                                        const next = !current;
+                                        const next = !generateCoverArt;
+                                        setGenerateCoverArt(next);
                                         localStorage.setItem('generate_cover_art', String(next));
-                                        setHqPresetSteps(prev => prev);
                                     }}
-                                    className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${localStorage.getItem('generate_cover_art') === 'true' ? 'bg-indigo-600' : 'bg-zinc-300 dark:bg-zinc-600'}`}
+                                    className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${generateCoverArt ? 'bg-indigo-600' : 'bg-zinc-300 dark:bg-zinc-600'}`}
                                 >
-                                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${localStorage.getItem('generate_cover_art') === 'true' ? 'translate-x-5' : 'translate-x-0'}`} />
+                                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${generateCoverArt ? 'translate-x-5' : 'translate-x-0'}`} />
                                 </button>
                             </div>
                     </div>
