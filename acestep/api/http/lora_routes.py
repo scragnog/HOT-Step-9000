@@ -245,13 +245,29 @@ def register_lora_routes(
         """Get current LoRA/LoKr adapter state for the primary handler."""
         handler = _require_initialized_handler(app)
         status = handler.get_lora_status()
+        # Build combined trigger_word from all slots (advanced) or fall back to single (basic)
+        _adapter_slots: dict = getattr(handler, "_adapter_slots", {})
+        if _adapter_slots:
+            _seen = set()
+            _words = []
+            for _sid in sorted(_adapter_slots.keys()):
+                _tw = _adapter_slots[_sid].get("trigger_word", "")
+                if _tw and _tw not in _seen:
+                    _words.append(_tw)
+                    _seen.add(_tw)
+            combined_trigger_word = ", ".join(_words)
+            combined_tag_position = "prepend"  # multi-slot positions are handled per-slot at generation time
+        else:
+            combined_trigger_word = getattr(handler, "_adapter_trigger_word", "")
+            combined_tag_position = getattr(handler, "_adapter_tag_position", "")
+
         result = {
             "lora_loaded": bool(status.get("loaded", getattr(handler, "lora_loaded", False))),
             "use_lora": bool(status.get("active", getattr(handler, "use_lora", False))),
             "lora_scale": float(status.get("scale", getattr(handler, "lora_scale", 1.0))),
             "adapter_type": getattr(handler, "_adapter_type", None),
-            "trigger_word": getattr(handler, "_adapter_trigger_word", ""),
-            "tag_position": getattr(handler, "_adapter_tag_position", ""),
+            "trigger_word": combined_trigger_word,
+            "tag_position": combined_tag_position,
             "scales": status.get("scales", {}),
             "active_adapter": status.get("active_adapter"),
             "adapters": status.get("adapters", []),
