@@ -127,8 +127,8 @@ router.post('/lm/backend', authMiddleware, async (req: AuthenticatedRequest, res
 // No auth required — only called during startup before app is fully loaded
 router.post('/update-env', async (req: any, res: Response) => {
     try {
-        const { ACESTEP_CONFIG_PATH, ACESTEP_LM_MODEL_PATH, ACESTEP_LM_BACKEND } = req.body;
-        if (!ACESTEP_CONFIG_PATH && !ACESTEP_LM_MODEL_PATH && !ACESTEP_LM_BACKEND) {
+        const { ACESTEP_CONFIG_PATH, ACESTEP_LM_MODEL_PATH, ACESTEP_LM_BACKEND, ACESTEP_REDMOND_MODE, ACESTEP_REDMOND_SCALE } = req.body;
+        if (!ACESTEP_CONFIG_PATH && !ACESTEP_LM_MODEL_PATH && !ACESTEP_LM_BACKEND && ACESTEP_REDMOND_MODE === undefined && !ACESTEP_REDMOND_SCALE) {
             res.status(400).json({ error: 'At least one setting required' });
             return;
         }
@@ -165,8 +165,30 @@ router.post('/update-env', async (req: any, res: Response) => {
             }
         }
 
+        // Redmond Mode
+        if (ACESTEP_REDMOND_MODE !== undefined) {
+            if (/^ACESTEP_REDMOND_MODE=.*/m.test(envContent)) {
+                envContent = envContent.replace(
+                    /^ACESTEP_REDMOND_MODE=.*/m,
+                    `ACESTEP_REDMOND_MODE=${ACESTEP_REDMOND_MODE}`
+                );
+            } else {
+                envContent = envContent.trimEnd() + `\nACESTEP_REDMOND_MODE=${ACESTEP_REDMOND_MODE}\n`;
+            }
+        }
+        if (ACESTEP_REDMOND_SCALE) {
+            if (/^ACESTEP_REDMOND_SCALE=.*/m.test(envContent)) {
+                envContent = envContent.replace(
+                    /^ACESTEP_REDMOND_SCALE=.*/m,
+                    `ACESTEP_REDMOND_SCALE=${ACESTEP_REDMOND_SCALE}`
+                );
+            } else {
+                envContent = envContent.trimEnd() + `\nACESTEP_REDMOND_SCALE=${ACESTEP_REDMOND_SCALE}\n`;
+            }
+        }
+
         fs.writeFileSync(envPath, envContent, 'utf-8');
-        console.log(`[Models] .env updated: CONFIG_PATH=${ACESTEP_CONFIG_PATH || '(unchanged)'}, LM_MODEL_PATH=${ACESTEP_LM_MODEL_PATH || '(unchanged)'}, LM_BACKEND=${ACESTEP_LM_BACKEND || '(unchanged)'}`);
+        console.log(`[Models] .env updated: CONFIG_PATH=${ACESTEP_CONFIG_PATH || '(unchanged)'}, LM_MODEL_PATH=${ACESTEP_LM_MODEL_PATH || '(unchanged)'}, LM_BACKEND=${ACESTEP_LM_BACKEND || '(unchanged)'}, REDMOND_MODE=${ACESTEP_REDMOND_MODE ?? '(unchanged)'}`);
         res.json({ success: true });
     } catch (error: any) {
         console.error('[Models] Failed to update .env:', error);
@@ -180,12 +202,21 @@ router.get('/env-config', async (_req: any, res: Response) => {
     try {
         const envPath = path.join(PROJECT_ROOT, '.env');
         let lmBackend = 'vllm';
+        let redmondMode = 'false';
+        let redmondScale = '0.7';
         if (fs.existsSync(envPath)) {
             const content = fs.readFileSync(envPath, 'utf-8');
-            const match = content.match(/^ACESTEP_LM_BACKEND=(.*)$/m);
-            if (match) lmBackend = match[1].trim().toLowerCase();
+            const matchLm = content.match(/^ACESTEP_LM_BACKEND=(.*)$/m);
+            if (matchLm) lmBackend = matchLm[1].trim().toLowerCase();
+            const matchRedmond = content.match(/^ACESTEP_REDMOND_MODE=(.*)$/m);
+            if (matchRedmond) redmondMode = matchRedmond[1].trim().toLowerCase();
+            const matchScale = content.match(/^ACESTEP_REDMOND_SCALE=(.*)$/m);
+            if (matchScale) redmondScale = matchScale[1].trim();
         }
-        res.json({ lmBackend });
+        // Check if Redmond adapter is available on disk
+        const redmondAdapterPath = path.join(PROJECT_ROOT, 'checkpoints', 'redmond-refine', 'standard', 'adapter_config.json');
+        const redmondAvailable = fs.existsSync(redmondAdapterPath);
+        res.json({ lmBackend, redmondMode, redmondScale, redmondAvailable });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }

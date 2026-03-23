@@ -252,6 +252,39 @@ if /i "!COVERART_CHOICE!"=="Y" (
 echo.
 
 :: -------------------------------------------------------------------
+:: 5d. Optional: Download Redmond Mode (DPO Quality Refinement)
+:: -------------------------------------------------------------------
+echo.
+echo  ============================================================
+echo    Optional: Redmond Mode (DPO Quality Refinement)
+echo  ============================================================
+echo.
+echo    Merges a quality-improvement adapter into the DiT at startup.
+echo    Improves musicality, arrangement coherence, and vocals.
+echo    Size: ~750 MB
+echo.
+
+set /p REDMOND_CHOICE="  Download Redmond Refine adapter? [Y/n] (default=n): "
+if "%REDMOND_CHOICE%"=="" set REDMOND_CHOICE=n
+if /i "!REDMOND_CHOICE!"=="Y" (
+    echo.
+    echo  Downloading AceStep_Refine_Redmond from HuggingFace...
+    if not exist "checkpoints\redmond-refine" mkdir "checkpoints\redmond-refine"
+    python -c "from huggingface_hub import snapshot_download; snapshot_download('artificialguybr/AceStep_Refine_Redmond', allow_patterns='standard/*', local_dir='checkpoints/redmond-refine')"
+    if errorlevel 1 (
+        echo  WARNING: Failed to download Redmond adapter.
+        echo  You can download manually from: https://huggingface.co/artificialguybr/AceStep_Refine_Redmond
+    ) else (
+        echo  Redmond Refine adapter downloaded successfully.
+        echo  Enable it in the loading screen or Settings.
+    )
+) else (
+    echo  Skipping Redmond download. You can download later by re-running install.bat
+    echo  or from: https://huggingface.co/artificialguybr/AceStep_Refine_Redmond
+)
+echo.
+
+:: -------------------------------------------------------------------
 :: 6. Install UI dependencies (Node.js / npm)
 :: -------------------------------------------------------------------
 echo  [6/6] Setting up React UI...

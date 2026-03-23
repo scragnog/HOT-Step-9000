@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, User as UserIcon, Palette, Info, Edit3, ExternalLink, Globe, ChevronDown, Github, Save, Activity, Sliders, Download } from 'lucide-react';
+import { X, User as UserIcon, Palette, Info, Edit3, ExternalLink, Globe, ChevronDown, Github, Save, Activity, Sliders, Download, Zap } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
 import { EditProfileModal } from './EditProfileModal';
@@ -45,6 +45,86 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
     const [mp3Bitrate, setMp3Bitrate] = useState(() => localStorage.getItem('mp3_export_bitrate') || 'V0');
     const [opusBitrate, setOpusBitrate] = useState(() => localStorage.getItem('opus_export_bitrate') || '128');
     const [generateCoverArt, setGenerateCoverArt] = useState(() => localStorage.getItem('generate_cover_art') === 'true');
+
+    // Redmond Mode state
+    const [redmondEnabled, setRedmondEnabled] = useState(false);
+    const [redmondScale, setRedmondScale] = useState(0.7);
+    const [redmondAvailable, setRedmondAvailable] = useState(false);
+    const [redmondLoading, setRedmondLoading] = useState(false);
+    const [redmondFetched, setRedmondFetched] = useState(false);
+
+    // Fetch Redmond status from Python API on first open
+    React.useEffect(() => {
+        if (!isOpen || redmondFetched) return;
+        (async () => {
+            try {
+                const res = await fetch('/api/redmond/status');
+                if (res.ok) {
+                    const json = await res.json();
+                    const data = json?.data || json;
+                    setRedmondEnabled(!!data.enabled);
+                    setRedmondScale(data.scale ?? 0.7);
+                    setRedmondAvailable(!!data.available || !!data.adapter_path);
+                    setRedmondFetched(true);
+                }
+            } catch { /* Python API might not be running yet */ }
+        })();
+    }, [isOpen, redmondFetched]);
+
+    const handleRedmondToggle = async () => {
+        setRedmondLoading(true);
+        try {
+            const next = !redmondEnabled;
+            const res = await fetch('/api/redmond/toggle', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: next }),
+            });
+            if (res.ok) {
+                setRedmondEnabled(next);
+                // Persist to .env
+                fetch('/api/models/update-env', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ACESTEP_REDMOND_MODE: next ? 'true' : 'false' }),
+                }).catch(() => {});
+            }
+        } catch { }
+        setRedmondLoading(false);
+    };
+
+    const handleRedmondScale = async (val: number) => {
+        setRedmondScale(val);
+        // Debounce: only send when slider is released (onMouseUp / onTouchEnd)
+    };
+
+    const commitRedmondScale = async () => {
+        if (!redmondEnabled) {
+            // Just persist, no merge needed
+            fetch('/api/models/update-env', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ACESTEP_REDMOND_SCALE: String(redmondScale) }),
+            }).catch(() => {});
+            return;
+        }
+        setRedmondLoading(true);
+        try {
+            const res = await fetch('/api/redmond/scale', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ scale: redmondScale }),
+            });
+            if (res.ok) {
+                fetch('/api/models/update-env', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ACESTEP_REDMOND_SCALE: String(redmondScale) }),
+                }).catch(() => {});
+            }
+        } catch { }
+        setRedmondLoading(false);
+    };
 
     if (!isOpen || !user) {
         if (isEditProfileOpen && user) {
@@ -450,6 +530,69 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
                                     <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${generateCoverArt ? 'translate-x-5' : 'translate-x-0'}`} />
                                 </button>
                             </div>
+                    </div>
+
+                    {/* Redmond Mode Section */}
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 text-zinc-900 dark:text-white">
+                            <Zap size={20} />
+                            <h3 className="font-semibold">Redmond Mode</h3>
+                            {redmondLoading && (
+                                <span className="ml-auto text-xs text-amber-500 dark:text-amber-400 animate-pulse flex items-center gap-1">
+                                    <span className="inline-block w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                                    Merging weights...
+                                </span>
+                            )}
+                        </div>
+                        <div className="pl-7 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-zinc-900 dark:text-white font-medium">DPO Quality Refinement</p>
+                                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
+                                        {!redmondAvailable
+                                            ? 'Not installed — download via install.bat'
+                                            : 'Merges quality adapter into the base DiT model'}
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={handleRedmondToggle}
+                                    disabled={redmondLoading || !redmondAvailable}
+                                    className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
+                                        !redmondAvailable ? 'bg-zinc-200 dark:bg-zinc-700 opacity-40 cursor-not-allowed' :
+                                        redmondEnabled ? 'bg-amber-600' : 'bg-zinc-300 dark:bg-zinc-600'
+                                    }`}
+                                >
+                                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${redmondEnabled && redmondAvailable ? 'translate-x-5' : 'translate-x-0'}`} />
+                                </button>
+                            </div>
+                            {redmondAvailable && (
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <p className="text-sm text-zinc-900 dark:text-white font-medium">Scale</p>
+                                        <span className="text-xs font-mono text-zinc-500 dark:text-zinc-400 min-w-[40px] text-right">
+                                            {redmondScale.toFixed(2)}
+                                        </span>
+                                    </div>
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="1.5"
+                                        step="0.05"
+                                        value={redmondScale}
+                                        onChange={(e) => handleRedmondScale(parseFloat(e.target.value))}
+                                        onMouseUp={commitRedmondScale}
+                                        onTouchEnd={commitRedmondScale}
+                                        disabled={redmondLoading}
+                                        className="w-full h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full appearance-none cursor-pointer accent-amber-600"
+                                    />
+                                    <div className="flex justify-between text-[10px] text-zinc-400 dark:text-zinc-500">
+                                        <span>Off</span>
+                                        <span>Default (0.70)</span>
+                                        <span>Max</span>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Audio Export Section */}

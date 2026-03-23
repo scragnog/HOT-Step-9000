@@ -65,6 +65,9 @@ class InitServiceOrchestratorMixin:
             lora_svc.scale_state = {}
             lora_svc.active_adapter = None
             lora_svc.last_scale_report = {}
+        # Reset Redmond Mode delta/raw_base (keep adapter_path for re-apply)
+        from acestep.core.generation.handler.redmond_mode import reset_redmond_state
+        reset_redmond_state(self)
         logger.info("[_reset_lora_state] LoRA/LoKr state cleared")
 
     def switch_dit_model(
@@ -124,6 +127,20 @@ class InitServiceOrchestratorMixin:
             attn = getattr(self.config, "_attn_implementation", "eager")
             status = f"[OK] Switched to {config_path} on {self.device} (attn={attn})"
             logger.info(f"[switch_dit_model] {status}")
+
+            # Re-apply Redmond Mode if it was active before the switch
+            _redmond_path = getattr(self, "_redmond_adapter_path", "")
+            _redmond_was_enabled = getattr(self, "_redmond_enabled", False)
+            if _redmond_was_enabled and _redmond_path and self.quantization is None:
+                import os as _os
+                if _os.path.isdir(_redmond_path):
+                    _redmond_scale = getattr(self, "_redmond_scale", 0.7)
+                    logger.info(f"[switch_dit_model] Re-applying Redmond Mode at scale {_redmond_scale:.2f}")
+                    try:
+                        from acestep.core.generation.handler.redmond_mode import apply_redmond_at_startup
+                        apply_redmond_at_startup(self, _redmond_path, _redmond_scale)
+                    except Exception as exc:
+                        logger.warning(f"[switch_dit_model] Failed to re-apply Redmond: {exc}")
 
             # Post-switch VRAM cleanup: release cached allocator blocks
             if torch.cuda.is_available():
