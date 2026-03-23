@@ -349,11 +349,39 @@ def run_stem_matchering(
             print("  ERROR: No stems to combine!")
             return False
 
-        # Hard-clip to prevent overs (stem summing can exceed 0 dBFS)
-        ceiling_linear = 10 ** (-0.5 / 20)  # -0.5 dBTP
+        # --- LUFS loudness matching against the reference track ---
+        # Per-stem matchering makes each stem match its (quiet) reference
+        # stem, so the recombined sum is much quieter than the full
+        # reference mix.  Fix: measure reference LUFS and match it.
+        import pyloudnorm as pyln
+
+        meter = pyln.Meter(target_sr)
+
+        # Measure reference loudness
+        ref_data, ref_sr_file = sf.read(reference_path, dtype="float32")
+        if ref_data.ndim == 1:
+            ref_data = np.column_stack((ref_data, ref_data))
+        if ref_sr_file != target_sr:
+            import librosa
+            ref_data = librosa.resample(ref_data.T, orig_sr=ref_sr_file, target_sr=target_sr).T
+        ref_lufs = meter.integrated_loudness(ref_data)
+
+        # Measure combined loudness
+        combined_lufs = meter.integrated_loudness(combined)
+
+        if not np.isinf(ref_lufs) and not np.isinf(combined_lufs):
+            gain_db = ref_lufs - combined_lufs
+            linear_gain = 10.0 ** (gain_db / 20.0)
+            print(f"  LUFS matching: combined={combined_lufs:.1f}, reference={ref_lufs:.1f}, gain={gain_db:+.1f} dB")
+            combined = combined * linear_gain
+        else:
+            print(f"  LUFS measurement failed (combined={combined_lufs}, ref={ref_lufs}), skipping normalization")
+
+        # True-peak ceiling limiter at -0.5 dBTP
+        ceiling_linear = 10 ** (-0.5 / 20)
         peak = np.max(np.abs(combined))
         if peak > ceiling_linear:
-            print(f"  Peak {peak:.4f} exceeds ceiling, normalizing to -{0.5:.1f} dBTP")
+            print(f"  Limiting: peak {peak:.4f} → ceiling {ceiling_linear:.4f} (-0.5 dBTP)")
             combined = combined * (ceiling_linear / peak)
 
         # Save result
