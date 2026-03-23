@@ -392,11 +392,54 @@ def run_stem_matchering(
 
         final_lufs = meter.integrated_loudness(combined)
         final_peak = np.max(np.abs(combined))
-        print(f"  Final: LUFS={final_lufs:.1f}, peak={final_peak:.4f}")
+        print(f"  After LUFS+limiter: LUFS={final_lufs:.1f}, peak={final_peak:.4f}")
 
-        # Save result
+        # Save stem-only result
         sf.write(output_path, combined, target_sr, subtype="PCM_16")
-        print(f"\n  Output saved: {output_path}")
+        print(f"\n  Stem-mastered saved: {output_path}")
+
+        # --- Step 5/5: Final full-mix matchering polish ---
+        # The stem matchering gave us per-element tonal matching, but the
+        # recombined mix is missing the inter-stem "glue" — how the bass
+        # and kick interact, how vocals sit in the mix, overall spectral
+        # balance.  A final light matchering pass corrects this.
+        # Since the recombined mix is already close to the reference,
+        # matchering will only apply small corrections (not overcook).
+        print("\n--- Step 5/5: Final full-mix matchering polish ---")
+        import matchering as mg
+
+        stem_plus_full_path = output_path.replace("_stem_mastered", "_stem_plus_full")
+        if stem_plus_full_path == output_path:
+            stem_plus_full_path = output_path.replace(".wav", "_plus_full.wav")
+
+        try:
+            with tempfile.TemporaryDirectory(prefix="final_match_") as final_tmp:
+                # matchering needs a wav input — we already saved one
+                temp_out = os.path.join(final_tmp, "final_polished.wav")
+                mg.process(
+                    target=output_path,
+                    reference=reference_path,
+                    results=[mg.pcm16(temp_out)],
+                )
+                # Read back and measure
+                polished, pol_sr = sf.read(temp_out, dtype="float32")
+                if polished.ndim == 1:
+                    polished = np.column_stack((polished, polished))
+                # Resample if matchering changed sample rate
+                if pol_sr != target_sr:
+                    import librosa
+                    polished = librosa.resample(polished.T, orig_sr=pol_sr, target_sr=target_sr).T
+
+                pol_lufs = meter.integrated_loudness(polished)
+                pol_peak = np.max(np.abs(polished))
+                print(f"  Final polish: LUFS={pol_lufs:.1f}, peak={pol_peak:.4f}")
+
+                sf.write(stem_plus_full_path, polished, target_sr, subtype="PCM_16")
+                print(f"  Stem+full-mix saved: {stem_plus_full_path}")
+
+        except Exception as e:
+            print(f"  Final matchering polish FAILED: {e}")
+            stem_plus_full_path = None
 
         # --- Optional: save individual stems for inspection ---
         if save_stems:
@@ -548,10 +591,13 @@ def main():
         )
 
     # --- Summary ---
+    stem_plus_full = Path(str(stem_output).replace("_stem_mastered", "_stem_plus_full"))
     print("\n" + "=" * 60)
     print("Files for A/B comparison:")
     print(f"  Original generation : {gen_path}")
     print(f"  Stem-mastered       : {stem_output}")
+    if stem_plus_full.exists():
+        print(f"  Stem + full polish  : {stem_plus_full}")
     if args.also_full_mix and full_output.exists():
         print(f"  Full-mix mastered   : {full_output}")
     print("=" * 60)
