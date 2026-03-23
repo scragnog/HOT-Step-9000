@@ -3,8 +3,9 @@
 Stem-by-Stem Matchering Prototype
 ===================================
 Splits both a reference audio and a generated audio into 6 stems using
-BS-Roformer-SW, runs matchering on each stem pair (gen → ref), then
-recombines the generated stems into a final mastered track.
+BS-Roformer-SW, merges guitar/piano/other into a single "other" group,
+runs matchering on each stem pair (gen → ref), then recombines the
+generated stems into a final mastered track.
 
 This is a standalone prototype to evaluate whether per-stem matchering
 produces better results than full-mix matchering.
@@ -55,12 +56,18 @@ def _float32_default_dtype():
 # ---------------------------------------------------------------------------
 
 ROFORMER_SW_MODEL = "BS-Roformer-SW.ckpt"
-STEM_TYPES = ("vocals", "drums", "bass", "guitar", "piano", "other")
+# The 6 raw stems from BS-Roformer-SW
+RAW_STEM_TYPES = ("vocals", "drums", "bass", "guitar", "piano", "other")
+# Guitar, piano, and other are merged into a single "other" group for matchering
+# (these stems are often too noisy/sparse individually for matchering to handle well)
+MERGE_INTO_OTHER = ("guitar", "piano", "other")
+# The 4 stem groups we actually run matchering on
+MATCHERING_GROUPS = ("vocals", "drums", "bass", "other")
 
 
 def classify_stem_type(filename_lower: str) -> str:
     """Classify a stem file by its name."""
-    for stem in STEM_TYPES:
+    for stem in RAW_STEM_TYPES:
         if stem in filename_lower:
             return stem
     return "other"
@@ -107,7 +114,67 @@ def separate_to_stems(
         stems[stem_type] = fp_str
         print(f"    {prefix}{stem_type}: {fp_path.name} ({info.duration:.1f}s, {info.samplerate}Hz)")
 
-    return stems, stem_sr or 44100
+    # Merge guitar + piano + other into a single "other" stem
+    stems, stem_sr_final = _merge_minor_stems(stems, stem_sr or 44100, output_dir, label)
+    return stems, stem_sr_final
+
+
+def _merge_minor_stems(
+    stems: Dict[str, str],
+    stem_sr: int,
+    output_dir: str,
+    label: str = "",
+) -> Tuple[Dict[str, str], int]:
+    """Merge guitar, piano, and other stems into a single 'other' stem.
+
+    Returns updated stems dict with only vocals/drums/bass/other keys.
+    """
+    prefix = f"[{label}] " if label else ""
+    to_merge = []
+    for stem_type in MERGE_INTO_OTHER:
+        if stem_type in stems:
+            to_merge.append((stem_type, stems[stem_type]))
+
+    if not to_merge:
+        return stems, stem_sr
+
+    # Load and sum
+    combined = None
+    sr_out = stem_sr
+    for stem_type, path in to_merge:
+        data, sr = sf.read(path, dtype="float32")
+        if data.ndim == 1:
+            data = np.column_stack((data, data))
+        if sr != sr_out:
+            import librosa
+            data_t = data.T
+            resampled = [librosa.resample(data_t[ch], orig_sr=sr, target_sr=sr_out) for ch in range(data_t.shape[0])]
+            data = np.stack(resampled, axis=-1)
+        if combined is None:
+            combined = data.copy()
+        else:
+            # Pad/trim to match
+            if data.shape[0] < combined.shape[0]:
+                data = np.pad(data, ((0, combined.shape[0] - data.shape[0]), (0, 0)))
+            elif data.shape[0] > combined.shape[0]:
+                combined = np.pad(combined, ((0, data.shape[0] - combined.shape[0]), (0, 0)))
+            combined += data
+
+    merge_names = [s[0] for s in to_merge]
+    print(f"    {prefix}Merged {'+'.join(merge_names)} → other")
+
+    # Write combined "other" stem
+    merged_path = os.path.join(output_dir, "merged_other.wav")
+    sf.write(merged_path, combined, sr_out)
+
+    # Build new stems dict with only the matchering groups
+    new_stems: Dict[str, str] = {}
+    for key in ("vocals", "drums", "bass"):
+        if key in stems:
+            new_stems[key] = stems[key]
+    new_stems["other"] = merged_path
+
+    return new_stems, sr_out
 
 
 # ---------------------------------------------------------------------------
@@ -201,7 +268,7 @@ def run_stem_matchering(
         matched_stems: Dict[str, str] = {}
         results: Dict[str, str] = {}
 
-        for stem_type in STEM_TYPES:
+        for stem_type in MATCHERING_GROUPS:
             gen_stem_path = gen_stems.get(stem_type)
             ref_stem_path = ref_stems.get(stem_type)
 
@@ -299,7 +366,7 @@ def run_stem_matchering(
                 stems_output_dir = str(Path(output_path).parent / f"{Path(output_path).stem}_stems")
             os.makedirs(stems_output_dir, exist_ok=True)
 
-            for stem_type in STEM_TYPES:
+            for stem_type in MATCHERING_GROUPS:
                 # Save matched generation stem
                 if stem_type in matched_stems:
                     src = matched_stems[stem_type]
