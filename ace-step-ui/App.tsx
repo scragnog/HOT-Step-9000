@@ -2313,7 +2313,15 @@ function AppContent() {
         onParamsChange={async (params) => {
           if (!remasterSong) return;
           // Use original audio if available (already mastered), otherwise use current audioUrl
+          const hasOriginal = !!remasterSong.generationParams?.originalAudioUrl;
           const originalUrl = remasterSong.generationParams?.originalAudioUrl || remasterSong.audioUrl;
+          console.log('[Remaster] Audio source decision:', {
+            hasOriginalAudioUrl: hasOriginal,
+            originalAudioUrl: remasterSong.generationParams?.originalAudioUrl,
+            songAudioUrl: remasterSong.audioUrl,
+            chosenUrl: originalUrl,
+            usingSource: hasOriginal ? 'ORIGINAL (unmastered)' : 'FALLBACK (current audioUrl — may be mastered!)',
+          });
           if (!originalUrl) { showToast('No audio available for re-mastering', 'error'); return; }
           try {
             showToast(params.mode === 'matchering' ? 'Matchering in progress…' : 'Re-mastering...', 'info');

@@ -1437,6 +1437,14 @@ router.post('/mastering/apply', authMiddleware, async (req: AuthenticatedRequest
       resolvedParams.reference_file = resolveAudioPath(resolvedParams.reference_file);
     }
 
+    console.log('[Mastering Proxy] Request:', {
+      mode: resolvedParams.mode || 'builtin',
+      inputPath: audio_path,
+      resolvedPath: resolvedAudioPath,
+      referencePath: resolvedParams.reference_file || 'none',
+      stemMatchering: resolvedParams.stem_matchering || false,
+    });
+
     const pythonApiBase = config.acestep.apiUrl;
     const resp = await fetch(`${pythonApiBase}/v1/mastering/apply`, {
       method: 'POST',
