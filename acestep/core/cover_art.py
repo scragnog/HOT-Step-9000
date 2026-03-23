@@ -67,22 +67,34 @@ def _extract_theme_keywords(lyrics: str, max_keywords: int = 5) -> list[str]:
 
 
 def _build_prompt(title: str, style: str, lyrics: str) -> str:
-    """Build a text-to-image prompt from song metadata."""
+    """Build a text-to-image prompt from song metadata.
+
+    Keeps total prompt under ~60 words to stay within CLIP's 77-token limit.
+    """
     parts = ["Album cover art"]
 
     if style:
-        parts.append(f"for a {style.strip()} song")
+        # Extract just the genre/mood keywords, not full production descriptions
+        style_words = style.strip().split(",")
+        # Take first 3 comma-separated phrases, truncate each
+        short_style = ", ".join(w.strip() for w in style_words[:3] if w.strip())
+        if short_style:
+            parts.append(f"for a {short_style} song")
 
     if title:
-        parts.append(f'called "{title.strip()}"')
+        # Strip artist prefix if present (e.g. "Artist - Title" -> "Title")
+        clean_title = title.strip()
+        if " - " in clean_title:
+            clean_title = clean_title.split(" - ", 1)[1].strip()
+        parts.append(f'called "{clean_title}"')
 
     # Extract theme keywords from lyrics
-    keywords = _extract_theme_keywords(lyrics)
+    keywords = _extract_theme_keywords(lyrics, max_keywords=4)
     if keywords:
-        parts.append(f"evoking themes of {', '.join(keywords)}")
+        parts.append(f"themes of {', '.join(keywords)}")
 
     # Style guidance
-    parts.append("digital art, vibrant colors, detailed, professional album artwork")
+    parts.append("digital art, vibrant, professional album artwork")
 
     prompt = ", ".join(parts)
     logger.info(f"[CoverArt] Prompt: {prompt}")

@@ -35,5 +35,6 @@ def register_audio_route(
             ".wav": "audio/wav",
             ".flac": "audio/flac",
             ".ogg": "audio/ogg",
+            ".webp": "image/webp",
         }
         return FileResponse(str(resolved_path), media_type=media_types.get(ext, "audio/mpeg"))

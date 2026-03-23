@@ -39,9 +39,11 @@ def register_cover_art_routes(
         if not title and not style:
             raise HTTPException(400, "At least title or style is required")
 
-        # Output path — save alongside audio in the output directory
-        project_root = get_project_root()
-        output_dir = os.path.join(project_root, "output")
+        # Output path — save into the temp_audio_dir so /v1/audio can serve it
+        output_dir = getattr(request.app.state, 'temp_audio_dir', None)
+        if not output_dir:
+            # Fallback to output/ under project root
+            output_dir = os.path.join(get_project_root(), "output")
         os.makedirs(output_dir, exist_ok=True)
         output_path = os.path.join(output_dir, f"{song_id}_cover.webp")
 
