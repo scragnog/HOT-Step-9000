@@ -68,13 +68,18 @@ def register_mastering_routes(
     async def apply_mastering(request: Request):
         """Re-master an audio file with given parameters.
 
+        Supports two modes:
+          - 'builtin' (default): Parametric mastering via MasteringEngine
+          - 'matchering': Reference-based mastering via the matchering library
+            optionally with stem-by-stem matching (stem_matchering=True)
+
         Request body:
             audio_path: Path/URL to the original (unmastered) audio file
             mastering_params: Dict of mastering parameters to apply
         """
         body = await request.json()
         audio_path = body.get("audio_path", "")
-        mastering_params = body.get("mastering_params")
+        mastering_params = body.get("mastering_params") or {}
 
         if not audio_path:
             raise HTTPException(400, "audio_path is required")
@@ -83,38 +88,104 @@ def register_mastering_routes(
         if not os.path.isfile(audio_path):
             raise HTTPException(404, f"Audio file not found: {audio_path}")
 
+        requested_mode = mastering_params.get("mode", "builtin")
+
         try:
-            import numpy as np
-            import soundfile as sf
-            from acestep.core.audio.mastering import MasteringEngine
-
-            # Load original audio
-            audio_data, sample_rate = sf.read(audio_path, dtype="float32")
-            # sf.read returns [samples, channels], we need [channels, samples]
-            if audio_data.ndim == 1:
-                audio_data = np.stack([audio_data, audio_data])
+            if requested_mode == "matchering":
+                return await _apply_matchering(audio_path, mastering_params, get_project_root)
             else:
-                audio_data = audio_data.T
-
-            # Apply mastering
-            engine = MasteringEngine()
-            mastered = engine.master(audio_data, sample_rate, params_override=mastering_params)
-
-            # Save re-mastered file alongside the original, with a unique ID to prevent overwrites
-            base, ext = os.path.splitext(audio_path)
-            uid_suffix = uuid.uuid4().hex[:8]
-            # If this is an _original file, swap it
-            if base.endswith("_original"):
-                output_path = base.replace("_original", f"_remastered_{uid_suffix}") + ext
-            else:
-                output_path = base + f"_remastered_{uid_suffix}" + ext
-
-            # Convert back to [samples, channels]
-            sf.write(output_path, mastered.T, sample_rate)
-
-            logger.info(f"[Mastering] Re-mastered: {output_path}")
-            return {"output_path": output_path, "sample_rate": sample_rate}
-
+                return _apply_builtin(audio_path, mastering_params)
+        except HTTPException:
+            raise
         except Exception as e:
             logger.error(f"[Mastering] Re-master failed: {e}", exc_info=True)
             raise HTTPException(500, f"Re-mastering failed: {e}")
+
+
+def _apply_builtin(audio_path: str, mastering_params: dict) -> dict:
+    """Parametric mastering via MasteringEngine."""
+    import numpy as np
+    import soundfile as sf
+    from acestep.core.audio.mastering import MasteringEngine
+
+    audio_data, sample_rate = sf.read(audio_path, dtype="float32")
+    if audio_data.ndim == 1:
+        audio_data = np.stack([audio_data, audio_data])
+    else:
+        audio_data = audio_data.T
+
+    engine = MasteringEngine()
+    mastered = engine.master(audio_data, sample_rate, params_override=mastering_params)
+
+    base, ext = os.path.splitext(audio_path)
+    uid_suffix = uuid.uuid4().hex[:8]
+    if base.endswith("_original"):
+        output_path = base.replace("_original", f"_remastered_{uid_suffix}") + ext
+    else:
+        output_path = base + f"_remastered_{uid_suffix}" + ext
+
+    sf.write(output_path, mastered.T, sample_rate)
+    logger.info(f"[Mastering] Re-mastered (builtin): {output_path}")
+    return {"output_path": output_path, "sample_rate": sample_rate}
+
+
+async def _apply_matchering(audio_path: str, mastering_params: dict, get_project_root) -> dict:
+    """Reference-based mastering via the matchering library."""
+    import asyncio
+    import numpy as np
+    import soundfile as sf
+    import tempfile
+
+    ref_path = mastering_params.get("reference_file") or mastering_params.get("reference")
+    if not ref_path or not os.path.isfile(ref_path):
+        raise HTTPException(400, f"Matchering reference file not found: {ref_path}")
+
+    use_stem = mastering_params.get("stem_matchering", False)
+
+    # Run the CPU-heavy matchering in a thread so we don't block the event loop
+    def _do_matchering():
+        import matchering as mg
+
+        _, sample_rate = sf.read(audio_path, dtype="float32", frames=1)
+
+        if use_stem:
+            from acestep.inference import _run_stem_matchering
+            logger.info("[Mastering] Running STEM Matchering pipeline (remaster)")
+
+            with tempfile.TemporaryDirectory() as temp_dir:
+                mastered = _run_stem_matchering(
+                    audio_path, ref_path, temp_dir, sample_rate, progress=None
+                )
+        else:
+            logger.info("[Mastering] Running standard Matchering pipeline (remaster)")
+            with tempfile.TemporaryDirectory() as temp_dir:
+                temp_out = os.path.join(temp_dir, "temp_out.wav")
+                mg.process(
+                    target=audio_path,
+                    reference=ref_path,
+                    results=[mg.pcm16(temp_out)],
+                )
+                mastered, out_sr = sf.read(temp_out, dtype="float32")
+                if mastered.ndim == 1:
+                    mastered = np.column_stack((mastered, mastered))
+                if out_sr != sample_rate:
+                    import librosa
+                    mastered = librosa.resample(
+                        mastered.T, orig_sr=out_sr, target_sr=sample_rate
+                    ).T
+
+        # Save output
+        base, ext = os.path.splitext(audio_path)
+        uid_suffix = uuid.uuid4().hex[:8]
+        suffix_tag = "stem_matchered" if use_stem else "matchered"
+        if base.endswith("_original"):
+            output_path = base.replace("_original", f"_{suffix_tag}_{uid_suffix}") + ext
+        else:
+            output_path = base + f"_{suffix_tag}_{uid_suffix}" + ext
+
+        sf.write(output_path, mastered if mastered.ndim == 2 else mastered.T, sample_rate)
+        logger.info(f"[Mastering] Matchered (stem={use_stem}): {output_path}")
+        return {"output_path": output_path, "sample_rate": sample_rate}
+
+    return await asyncio.get_event_loop().run_in_executor(None, _do_matchering)
+
