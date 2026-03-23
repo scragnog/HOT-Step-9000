@@ -51,6 +51,7 @@ HOT-Step 9000 sits on top of the original ACE-Step backend but introduces a mass
 - **Audio Enhancement Studio (Legacy):** Per-stem DSP engine with 6 presets, reverb, echo, stereo widening, and optional Demucs stem separation.
 - **UI & QoL:** Persistent settings, debug panel with GPU/RAM/CPU monitoring, waveform visualizer, track list pagination, job cancellation, queue management, bulk operations, and a simple one-click shutdown.
 - **AI Cover Art:** Optional AI-generated album artwork using SDXL Turbo. When enabled in Settings, each generated song receives a unique 512×512 cover image based on its title, style, and lyrics — generated locally on your GPU after audio completes.
+- **Redmond Mode:** One-click DPO quality refinement using the [AceStep_Refine_Redmond](https://huggingface.co/artificialguybr/AceStep_Refine_Redmond) adapter by [artificialguybr](https://huggingface.co/artificialguybr). Merges a trained quality adapter directly into the DiT decoder below the adapter slot system — improving musicality, arrangement, and vocal quality across all generations. Auto-downloads on first use (~132 MB), toggleable at runtime with adjustable scale.
 
 *For a detailed, technical breakdown of every new feature, see [FEATURES.md](./FEATURES.md).*
 
@@ -74,6 +75,7 @@ HOT-Step 9000 exists thanks to the incredible open-source AI audio community:
 
 - Core models and initial application framework by the **[ACE-Step 1.5 Team](https://github.com/ace-step/ACE-Step-1.5)**.
 - Windows compatibility layer and upstream scaffolding by **[sdbds](https://github.com/sdbds/ACE-Step-1.5-for-windows)**.
+- DPO quality refinement adapter (Redmond Mode) by **[artificialguybr](https://huggingface.co/artificialguybr)**.
 - UI Overhaul, advanced tooling, and new features by **scragnog**.
 
 ## License
