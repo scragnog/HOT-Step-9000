@@ -50,6 +50,7 @@ HOT-Step 9000 sits on top of the original ACE-Step backend but introduces a mass
 - **Creation Panel Overhaul:** Reorganized from a single monolithic panel into ~13 modular accordion sections with Simple vs Custom modes.
 - **Audio Enhancement Studio (Legacy):** Per-stem DSP engine with 6 presets, reverb, echo, stereo widening, and optional Demucs stem separation.
 - **UI & QoL:** Persistent settings, debug panel with GPU/RAM/CPU monitoring, waveform visualizer, track list pagination, job cancellation, queue management, bulk operations, and a simple one-click shutdown.
+- **AI Cover Art:** Optional AI-generated album artwork using SDXL Turbo. When enabled in Settings, each generated song receives a unique 512×512 cover image based on its title, style, and lyrics — generated locally on your GPU after audio completes.
 
 *For a detailed, technical breakdown of every new feature, see [FEATURES.md](./FEATURES.md).*
 
