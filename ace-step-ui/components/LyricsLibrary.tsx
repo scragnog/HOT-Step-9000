@@ -40,6 +40,7 @@ export function LyricsLibrary({ setStyle, setLyrics, setBpm, setKeyScale, setTit
     const [expandedArtists, setExpandedArtists] = useState<Set<string>>(new Set());
     const [expandedAlbums, setExpandedAlbums] = useState<Set<string>>(new Set());
     const [appliedTrack, setAppliedTrack] = useState('');
+    const [useLibraryDuration, setUseLibraryDuration] = usePersistedState('ace-lyrics-use-duration', false);
 
     const handleScan = async () => {
         if (!libraryPath.trim()) return;
@@ -102,9 +103,8 @@ export function LyricsLibrary({ setStyle, setLyrics, setBpm, setKeyScale, setTit
             }
         }
         if (track.title) setTitle(artistName ? `${artistName} - ${track.title}` : track.title);
-        if (track.duration > 0) {
-            // Add ~15% headroom so CoT has room to end the song naturally
-            // Duration intentionally not set — CoT needs Auto duration
+        if (track.duration > 0 && useLibraryDuration) {
+            setDuration(track.duration);
         }
         setAppliedTrack(track.filename);
         setTimeout(() => setAppliedTrack(''), 2000);
@@ -214,6 +214,26 @@ export function LyricsLibrary({ setStyle, setLyrics, setBpm, setKeyScale, setTit
                     {artists.length === 0 && !loading && libraryPath && (
                         <div className="text-xs text-zinc-500 text-center py-2">
                             No tracks found. Click Scan to search for lyrics files.
+                        </div>
+                    )}
+
+                    {/* Use Library Duration toggle */}
+                    {totalTracks > 0 && (
+                        <div className="flex items-center justify-between pt-2 mt-2 border-t border-white/10">
+                            <div>
+                                <div className="text-xs font-medium text-zinc-300">Use Library Duration</div>
+                                <div className="text-[10px] text-zinc-500">Set duration from track data so audio codes match song length</div>
+                            </div>
+                            <button
+                                onClick={() => setUseLibraryDuration(!useLibraryDuration)}
+                                className={`relative w-9 h-5 rounded-full transition-colors ${
+                                    useLibraryDuration ? 'bg-purple-500' : 'bg-zinc-700'
+                                }`}
+                            >
+                                <span className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                                    useLibraryDuration ? 'translate-x-4' : 'translate-x-0'
+                                }`} />
+                            </button>
                         </div>
                     )}
                 </div>
