@@ -509,9 +509,7 @@
         const redmondAvailable = REDMOND_AVAILABLE === 'true';
         redmondToggle.checked = CURRENT_REDMOND_MODE === 'true';
         if (!redmondAvailable) {
-            redmondRow.classList.add('unavailable');
-            redmondDesc.textContent = 'Not installed — download via install.bat';
-            redmondToggle.disabled = true;
+            redmondDesc.textContent = 'DPO quality refinement — adapter will download on first launch (~750 MB)';
         }
 
         // ---- Buttons & Events ----

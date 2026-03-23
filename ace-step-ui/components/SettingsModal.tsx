@@ -64,7 +64,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
                     const data = json?.data || json;
                     setRedmondEnabled(!!data.enabled);
                     setRedmondScale(data.scale ?? 0.7);
-                    setRedmondAvailable(!!data.available || !!data.adapter_path);
+                    setRedmondAvailable(true);  // Always allow — auto-downloads if needed
                     setRedmondFetched(true);
                 }
             } catch { /* Python API might not be running yet */ }
