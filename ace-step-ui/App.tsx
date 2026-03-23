@@ -1066,9 +1066,17 @@ function AppContent() {
     if (!token) return;
     if (activeJobsRef.current.has(jobId)) return;
 
+    // Track consecutive poll failures — tolerate transient errors instead of
+    // immediately killing queued jobs that the backend is still processing.
+    let consecutiveErrors = 0;
+    const MAX_CONSECUTIVE_ERRORS = 30; // ~60s of continuous failure at 2s intervals
+
     const pollInterval = setInterval(async () => {
       try {
         const status = await generateApi.getStatus(jobId, token);
+
+        // Successful poll — reset error counter
+        consecutiveErrors = 0;
 
         // When job is queued/pending, don't show progress from another running job
         const isQueued = status.status === 'queued' || status.status === 'pending';
@@ -1136,21 +1144,29 @@ function AppContent() {
           showToast(`Generation failed: ${status.error || 'Unknown error'}`, 'error');
         }
       } catch (pollError) {
-        console.error(`Polling error for job ${jobId}:`, pollError);
-        cleanupJob(jobId, tempId);
+        consecutiveErrors++;
+        console.warn(`Polling error for job ${jobId} (${consecutiveErrors}/${MAX_CONSECUTIVE_ERRORS}):`, pollError);
+
+        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+          console.error(`Job ${jobId}: too many consecutive poll failures, giving up`);
+          cleanupJob(jobId, tempId);
+          showToast('Generation lost contact with backend — check if it completed in your library', 'error');
+        }
+        // Otherwise keep polling — transient errors are normal when the backend is busy
       }
     }, 2000);
 
     activeJobsRef.current.set(jobId, { tempId, pollInterval });
     setActiveJobCount(activeJobsRef.current.size);
 
+    // Hard safety timeout: 1 hour accommodates deep queues (e.g. 10+ songs)
     setTimeout(() => {
       if (activeJobsRef.current.has(jobId)) {
-        console.warn(`Job ${jobId} timed out`);
+        console.warn(`Job ${jobId} timed out after 1 hour`);
         cleanupJob(jobId, tempId);
-        showToast('Generation timed out', 'error');
+        showToast('Generation timed out — check if it completed in your library', 'error');
       }
-    }, 600000);
+    }, 3_600_000);
   }, [token, cleanupJob, refreshSongsList]);
 
   const buildTempSongFromParams = (params: GenerationParams, tempId: string, createdAt?: string) => ({
