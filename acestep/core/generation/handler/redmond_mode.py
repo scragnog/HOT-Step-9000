@@ -24,6 +24,26 @@ import torch
 from loguru import logger
 
 
+def _ensure_peft_filename(adapter_dir: str) -> None:
+    """Rename the safetensors weights file to adapter_model.safetensors if needed.
+
+    HuggingFace repos sometimes use custom filenames (e.g.
+    ``AceStep_Refine_Redmond_standard.safetensors``) but PEFT's
+    ``from_pretrained`` expects ``adapter_model.safetensors``.
+    """
+    expected = os.path.join(adapter_dir, "adapter_model.safetensors")
+    if os.path.isfile(expected):
+        return  # Already correct
+
+    # Find any .safetensors file in the directory
+    for fname in os.listdir(adapter_dir):
+        if fname.endswith(".safetensors"):
+            src = os.path.join(adapter_dir, fname)
+            os.rename(src, expected)
+            logger.info(f"[Redmond] Renamed {fname} → adapter_model.safetensors")
+            return
+
+
 def _compute_redmond_delta(handler: Any, adapter_path: str) -> Dict[str, torch.Tensor]:
     """Load PEFT adapter, merge into decoder, compute delta vs raw base.
 
@@ -136,6 +156,7 @@ def apply_redmond_at_startup(handler: Any, adapter_path: str, scale: float = 0.7
         return f"❌ Redmond adapter not found: {adapter_path}"
 
     t0 = time.time()
+    _ensure_peft_filename(adapter_path)
     logger.info(f"[Redmond] Merging base refinement adapter at scale {scale:.2f}")
     logger.info(f"[Redmond] Adapter path: {adapter_path}")
 

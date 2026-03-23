@@ -49,7 +49,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
     // Redmond Mode state
     const [redmondEnabled, setRedmondEnabled] = useState(false);
     const [redmondScale, setRedmondScale] = useState(0.7);
-    const [redmondAvailable, setRedmondAvailable] = useState(false);
+    const [redmondAvailable, setRedmondAvailable] = useState(true);
     const [redmondLoading, setRedmondLoading] = useState(false);
     const [redmondFetched, setRedmondFetched] = useState(false);
 

@@ -42,6 +42,18 @@ if exist ".env" (
     for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_LM_BACKEND=" ".env"') do set "CURRENT_LM_BACKEND=%%b"
 )
 
+REM Read Redmond Mode settings from .env
+set "CURRENT_REDMOND_MODE=false"
+set "CURRENT_REDMOND_SCALE=0.7"
+if exist ".env" (
+    for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_REDMOND_MODE=" ".env"') do set "CURRENT_REDMOND_MODE=%%b"
+    for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_REDMOND_SCALE=" ".env"') do set "CURRENT_REDMOND_SCALE=%%b"
+)
+
+REM Check if Redmond adapter is available on disk
+set "REDMOND_AVAILABLE=false"
+if exist "checkpoints\redmond-refine\standard\adapter_config.json" set "REDMOND_AVAILABLE=true"
+
 REM Scan checkpoints/ for available ACE-Step models (acestep-v15-*)
 set "MODEL_LIST="
 for /d %%d in (checkpoints\acestep-v15-*) do (
@@ -80,6 +92,9 @@ echo var AVAILABLE_LM_MODELS = [%LM_MODEL_LIST%];
 echo var CURRENT_MODEL = '%CURRENT_MODEL%';
 echo var CURRENT_LM_MODEL = '%CURRENT_LM_MODEL%';
 echo var CURRENT_LM_BACKEND = '%CURRENT_LM_BACKEND%';
+echo var CURRENT_REDMOND_MODE = '%CURRENT_REDMOND_MODE%';
+echo var CURRENT_REDMOND_SCALE = '%CURRENT_REDMOND_SCALE%';
+echo var REDMOND_AVAILABLE = '%REDMOND_AVAILABLE%';
 ) > "%~dp0loading-config.js"
 
 if "%IS_RESTART%"=="0" (
