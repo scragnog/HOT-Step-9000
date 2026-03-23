@@ -89,10 +89,13 @@ def apply_patch(dll_path: str, *, force: bool = False) -> bool:
     # Create backup
     backup_path = dll_path + ".bak"
     if not os.path.exists(backup_path):
-        shutil.copy2(dll_path, backup_path)
-        print(f"  [BACKUP] Created: {backup_path}")
+        try:
+            shutil.copy2(dll_path, backup_path)
+            print(f"  [BACKUP] Created: {backup_path}")
+        except PermissionError:
+            print(f"  [WARN] Could not create backup (file locked?) — continuing anyway.")
 
-    # Read, patch, write
+    # Read and patch
     data = open(dll_path, "rb").read()
     patched = data.replace(PATTERN_BROKEN, PATTERN_FIXED, 1)
 
@@ -100,7 +103,40 @@ def apply_patch(dll_path: str, *, force: bool = False) -> bool:
         print(f"  [ERROR] Size mismatch after patching — aborting!")
         return False
 
-    open(dll_path, "wb").write(patched)
+    # Write to temp file first, then atomic-replace.
+    # This avoids corrupting the DLL if the write is interrupted,
+    # and os.replace() can sometimes succeed where open("wb") fails
+    # because it uses a different Windows API path.
+    import tempfile
+    dll_dir = os.path.dirname(dll_path)
+    try:
+        fd, tmp_path = tempfile.mkstemp(dir=dll_dir, suffix=".tmp")
+        try:
+            os.write(fd, patched)
+        finally:
+            os.close(fd)
+        os.replace(tmp_path, dll_path)
+    except PermissionError:
+        # Clean up temp file if it exists
+        if 'tmp_path' in locals() and os.path.exists(tmp_path):
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+        print()
+        print(f"  [ERROR] Permission denied writing to: {dll_path}")
+        print()
+        print(f"  The DLL is likely locked by another process (antivirus, Python, etc.).")
+        print(f"  To fix this, try one of:")
+        print(f"    1. Close ALL Python processes and terminal windows, then re-run LAUNCH.bat")
+        print(f"    2. Run LAUNCH.bat as Administrator (right-click → Run as administrator)")
+        print(f"    3. Manually patch: copy the .bak file, patch with a hex editor, replace the original")
+        print()
+        print(f"  Without this patch, VLLM/Custom VLLM will run ~14x slower (eager mode fallback).")
+        print(f"  PyTorch/PT mode is unaffected.")
+        print()
+        return False
+
     print(f"  [PATCHED] Fixed CUDA stream handle parsing (long → unsigned long long)")
     print(f"            DLL: {dll_path}")
     return True
@@ -113,7 +149,13 @@ def revert_patch(dll_path: str) -> bool:
         print(f"  [ERROR] No backup found at: {backup_path}")
         return False
 
-    shutil.copy2(backup_path, dll_path)
+    try:
+        shutil.copy2(backup_path, dll_path)
+    except PermissionError:
+        print(f"  [ERROR] Permission denied restoring: {dll_path}")
+        print(f"  Close all Python processes and try again, or run as Administrator.")
+        return False
+
     print(f"  [REVERTED] Restored from backup: {backup_path}")
     return True
 
