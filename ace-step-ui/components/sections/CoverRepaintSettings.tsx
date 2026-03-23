@@ -374,6 +374,21 @@ export const CoverRepaintSettings: React.FC<CoverRepaintSettingsProps> = ({
                                                 </div>
                                             )}
                                         </div>
+                                        {/* Stem Matchering toggle — only when reference is selected */}
+                                        {masteringParams?.reference_file && (
+                                            <div className="flex items-center justify-between py-1.5 mt-1 border-t border-zinc-200 dark:border-white/5">
+                                                <div className="flex-1">
+                                                    <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Stem Matchering</span>
+                                                    <p className="text-[10px] text-zinc-500">Separate both tracks into stems, match per-stem, then recombine. Better tonal fidelity, longer processing.</p>
+                                                </div>
+                                                <button
+                                                    onClick={() => setMasteringParams?.({ ...(masteringParams || {}), stem_matchering: !masteringParams?.stem_matchering })}
+                                                    className={`w-10 h-5 rounded-full flex items-center transition-colors duration-200 px-0.5 border border-zinc-200 dark:border-white/5 ${masteringParams?.stem_matchering ? 'bg-pink-600' : 'bg-zinc-300 dark:bg-black/40'}`}
+                                                >
+                                                    <div className={`w-4 h-4 rounded-full bg-white transform transition-transform duration-200 shadow-sm ${masteringParams?.stem_matchering ? 'translate-x-5' : 'translate-x-0'}`} />
+                                                </button>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>
