@@ -18,6 +18,12 @@ export default defineConfig(({ mode }) => {
           target: env.ACESTEP_API_URL || `http://${env.ACESTEP_API_HOST || '127.0.0.1'}:${env.ACESTEP_API_PORT || '8001'}`,
           changeOrigin: true,
         },
+        // Redmond Mode — direct to Python backend (bypasses Node.js middleware)
+        '/api/redmond': {
+          target: env.ACESTEP_API_URL || `http://${env.ACESTEP_API_HOST || '127.0.0.1'}:${env.ACESTEP_API_PORT || '8001'}`,
+          changeOrigin: true,
+          rewrite: (path: string) => path.replace(/^\/api\/redmond/, '/v1/redmond'),
+        },
         '/api': {
           target: backendUrl,
           changeOrigin: true,
