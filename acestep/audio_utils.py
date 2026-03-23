@@ -182,11 +182,16 @@ class AudioSaver:
                     try:
                         subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
                     except FileNotFoundError:
-                        raise FileNotFoundError(
-                            f"ffmpeg not found on system PATH — required for '{format}' audio format. "
-                            f"Install ffmpeg (https://ffmpeg.org/download.html) and ensure it is on your PATH, "
-                            f"or switch to 'flac' or 'wav' format which do not require ffmpeg."
+                        # ffmpeg not found — fall back to FLAC so the audio isn't lost
+                        logger.warning(
+                            f"[AudioSaver] ffmpeg not found on system PATH — cannot save as '{format}'. "
+                            f"Falling back to FLAC format. Install ffmpeg "
+                            f"(https://ffmpeg.org/download.html) for mp3/opus/aac support."
                         )
+                        fallback_path = output_path.with_suffix(".flac")
+                        sf.write(str(fallback_path), audio_np, sample_rate, format="FLAC")
+                        logger.info(f"[AudioSaver] Saved audio to {fallback_path} (flac fallback, {sample_rate}Hz)")
+                        return str(fallback_path)
                     logger.debug(f"[AudioSaver] Saved audio to {output_path} ({format}, {sample_rate}Hz) via ffmpeg subprocess")
                 finally:
                     # Clean up temp wav file
