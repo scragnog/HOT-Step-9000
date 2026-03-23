@@ -116,6 +116,11 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
     const [showBrowse, setShowBrowse] = useState(false);
     const [expandedLayers, setExpandedLayers] = useState<Set<number>>(new Set());
 
+    // Pending drag state for raw range inputs (Role Blend + individual layers)
+    // Key format: `${slotNum}-${roleKey}` or `${slotNum}-layer-${layerIdx}`
+    const [pendingRoleBlend, setPendingRoleBlend] = useState<Record<string, number>>({});
+    const [pendingLayerScale, setPendingLayerScale] = useState<Record<string, number>>({});
+
     // In-browser file browser modal state
     const [fileBrowserOpen, setFileBrowserOpen] = useState(false);
     const [fileBrowserMode, setFileBrowserMode] = useState<'file' | 'folder'>('file');
@@ -386,11 +391,13 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                 <div className="space-y-2">
                                     <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Loaded Adapters ({adapterSlots.length}/4)</label>
                                     {(() => {
-                                        const totalScale = adapterSlots.reduce((sum, s) => sum + s.scale, 0);
+                                        const totalScale = globalScaleOverrideEnabled && globalOverallScale !== undefined
+                                            ? adapterSlots.length * globalOverallScale
+                                            : adapterSlots.reduce((sum, s) => sum + s.scale, 0);
                                         return totalScale > 1.0 ? (
                                             <div className="flex items-start gap-1.5 text-[11px] text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 px-2 py-1.5 rounded">
                                                 <span className="mt-0.5">⚠️</span>
-                                                <span>Combined adapter strength is <strong>{totalScale.toFixed(2)}</strong> — values above 1.0 may produce unexpected or distorted output.</span>
+                                                <span>Combined adapter strength is <strong>{totalScale.toFixed(2)}</strong>{globalScaleOverrideEnabled ? ' (global override)' : ''} — values above 1.0 may produce unexpected or distorted output.</span>
                                             </div>
                                         ) : null;
                                     })()}
@@ -444,6 +451,7 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                                 max={2}
                                                 step={0.05}
                                                 onChange={(v) => onSlotScaleChange(slot.slot, v)}
+                                                onChangeCommitted={(v) => onSlotScaleChange(slot.slot, v)}
                                                 formatDisplay={(v) => v.toFixed(2)}
                                             />
                                             </div>
@@ -479,6 +487,7 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                                                 max={2}
                                                                 step={0.05}
                                                                 onChange={(v) => onSlotGroupScaleChange(slot.slot, group, v)}
+                                                                onChangeCommitted={(v) => onSlotGroupScaleChange(slot.slot, group, v)}
                                                                 formatDisplay={(v) => v.toFixed(2)}
                                                                 helpText={info.helpText}
                                                                 tooltip={info.tooltip}
@@ -539,18 +548,33 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                                                         min={0}
                                                                         max={2}
                                                                         step={0.05}
-                                                                        value={avg}
+                                                                        value={pendingRoleBlend[`${slot.slot}-${key}`] ?? avg}
                                                                         onChange={(e) => {
-                                                                            const val = parseFloat(e.target.value);
-                                                                            for (const i of layers) {
-                                                                                onSlotLayerScaleChange(slot.slot, i, val);
+                                                                            setPendingRoleBlend(prev => ({ ...prev, [`${slot.slot}-${key}`]: parseFloat(e.target.value) }));
+                                                                        }}
+                                                                        onPointerUp={() => {
+                                                                            const val = pendingRoleBlend[`${slot.slot}-${key}`];
+                                                                            if (val !== undefined) {
+                                                                                for (const i of layers) {
+                                                                                    onSlotLayerScaleChange(slot.slot, i, val);
+                                                                                }
+                                                                                setPendingRoleBlend(prev => { const next = { ...prev }; delete next[`${slot.slot}-${key}`]; return next; });
+                                                                            }
+                                                                        }}
+                                                                        onTouchEnd={() => {
+                                                                            const val = pendingRoleBlend[`${slot.slot}-${key}`];
+                                                                            if (val !== undefined) {
+                                                                                for (const i of layers) {
+                                                                                    onSlotLayerScaleChange(slot.slot, i, val);
+                                                                                }
+                                                                                setPendingRoleBlend(prev => { const next = { ...prev }; delete next[`${slot.slot}-${key}`]; return next; });
                                                                             }
                                                                         }}
                                                                         className={`flex-1 accent-${color}-500 h-1`}
                                                                         style={{ height: '4px' }}
                                                                     />
                                                                     <span className={`text-[10px] font-mono w-7 text-right ${isModified ? `text-${color}-500 dark:text-${color}-400 font-semibold` : 'text-zinc-500'}`}>
-                                                                        {avg.toFixed(2)}
+                                                                        {(pendingRoleBlend[`${slot.slot}-${key}`] ?? avg).toFixed(2)}
                                                                     </span>
                                                                 </div>
                                                             );
@@ -591,12 +615,26 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                                                         min={0}
                                                                         max={2}
                                                                         step={0.05}
-                                                                        value={val}
-                                                                        onChange={(e) => onSlotLayerScaleChange?.(slot.slot, i, parseFloat(e.target.value))}
+                                                                        value={pendingLayerScale[`${slot.slot}-layer-${i}`] ?? val}
+                                                                        onChange={(e) => setPendingLayerScale(prev => ({ ...prev, [`${slot.slot}-layer-${i}`]: parseFloat(e.target.value) }))}
+                                                                        onPointerUp={() => {
+                                                                            const v = pendingLayerScale[`${slot.slot}-layer-${i}`];
+                                                                            if (v !== undefined) {
+                                                                                onSlotLayerScaleChange?.(slot.slot, i, v);
+                                                                                setPendingLayerScale(prev => { const next = { ...prev }; delete next[`${slot.slot}-layer-${i}`]; return next; });
+                                                                            }
+                                                                        }}
+                                                                        onTouchEnd={() => {
+                                                                            const v = pendingLayerScale[`${slot.slot}-layer-${i}`];
+                                                                            if (v !== undefined) {
+                                                                                onSlotLayerScaleChange?.(slot.slot, i, v);
+                                                                                setPendingLayerScale(prev => { const next = { ...prev }; delete next[`${slot.slot}-layer-${i}`]; return next; });
+                                                                            }
+                                                                        }}
                                                                         className="w-full h-1 accent-purple-500"
                                                                         style={{ WebkitAppearance: 'none', height: '4px' }}
                                                                     />
-                                                                    <span className={`text-[8px] ${isModified ? 'text-purple-400 font-semibold' : 'text-zinc-500'}`}>{val.toFixed(1)}</span>
+                                                                    <span className={`text-[8px] ${isModified ? 'text-purple-400 font-semibold' : 'text-zinc-500'}`}>{(pendingLayerScale[`${slot.slot}-layer-${i}`] ?? val).toFixed(1)}</span>
                                                                 </div>
                                                             );
                                                         })}
@@ -637,6 +675,7 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                                 max={2}
                                                 step={0.05}
                                                 onChange={(v) => onGlobalOverallScaleChange?.(v)}
+                                                onChangeCommitted={(v) => onGlobalOverallScaleChange?.(v)}
                                                 formatDisplay={(v) => v.toFixed(2)}
                                             />
                                             <div className="space-y-1">
@@ -665,6 +704,7 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                                             max={2}
                                                             step={0.05}
                                                             onChange={(v) => onGlobalGroupScaleChange?.(group, v)}
+                                                            onChangeCommitted={(v) => onGlobalGroupScaleChange?.(group, v)}
                                                             formatDisplay={(v) => v.toFixed(2)}
                                                             helpText={info.helpText}
                                                         />
