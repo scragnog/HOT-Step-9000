@@ -58,6 +58,10 @@ class InitServiceOrchestratorMixin:
             self._adapter_type = None
         if hasattr(self, "_lora_scale_state"):
             self._lora_scale_state = {}
+        # Reset advanced adapter slot state (weight-space merging system)
+        self._adapter_slots = {}
+        self._next_slot_id = 0
+        self._merged_dirty = False
         # Reset LoraService registry if present
         lora_svc = getattr(self, "_lora_service", None)
         if lora_svc is not None:
@@ -68,7 +72,7 @@ class InitServiceOrchestratorMixin:
         # Reset Redmond Mode delta/raw_base (keep adapter_path for re-apply)
         from acestep.core.generation.handler.redmond_mode import reset_redmond_state
         reset_redmond_state(self)
-        logger.info("[_reset_lora_state] LoRA/LoKr state cleared")
+        logger.info("[_reset_lora_state] LoRA/LoKr/adapter-slot state cleared")
 
     def switch_dit_model(
         self,
@@ -87,6 +91,11 @@ class InitServiceOrchestratorMixin:
             Tuple of (status_message, success_bool).
         """
         try:
+            # Capture Redmond state BEFORE reset clears it
+            _redmond_was_enabled = getattr(self, "_redmond_enabled", False)
+            _redmond_path = getattr(self, "_redmond_adapter_path", "")
+            _redmond_scale = getattr(self, "_redmond_scale", 0.7)
+
             # Clean up LoRA state from previous model
             if self.lora_loaded:
                 try:
@@ -128,13 +137,9 @@ class InitServiceOrchestratorMixin:
             status = f"[OK] Switched to {config_path} on {self.device} (attn={attn})"
             logger.info(f"[switch_dit_model] {status}")
 
-            # Re-apply Redmond Mode if it was active before the switch
-            _redmond_path = getattr(self, "_redmond_adapter_path", "")
-            _redmond_was_enabled = getattr(self, "_redmond_enabled", False)
+            # Re-apply Redmond Mode if it was active before the switch (uses pre-reset values)
             if _redmond_was_enabled and _redmond_path and self.quantization is None:
-                import os as _os
-                if _os.path.isdir(_redmond_path):
-                    _redmond_scale = getattr(self, "_redmond_scale", 0.7)
+                if os.path.isdir(_redmond_path):
                     logger.info(f"[switch_dit_model] Re-applying Redmond Mode at scale {_redmond_scale:.2f}")
                     try:
                         from acestep.core.generation.handler.redmond_mode import apply_redmond_at_startup
