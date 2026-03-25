@@ -163,15 +163,6 @@ def _extract_adapter_delta(self, lora_path: str) -> dict:
         except ImportError:
             raise ImportError("LyCORIS library not installed")
 
-        # Snapshot all hook IDs on every decoder sub-module BEFORE injection
-        # so we can remove only the NEW hooks that LyCORIS adds.
-        pre_hooks = {}
-        for name, module in self.model.decoder.named_modules():
-            fwd = set(getattr(module, '_forward_hooks', {}).keys())
-            pre = set(getattr(module, '_forward_pre_hooks', {}).keys())
-            if fwd or pre:
-                pre_hooks[name] = (fwd, pre)
-
         # Move model to CPU for lycoris injection
         original_device = self.device
         self.model.decoder = self.model.decoder.cpu()
@@ -179,42 +170,71 @@ def _extract_adapter_delta(self, lora_path: str) -> dict:
         from acestep.core.generation.handler.lora.lifecycle import _load_lokr_adapter
         lycoris_net = _load_lokr_adapter(self.model.decoder, lokr_weights_path)
 
-        self.model.decoder = self.model.decoder.to(original_device).to(self.dtype)
-        self.model.decoder.eval()
+        # === Compute deltas directly from LoKR factor matrices ===
+        # We intentionally bypass lycoris_net.merge_to() because LyCORIS has
+        # a double-scaling bug: get_diff_weight() calls get_weight() which
+        # already applies self.scale via make_kron(), then multiplies by
+        # self.scale again.  When scale=1.0 (alpha==dim) this is invisible,
+        # but for alpha!=dim the delta is scaled by scale² instead of scale.
+        #
+        # Instead we compute the delta using the same formula as LyCORIS's
+        # training forward() path: get_weight(shape) * scalar.
+        # This matches what the model actually saw during training.
 
-        # LyCORIS uses forward hooks — merge_to() bakes effect into weights
-        lycoris_net.merge_to()
-        adapted_sd = {k: v.detach().cpu().clone() for k, v in self.model.decoder.state_dict().items()}
+        # Build a map from decoder parameter data_ptr → state dict key
+        param_to_key = {}
+        for key, param in self.model.decoder.named_parameters():
+            param_to_key[param.data_ptr()] = key
+
+        adapted_sd = {}  # will hold only the delta keys for LoKR
+        lokr_delta_keys = set()
+        for lora_mod in lycoris_net.loras:
+            org_module = lora_mod.org_module[0]
+            weight_ptr = org_module.weight.data_ptr()
+            sd_key = param_to_key.get(weight_ptr)
+            if sd_key is None:
+                continue
+            # get_weight includes self.scale once via make_kron — correct
+            # scalar is 1.0 for standard adapters (non-use_scalar)
+            diff = lora_mod.get_weight(org_module.weight.shape)
+            scalar_val = lora_mod.scalar
+            if scalar_val is not None:
+                diff = diff.float() * scalar_val.float()
+            else:
+                diff = diff.float()
+            if diff.abs().max().item() > 1e-8:
+                adapted_sd[sd_key] = diff.detach().cpu()
+                lokr_delta_keys.add(sd_key)
+
+        logger.info(
+            f"LoKr direct delta: {len(lokr_delta_keys)} keys computed from "
+            f"{len(lycoris_net.loras)} modules (scale={getattr(lycoris_net.loras[0], 'scale', '?') if lycoris_net.loras else 'N/A'})"
+        )
+
+        # === Cleanup: restore decoder and remove LyCORIS hooks/wrappers ===
         try:
             lycoris_net.restore()
         except Exception:
             pass
 
-        # === Critical cleanup ===
-        # Remove ALL hooks that were added by inject_lokr_into_dit / apply_to().
-        # LyCORIS restore() only un-bakes merge_to() weight changes but does NOT
-        # remove forward hooks.  Without this cleanup, the last adapter's hooks
-        # fire during inference ON TOP of the weight-space merged values.
-        removed_count = 0
-        for name, module in self.model.decoder.named_modules():
-            old_fwd, old_pre = pre_hooks.get(name, (set(), set()))
+        # Remove forward wrappers left by apply_to().  LyCORIS restore() only
+        # un-bakes merge_to() weight changes but does NOT remove the forward
+        # monkey-patches.  Clean up via the _lycoris_wrappers list if present,
+        # otherwise fall back to _lycoris_original_forward.
+        cleaned = 0
+        for _name, mod in self.model.decoder.named_modules():
+            wrappers = getattr(mod, '_lycoris_wrappers', None)
+            if wrappers:
+                orig_fwd = getattr(mod, '_lycoris_original_forward', None)
+                if orig_fwd is not None:
+                    mod.forward = orig_fwd
+                mod.__dict__.pop('_lycoris_wrappers', None)
+                mod.__dict__.pop('_lycoris_original_forward', None)
+                cleaned += 1
 
-            # Remove new forward hooks
-            new_fwd = set(getattr(module, '_forward_hooks', {}).keys()) - old_fwd
-            for hid in new_fwd:
-                del module._forward_hooks[hid]
-                removed_count += 1
+        if cleaned:
+            logger.info(f"Cleaned {cleaned} LyCORIS forward wrappers from decoder")
 
-            # Remove new forward pre-hooks
-            new_pre = set(getattr(module, '_forward_pre_hooks', {}).keys()) - old_pre
-            for hid in new_pre:
-                del module._forward_pre_hooks[hid]
-                removed_count += 1
-
-        if removed_count:
-            logger.info(f"Removed {removed_count} LyCORIS hooks from decoder")
-
-        # Clean up the lycoris_net reference
         try:
             if hasattr(self.model.decoder, '_lycoris_net'):
                 delattr(self.model.decoder, '_lycoris_net')
@@ -233,13 +253,17 @@ def _extract_adapter_delta(self, lora_path: str) -> dict:
     if is_peft:
         adapted_sd = {k: v.detach().cpu().clone() for k, v in self.model.decoder.state_dict().items()}
 
-    # Compute delta = adapted − base (CPU, only changed keys)
+    # Compute delta — for LoKR, adapted_sd already contains raw deltas
+    # (computed directly from factor matrices).  For PEFT, subtract base.
     delta = {}
-    for k in self._base_decoder:
-        if k in adapted_sd:
-            diff = adapted_sd[k].float() - self._base_decoder[k].float()
-            if diff.abs().max().item() > 1e-8:
-                delta[k] = diff
+    if adapter_type == "lycoris_lokr":
+        delta = {k: v.float() for k, v in adapted_sd.items()}
+    else:
+        for k in self._base_decoder:
+            if k in adapted_sd:
+                diff = adapted_sd[k].float() - self._base_decoder[k].float()
+                if diff.abs().max().item() > 1e-8:
+                    delta[k] = diff
     del adapted_sd
 
     # Restore decoder to base state
