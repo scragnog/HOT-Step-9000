@@ -30,7 +30,7 @@ import { GenerateFooter } from './GenerateFooter';
 import { LyricsLibrary } from './LyricsLibrary';
 import { MasteringConsoleModal, MasteringParams as MasteringParamsType } from './MasteringConsoleModal';
 
-import AdaptersAccordion from './accordions/AdaptersAccordion';
+import AdaptersAccordion, { AdapterTriggerSetting } from './accordions/AdaptersAccordion';
 import { LayerAblationPanel } from './accordions/LayerAblationPanel';
 import ScoreSystemAccordion from './accordions/ScoreSystemAccordion';
 import { ActivationSteeringSection } from './sections/ActivationSteeringSection';
@@ -263,6 +263,9 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [globalOverallScale, setGlobalOverallScale] = usePersistedState('ace-globalOverallScale', 1.0);
   const [globalGroupScales, setGlobalGroupScales] = usePersistedState<{ self_attn: number; cross_attn: number; mlp: number }>('ace-globalGroupScales', { self_attn: 1.0, cross_attn: 1.0, mlp: 1.0 });
   const [adapterLoadingMessage, setAdapterLoadingMessage] = useState<string | null>(null);
+
+  // Per-adapter trigger word settings (persisted by adapter path)
+  const [adapterTriggerSettings, setAdapterTriggerSettings] = usePersistedState<Record<string, AdapterTriggerSetting>>('ace-adapterTriggerSettings', {});
 
   // Activation Steering State
   const [showSteeringPanel, setShowSteeringPanel] = usePersistedState('ace-showSteeringPanel', false);
@@ -717,6 +720,26 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
         setAdapterSlots(status.advanced.slots);
         setLoraLoaded(true);
         setAdapterTriggerWord((status as any).trigger_word || '');
+
+        // Auto-apply saved trigger word settings for this adapter
+        const savedSetting = adapterTriggerSettings[filePath];
+        if (savedSetting?.useFilename) {
+          const fileName = filePath.replace(/\\/g, '/').split('/').pop() || '';
+          const triggerWord = fileName.replace(/\.safetensors$/i, '').replace(/_/g, ' ');
+          const newSlot = status.advanced.slots.find((s: any) => s.path === filePath);
+          if (newSlot) {
+            try {
+              await generateApi.setSlotTriggerWord({
+                slot: newSlot.slot,
+                trigger_word: triggerWord,
+                tag_position: savedSetting.placement || 'prepend',
+              }, token);
+              console.log(`[TriggerWord] Auto-applied '${triggerWord}' (${savedSetting.placement}) for slot ${newSlot.slot}`);
+            } catch (err) {
+              console.error('[TriggerWord] Failed to auto-apply:', err);
+            }
+          }
+        }
       }
     } catch (err) {
       setLoraError(err instanceof Error ? err.message : 'Failed to load adapter');
@@ -778,6 +801,35 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       await generateApi.setSlotGroupScales({ slot, ...newScales }, token);
     } catch (err) {
       console.error('Failed to set slot group scales:', err);
+    }
+  };
+
+  // ── Trigger word setting handler ──────────────────────────────────────────
+  const handleTriggerSettingChange = async (adapterPath: string, setting: AdapterTriggerSetting) => {
+    // Update persisted state
+    setAdapterTriggerSettings(prev => ({ ...prev, [adapterPath]: setting }));
+
+    if (!token) return;
+
+    // Find the slot for this adapter path
+    const slotData = adapterSlots.find(s => s.path === adapterPath);
+    if (!slotData) return;
+
+    // Derive trigger word from filename
+    const fileName = adapterPath.replace(/\\/g, '/').split('/').pop() || '';
+    const triggerWord = setting.useFilename
+      ? fileName.replace(/\.safetensors$/i, '').replace(/_/g, ' ')
+      : '';
+
+    try {
+      await generateApi.setSlotTriggerWord({
+        slot: slotData.slot,
+        trigger_word: triggerWord,
+        tag_position: setting.placement || 'prepend',
+      }, token);
+      console.log(`[TriggerWord] Set '${triggerWord}' (${setting.placement}) for slot ${slotData.slot}`);
+    } catch (err) {
+      console.error('[TriggerWord] Failed to set:', err);
     }
   };
 
@@ -3067,6 +3119,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                 onGlobalOverallScaleChange={handleGlobalOverallScaleChange}
                 globalGroupScales={globalGroupScales}
                 onGlobalGroupScaleChange={handleGlobalGroupScaleChange}
+                adapterTriggerSettings={adapterTriggerSettings}
+                onTriggerSettingChange={handleTriggerSettingChange}
               />
               <LayerAblationPanel
                 customMode={true}

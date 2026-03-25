@@ -609,6 +609,18 @@ export const generateApi = {
     scale: number;
   }> => api('/api/lora/slot-layer-scale', { method: 'POST', body: params, token }),
 
+  // Advanced adapter: per-slot trigger word / placement
+  setSlotTriggerWord: (params: {
+    slot?: number;
+    trigger_word: string;
+    tag_position: string;
+  }, token: string): Promise<{
+    message: string;
+    trigger_word: string;
+    tag_position: string;
+    slot?: number;
+  }> => api('/api/lora/slot-trigger-word', { method: 'POST', body: params, token }),
+
   // Advanced adapter: temporal schedule for multi-singer switching
   setTemporalSchedule: (params: {
     clear?: boolean;
