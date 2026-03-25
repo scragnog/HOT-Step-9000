@@ -79,6 +79,13 @@ class AudioDiffRequest(BaseModel):
     amplify: float = Field(default=3.0, ge=1.0, le=20.0, description="Amplification factor for the diff signal")
 
 
+class SetSlotTriggerWordRequest(BaseModel):
+    """Set trigger word and placement for an adapter slot (or basic mode)."""
+    slot: Optional[int] = Field(default=None, description="Slot number for advanced mode; omit for basic single-adapter mode")
+    trigger_word: str = Field(default="", description="Trigger word to inject into captions (empty string to clear)")
+    tag_position: str = Field(default="prepend", description="Where to place the trigger word: prepend, append, or replace")
+
+
 class RedmondToggleRequest(BaseModel):
     """Enable or disable Redmond Mode (DPO quality refinement)."""
     enabled: bool = Field(..., description="Whether to enable Redmond Mode")
@@ -405,6 +412,39 @@ def register_lora_routes(
             return wrap_response(None, code=400, error=result)
         except Exception as exc:
             return wrap_response(None, code=500, error=f"Failed to set slot layer scales: {str(exc)}")
+
+    @app.post("/v1/lora/slot-trigger-word")
+    async def set_slot_trigger_word_endpoint(request: SetSlotTriggerWordRequest, _: None = Depends(verify_api_key)):
+        """Set trigger word and placement for an adapter slot or basic adapter."""
+        handler = _require_initialized_handler(app)
+        try:
+            tw = request.trigger_word.strip()
+            tp = request.tag_position.strip().lower() if request.tag_position else "prepend"
+            if tp not in ("prepend", "append", "replace"):
+                tp = "prepend"
+
+            if request.slot is not None:
+                # Advanced mode: per-slot
+                _adapter_slots: dict = getattr(handler, "_adapter_slots", {})
+                if request.slot not in _adapter_slots:
+                    return wrap_response(None, code=400, error=f"Slot {request.slot} not loaded")
+                _adapter_slots[request.slot]["trigger_word"] = tw
+                _adapter_slots[request.slot]["tag_position"] = tp
+                logger.info(f"Slot {request.slot} trigger word set: '{tw}' (position: {tp})")
+            else:
+                # Basic mode: single adapter
+                handler._adapter_trigger_word = tw
+                handler._adapter_tag_position = tp
+                logger.info(f"Basic adapter trigger word set: '{tw}' (position: {tp})")
+
+            return wrap_response({
+                "message": f"✅ Trigger word {'set' if tw else 'cleared'}",
+                "trigger_word": tw,
+                "tag_position": tp,
+                "slot": request.slot,
+            })
+        except Exception as exc:
+            return wrap_response(None, code=500, error=f"Failed to set trigger word: {str(exc)}")
 
     @app.post("/v1/lora/slot-layer-scale")
     async def set_slot_layer_scale_endpoint(request: SetSlotLayerScaleRequest, _: None = Depends(verify_api_key)):

@@ -291,6 +291,15 @@ router.post('/slot-layer-scale', authMiddleware, async (req: AuthenticatedReques
   }
 });
 
+router.post('/slot-trigger-word', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const result = await proxyToAceStep('/v1/lora/slot-trigger-word', 'POST', req.body);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/temporal-schedule', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const result = await proxyToAceStep('/v1/lora/temporal-schedule', 'POST', req.body);
