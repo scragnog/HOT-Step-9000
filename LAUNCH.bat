@@ -36,10 +36,12 @@ REM Read current model selections from .env
 set "CURRENT_MODEL=acestep-v15-base"
 set "CURRENT_LM_MODEL=acestep-5Hz-lm-0.6B"
 set "CURRENT_LM_BACKEND=vllm"
+set "CURRENT_NO_INIT=false"
 if exist ".env" (
     for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_CONFIG_PATH=" ".env"') do set "CURRENT_MODEL=%%b"
     for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_LM_MODEL_PATH=" ".env"') do set "CURRENT_LM_MODEL=%%b"
     for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_LM_BACKEND=" ".env"') do set "CURRENT_LM_BACKEND=%%b"
+    for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_NO_INIT=" ".env"') do set "CURRENT_NO_INIT=%%b"
 )
 
 REM Read Redmond Mode settings from .env
@@ -95,6 +97,7 @@ echo var CURRENT_LM_BACKEND = '%CURRENT_LM_BACKEND%';
 echo var CURRENT_REDMOND_MODE = '%CURRENT_REDMOND_MODE%';
 echo var CURRENT_REDMOND_SCALE = '%CURRENT_REDMOND_SCALE%';
 echo var REDMOND_AVAILABLE = '%REDMOND_AVAILABLE%';
+echo var CURRENT_NO_INIT = '%CURRENT_NO_INIT%';
 ) > "%~dp0loading-config.js"
 
 if "%IS_RESTART%"=="0" (

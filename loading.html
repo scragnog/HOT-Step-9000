@@ -396,7 +396,6 @@
                     <option value="pt">PyTorch (native)</option>
                 </select>
             </div>
-            <!-- Redmond Mode Toggle -->
             <div class="toggle-row" id="redmondRow" style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid rgba(255,255,255,.06)">
                 <div class="toggle-info">
                     <div class="toggle-label">🔴 Redmond Mode</div>
@@ -404,6 +403,17 @@
                 </div>
                 <label class="toggle-switch">
                     <input type="checkbox" id="redmondToggle">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
+            <!-- Lazy Load Models Toggle -->
+            <div class="toggle-row" id="noInitRow" style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid rgba(255,255,255,.06)">
+                <div class="toggle-info">
+                    <div class="toggle-label">⚡ Lazy Load Models</div>
+                    <div class="toggle-desc" id="noInitDesc">Skip loading models at startup (loads on first generation)</div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="noInitToggle">
                     <span class="toggle-slider"></span>
                 </label>
             </div>
@@ -469,6 +479,7 @@
         if (typeof CURRENT_REDMOND_MODE === 'undefined') var CURRENT_REDMOND_MODE = 'false';
         if (typeof CURRENT_REDMOND_SCALE === 'undefined') var CURRENT_REDMOND_SCALE = '0.7';
         if (typeof REDMOND_AVAILABLE === 'undefined') var REDMOND_AVAILABLE = 'false';
+        if (typeof CURRENT_NO_INIT === 'undefined') var CURRENT_NO_INIT = 'false';
 
         document.getElementById('frontend-port').textContent = `(port ${VITE_PORT})`;
 
@@ -512,6 +523,10 @@
             redmondDesc.textContent = 'DPO quality refinement — adapter will download on first launch (~750 MB)';
         }
 
+        // Set Lazy Load Toggle
+        const noInitToggle = document.getElementById('noInitToggle');
+        noInitToggle.checked = CURRENT_NO_INIT === 'true';
+
         // ---- Buttons & Events ----
         const btnLaunch = document.getElementById('btnLaunch');
         const btnUpdate = document.getElementById('btnUpdate');
@@ -539,6 +554,7 @@
                             ACESTEP_LM_MODEL_PATH: lmModelPath,
                             ACESTEP_LM_BACKEND: lmBackend,
                             ACESTEP_REDMOND_MODE: redmondToggle.checked ? 'true' : 'false',
+                            ACESTEP_NO_INIT: noInitToggle.checked ? 'true' : 'false',
                         }),
                     });
                     if (resp.ok) return true;
@@ -678,7 +694,8 @@
                 const data = json.data || json;
                 const activeModel = data.active_model || null;
                 const lmModel = data.lm_model || null;
-                return { up: true, ready: !!activeModel, model: activeModel, lmModel: lmModel };
+                const noInit = data.no_init || false;
+                return { up: true, ready: !!activeModel || noInit, model: activeModel, lmModel: lmModel, noInit: noInit };
             } catch {
                 // JSON fetch failed (CORS from file://, network, etc.)
                 // Fall back to no-cors probe on /health endpoint
@@ -711,7 +728,10 @@
                 } else if (result.ready) {
                     state.apiUp = true;
                     state.apiReady = true;
-                    const modelInfo = result.model + (result.lmModel ? ` | LM: ${result.lmModel}` : '');
+                    let modelInfo = result.model + (result.lmModel ? ` | LM: ${result.lmModel}` : '');
+                    if (result.noInit) {
+                        modelInfo = '(Lazy Load active — models skip initialization)';
+                    }
                     setDetail('d-api', `Model loaded: ${modelInfo}`);
                     document.getElementById('modelSelection').style.display = 'none';
                 } else {
