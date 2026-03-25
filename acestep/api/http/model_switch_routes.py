@@ -73,9 +73,13 @@ def register_model_switch_routes(
             (prev_params or {}).get("lm_model_path", "")
             if isinstance(prev_params, dict) else ""
         ) or os.getenv("ACESTEP_LM_MODEL_PATH", "").strip() or None
+
+        no_init = os.getenv("ACESTEP_NO_INIT", "").strip().lower() in ("true", "1", "yes")
+
         return wrap_response({
             "active_model": current_model,
             "lm_model": current_lm,
+            "no_init": no_init,
         })
 
     @app.post("/v1/models/switch")

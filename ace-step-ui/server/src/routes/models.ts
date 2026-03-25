@@ -127,8 +127,8 @@ router.post('/lm/backend', authMiddleware, async (req: AuthenticatedRequest, res
 // No auth required — only called during startup before app is fully loaded
 router.post('/update-env', async (req: any, res: Response) => {
     try {
-        const { ACESTEP_CONFIG_PATH, ACESTEP_LM_MODEL_PATH, ACESTEP_LM_BACKEND, ACESTEP_REDMOND_MODE, ACESTEP_REDMOND_SCALE } = req.body;
-        if (!ACESTEP_CONFIG_PATH && !ACESTEP_LM_MODEL_PATH && !ACESTEP_LM_BACKEND && ACESTEP_REDMOND_MODE === undefined && !ACESTEP_REDMOND_SCALE) {
+        const { ACESTEP_CONFIG_PATH, ACESTEP_LM_MODEL_PATH, ACESTEP_LM_BACKEND, ACESTEP_REDMOND_MODE, ACESTEP_REDMOND_SCALE, ACESTEP_NO_INIT } = req.body;
+        if (!ACESTEP_CONFIG_PATH && !ACESTEP_LM_MODEL_PATH && !ACESTEP_LM_BACKEND && ACESTEP_REDMOND_MODE === undefined && !ACESTEP_REDMOND_SCALE && ACESTEP_NO_INIT === undefined) {
             res.status(400).json({ error: 'At least one setting required' });
             return;
         }
@@ -186,9 +186,21 @@ router.post('/update-env', async (req: any, res: Response) => {
                 envContent = envContent.trimEnd() + `\nACESTEP_REDMOND_SCALE=${ACESTEP_REDMOND_SCALE}\n`;
             }
         }
+        
+        // Lazy Load Models toggle
+        if (ACESTEP_NO_INIT !== undefined) {
+            if (/^ACESTEP_NO_INIT=.*/m.test(envContent)) {
+                envContent = envContent.replace(
+                    /^ACESTEP_NO_INIT=.*/m,
+                    `ACESTEP_NO_INIT=${ACESTEP_NO_INIT}`
+                );
+            } else {
+                envContent = envContent.trimEnd() + `\nACESTEP_NO_INIT=${ACESTEP_NO_INIT}\n`;
+            }
+        }
 
         fs.writeFileSync(envPath, envContent, 'utf-8');
-        console.log(`[Models] .env updated: CONFIG_PATH=${ACESTEP_CONFIG_PATH || '(unchanged)'}, LM_MODEL_PATH=${ACESTEP_LM_MODEL_PATH || '(unchanged)'}, LM_BACKEND=${ACESTEP_LM_BACKEND || '(unchanged)'}, REDMOND_MODE=${ACESTEP_REDMOND_MODE ?? '(unchanged)'}`);
+        console.log(`[Models] .env updated: CONFIG_PATH=${ACESTEP_CONFIG_PATH || '(unchanged)'}, LM_MODEL_PATH=${ACESTEP_LM_MODEL_PATH || '(unchanged)'}, LM_BACKEND=${ACESTEP_LM_BACKEND || '(unchanged)'}, REDMOND_MODE=${ACESTEP_REDMOND_MODE ?? '(unchanged)'}, NO_INIT=${ACESTEP_NO_INIT ?? '(unchanged)'}`);
         res.json({ success: true });
     } catch (error: any) {
         console.error('[Models] Failed to update .env:', error);
