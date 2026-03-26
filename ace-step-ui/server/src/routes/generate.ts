@@ -41,7 +41,7 @@ const resolveAudioPath = (audioUrl: string): string => {
 
 const audioUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB max
+  limits: { fileSize: 200 * 1024 * 1024 }, // 200MB max (FLAC/WAV reference files can be large)
   fileFilter: (_req, file, cb) => {
     const allowedTypes = [
       'audio/mpeg',
