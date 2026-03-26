@@ -66,35 +66,51 @@ def _extract_theme_keywords(lyrics: str, max_keywords: int = 5) -> list[str]:
     return sorted_words[:max_keywords]
 
 
-def _build_prompt(title: str, style: str, lyrics: str) -> str:
+def _build_prompt(
+    title: str, style: str, lyrics: str, subject: str = ""
+) -> str:
     """Build a text-to-image prompt from song metadata.
+
+    When *subject* is provided (from the Lyrics Library JSON ``metadata.subject``),
+    it is used as the primary prompt for far more evocative imagery.  Otherwise
+    falls back to keyword-extraction from the lyrics.
 
     Keeps total prompt under ~60 words to stay within CLIP's 77-token limit.
     """
-    parts = ["Album cover art"]
+    parts: list[str] = []
 
-    if style:
-        # Extract just the genre/mood keywords, not full production descriptions
-        style_words = style.strip().split(",")
-        # Take first 3 comma-separated phrases, truncate each
-        short_style = ", ".join(w.strip() for w in style_words[:3] if w.strip())
-        if short_style:
-            parts.append(f"for a {short_style} song")
+    if subject and subject.strip():
+        # ── Rich subject path: use the curated description as-is ──
+        parts.append(subject.strip())
 
-    if title:
-        # Strip artist prefix if present (e.g. "Artist - Title" -> "Title")
-        clean_title = title.strip()
-        if " - " in clean_title:
-            clean_title = clean_title.split(" - ", 1)[1].strip()
-        parts.append(f'called "{clean_title}"')
+        # Add a couple of genre words for visual tone
+        if style:
+            style_words = style.strip().split(",")
+            short_style = ", ".join(w.strip() for w in style_words[:2] if w.strip())
+            if short_style:
+                parts.append(short_style)
+    else:
+        # ── Fallback: keyword extraction (original behaviour) ──
+        parts.append("Album cover art")
 
-    # Extract theme keywords from lyrics
-    keywords = _extract_theme_keywords(lyrics, max_keywords=4)
-    if keywords:
-        parts.append(f"themes of {', '.join(keywords)}")
+        if style:
+            style_words = style.strip().split(",")
+            short_style = ", ".join(w.strip() for w in style_words[:3] if w.strip())
+            if short_style:
+                parts.append(f"for a {short_style} song")
 
-    # Style guidance
-    parts.append("digital art, vibrant, professional album artwork")
+        if title:
+            clean_title = title.strip()
+            if " - " in clean_title:
+                clean_title = clean_title.split(" - ", 1)[1].strip()
+            parts.append(f'called "{clean_title}"')
+
+        keywords = _extract_theme_keywords(lyrics, max_keywords=4)
+        if keywords:
+            parts.append(f"themes of {', '.join(keywords)}")
+
+    # Art-direction suffix (always)
+    parts.append("digital art, cinematic, professional album artwork")
 
     prompt = ", ".join(parts)
     logger.info(f"[CoverArt] Prompt: {prompt}")
@@ -149,6 +165,7 @@ class CoverArtGenerator:
         output_path: str,
         width: int = 512,
         height: int = 512,
+        subject: str = "",
     ) -> Optional[str]:
         """Generate a cover art image and save it.
 
@@ -159,13 +176,14 @@ class CoverArtGenerator:
             output_path: Where to save the image (should end in ``.webp``).
             width: Image width in pixels.
             height: Image height in pixels.
+            subject: Optional rich description from lyrics library metadata.
 
         Returns:
             The *output_path* on success, or ``None`` on failure.
         """
         import torch
 
-        prompt = _build_prompt(title, style, lyrics)
+        prompt = _build_prompt(title, style, lyrics, subject=subject)
 
         # Determine device
         device = "cuda" if torch.cuda.is_available() else "cpu"

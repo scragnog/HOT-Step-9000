@@ -389,6 +389,7 @@ export interface GenerationParams {
 
   // AI Cover Art
   generateCoverArt?: boolean;
+  coverArtSubject?: string;
 }
 
 export interface GenerationJob {

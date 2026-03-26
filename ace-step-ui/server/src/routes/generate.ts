@@ -202,6 +202,7 @@ interface GenerateBody {
 
   // AI Cover Art
   generateCoverArt?: boolean;
+  coverArtSubject?: string;
 }
 
 router.post('/upload-audio', authMiddleware, audioUpload.single('audio'), async (req: AuthenticatedRequest, res: Response) => {
@@ -918,6 +919,7 @@ router.get('/status/:jobId', authMiddleware, async (req: AuthenticatedRequest, r
                         style: params.style || '',
                         lyrics: params.lyrics || '',
                         song_id: songId,
+                        subject: params.coverArtSubject || '',
                       }),
                     });
                     if (coverRes.ok) {

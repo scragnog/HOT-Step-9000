@@ -105,6 +105,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [lyrics, setLyrics] = usePersistedState('ace-lyrics', '');
   const [style, setStyle] = usePersistedState('ace-style', '');
   const [title, setTitle] = usePersistedState('ace-title', '');
+  const [coverArtSubject, setCoverArtSubject] = useState('');
 
   // Common
   const [instrumental, setInstrumental] = usePersistedState('ace-instrumental', false);
@@ -2290,6 +2291,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           })(),
           isFormatCaption,
           loraLoaded,
+          coverArtSubject: coverArtSubject || undefined,
         });
       }
     }
@@ -2779,6 +2781,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                     setKeyScale={setKeyScale}
                     setTitle={setTitle}
                     setDuration={setDuration}
+                    setCoverArtSubject={setCoverArtSubject}
                   />
                   {/* Title Input (standalone — between library and lyrics for natural flow) */}
                   <div className="space-y-1.5">

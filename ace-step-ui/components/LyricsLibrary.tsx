@@ -11,6 +11,7 @@ interface Track {
     duration: number;
     filename: string;
     is_refined?: boolean;
+    subject?: string;
 }
 
 interface Album {
@@ -30,9 +31,10 @@ interface Props {
     setKeyScale: (v: string) => void;
     setTitle: (v: string) => void;
     setDuration: (v: number) => void;
+    setCoverArtSubject?: (v: string) => void;
 }
 
-export function LyricsLibrary({ setStyle, setLyrics, setBpm, setKeyScale, setTitle, setDuration }: Props) {
+export function LyricsLibrary({ setStyle, setLyrics, setBpm, setKeyScale, setTitle, setDuration, setCoverArtSubject }: Props) {
     const [libraryPath, setLibraryPath] = usePersistedState('ace-lyrics-library-path', '');
     const [artists, setArtists] = useState<Artist[]>([]);
     const [loading, setLoading] = useState(false);
@@ -107,6 +109,7 @@ export function LyricsLibrary({ setStyle, setLyrics, setBpm, setKeyScale, setTit
         if (track.duration > 0 && useLibraryDuration) {
             setDuration(track.duration);
         }
+        if (setCoverArtSubject) setCoverArtSubject(track.subject || '');
         setAppliedTrack(track.filename);
         setTimeout(() => setAppliedTrack(''), 2000);
     };

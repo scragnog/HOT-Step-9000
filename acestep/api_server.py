@@ -388,6 +388,7 @@ def create_app() -> FastAPI:
                     "duration": data.get("duration", 0),
                     "filename": json_path.name,
                     "is_refined": "_refined_" in json_path.stem,
+                    "subject": meta.get("subject", ""),
                 })
             except Exception as exc:
                 logger.debug(f"Skipping {json_path}: {exc}")

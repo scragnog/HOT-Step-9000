@@ -32,6 +32,7 @@ def register_cover_art_routes(
         style = body.get("style", "")
         lyrics = body.get("lyrics", "")
         song_id = body.get("song_id", "")
+        subject = body.get("subject", "")
 
         if not song_id:
             raise HTTPException(400, "song_id is required")
@@ -56,6 +57,7 @@ def register_cover_art_routes(
                 style=style,
                 lyrics=lyrics,
                 output_path=output_path,
+                subject=subject,
             )
 
         try:
