@@ -145,6 +145,7 @@ async def _apply_matchering(audio_path: str, mastering_params: dict, get_project
     # Run the CPU-heavy matchering in a thread so we don't block the event loop
     def _do_matchering():
         import matchering as mg
+        from acestep.audio_utils import ensure_mp3_for_matchering
 
         _, sample_rate = sf.read(audio_path, dtype="float32", frames=1)
 
@@ -153,16 +154,20 @@ async def _apply_matchering(audio_path: str, mastering_params: dict, get_project
             logger.info("[Mastering] Running STEM Matchering pipeline (remaster)")
 
             with tempfile.TemporaryDirectory() as temp_dir:
+                # Convert non-MP3 references (FLAC, WAV, etc.) for Matchering
+                effective_ref = ensure_mp3_for_matchering(ref_path, temp_dir)
                 mastered = _run_stem_matchering(
-                    audio_path, ref_path, temp_dir, sample_rate, progress=None
+                    audio_path, effective_ref, temp_dir, sample_rate, progress=None
                 )
         else:
             logger.info("[Mastering] Running standard Matchering pipeline (remaster)")
             with tempfile.TemporaryDirectory() as temp_dir:
+                # Convert non-MP3 references (FLAC, WAV, etc.) for Matchering
+                effective_ref = ensure_mp3_for_matchering(ref_path, temp_dir)
                 temp_out = os.path.join(temp_dir, "temp_out.wav")
                 mg.process(
                     target=audio_path,
-                    reference=ref_path,
+                    reference=effective_ref,
                     results=[mg.pcm16(temp_out)],
                 )
                 mastered, out_sr = sf.read(temp_out, dtype="float32")

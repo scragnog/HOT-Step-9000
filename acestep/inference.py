@@ -1178,6 +1178,10 @@ def generate_music(
                         with tempfile.TemporaryDirectory() as temp_dir:
                             temp_target = os.path.join(temp_dir, "temp_target.wav")
                             
+                            # Convert non-MP3 references (FLAC, WAV, etc.) for Matchering
+                            from acestep.audio_utils import ensure_mp3_for_matchering
+                            effective_ref = ensure_mp3_for_matchering(ref_path, temp_dir)
+                            
                             temp_tensor = audio_tensor.clone()
                             if temp_tensor.dim() == 1:
                                 temp_tensor = temp_tensor.unsqueeze(0)
@@ -1192,14 +1196,14 @@ def generate_music(
                             if use_stem_matchering:
                                 logger.info("[AutoMaster] Running STEM Matchering pipeline")
                                 mastered = _run_stem_matchering(
-                                    temp_target, ref_path, temp_dir, sample_rate, progress
+                                    temp_target, effective_ref, temp_dir, sample_rate, progress
                                 )
                             else:
                                 logger.info("[AutoMaster] Running standard Matchering pipeline")
                                 temp_out = os.path.join(temp_dir, "temp_out.wav")
                                 mg.process(
                                     target=temp_target,
-                                    reference=ref_path,
+                                    reference=effective_ref,
                                     results=[mg.pcm16(temp_out)]
                                 )
                                 mastered, out_sr = sf.read(temp_out)

@@ -63,6 +63,67 @@ def normalize_audio(audio_data: Union[torch.Tensor, np.ndarray], target_db: floa
 
 
 
+def ensure_mp3_for_matchering(ref_path: str, temp_dir: str) -> str:
+    """Convert a non-MP3 reference file to MP3 for Matchering compatibility.
+
+    Matchering only reliably accepts MP3 reference files. If the supplied
+    path is already an MP3, it is returned unchanged. Otherwise the file
+    is converted to a 320 kbps MP3 inside *temp_dir* via ffmpeg and the
+    new path is returned.
+
+    Args:
+        ref_path: Absolute path to the reference audio file.
+        temp_dir: A temporary directory where the converted file can be
+                  written (the caller is responsible for cleanup).
+
+    Returns:
+        The original *ref_path* if it is already MP3, or the path to the
+        newly created MP3 inside *temp_dir*.
+
+    Raises:
+        FileNotFoundError: If *ref_path* does not exist on disk.
+        RuntimeError: If ffmpeg is not found on PATH or the conversion fails.
+    """
+    if not os.path.isfile(ref_path):
+        raise FileNotFoundError(f"Reference file not found: {ref_path}")
+
+    ext = os.path.splitext(ref_path)[1].lower()
+    if ext == ".mp3":
+        return ref_path  # Already MP3, nothing to do
+
+    mp3_path = os.path.join(temp_dir, "matchering_ref.mp3")
+    logger.info(
+        f"[Matchering] Converting reference '{os.path.basename(ref_path)}' "
+        f"({ext or 'unknown'}) → MP3 for Matchering compatibility"
+    )
+
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", ref_path,
+        "-c:a", "libmp3lame",
+        "-b:a", "320k",
+        mp3_path,
+    ]
+    try:
+        result = subprocess.run(
+            cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
+        )
+    except FileNotFoundError:
+        raise RuntimeError(
+            "ffmpeg not found on system PATH — cannot convert reference file "
+            "to MP3 for Matchering. Install ffmpeg "
+            "(https://ffmpeg.org/download.html) or use an MP3 reference."
+        )
+    except subprocess.CalledProcessError as exc:
+        raise RuntimeError(
+            f"ffmpeg conversion failed (exit {exc.returncode}): "
+            f"{exc.stderr.decode(errors='replace')[:500]}"
+        )
+
+    logger.info(f"[Matchering] Converted reference saved to {mp3_path}")
+    return mp3_path
+
+
 class AudioSaver:
     """Audio saving and transcoding utility class"""
     
