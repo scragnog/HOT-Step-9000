@@ -208,7 +208,7 @@ export const LiveVisualizer: React.FC<LiveVisualizerProps> = ({
     return (
         <div
             className={`relative overflow-hidden ${className}`}
-            style={dimmed ? { opacity: 0.15, pointerEvents: 'none' } : undefined}
+            style={dimmed ? { opacity: 0.25, pointerEvents: 'none' } : undefined}
         >
             <canvas
                 ref={canvasRef}
