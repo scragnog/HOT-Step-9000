@@ -887,7 +887,7 @@ const SongItem: React.FC<SongItemProps> = ({
                         }
                     }, 0);
                 }}
-                className={`group flex items-center gap-4 p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-[#18181b] transition-all cursor-pointer border ${isSelected ? 'bg-zinc-100 dark:bg-[#18181b] border-zinc-200 dark:border-white/10' : 'border-transparent bg-transparent'} ${song.audioUrl && !song.isGenerating ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                className={`group flex items-center gap-4 p-2 rounded-lg transition-all cursor-pointer border ${isSelected ? 'bg-white/10 dark:bg-white/8 backdrop-blur-sm border-white/15' : 'border-transparent bg-transparent hover:bg-white/5 dark:hover:bg-white/5'} ${song.audioUrl && !song.isGenerating ? 'cursor-grab active:cursor-grabbing' : ''}`}
             >
                 {isSelectionMode && (
                     <button
@@ -1020,7 +1020,7 @@ const SongItem: React.FC<SongItemProps> = ({
                                 </span>
                             </div>
                         </div>
-                        <p className="text-xs text-zinc-500 dark:text-zinc-500 line-clamp-2 pt-1 font-medium max-w-2xl">
+                        <p className="text-xs text-zinc-600 dark:text-zinc-300 line-clamp-2 pt-1 font-medium max-w-2xl">
                             {song.style}
                         </p>
                         {song.isGenerating && (
@@ -1067,40 +1067,7 @@ const SongItem: React.FC<SongItemProps> = ({
                     {!song.isGenerating && (
                         <div className="flex items-center gap-1 pt-2">
                             <button
-                                className={`flex items-center gap-1 px-3 py-1.5 rounded-full hover:bg-white/5 transition-colors ${isLiked ? 'text-pink-600 dark:text-pink-500 bg-pink-100 dark:bg-pink-500/10' : 'text-zinc-400 hover:text-black dark:hover:text-white'}`}
-                                onClick={(e) => { e.stopPropagation(); onToggleLike(); }}
-                            >
-                                <ThumbsUp size={16} fill={isLiked ? "currentColor" : "none"} />
-                                {(song.likeCount || 0) > 0 && (
-                                    <span className="text-xs font-bold">{song.likeCount}</span>
-                                )}
-                            </button>
-
-                            <button
                                 className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-white/5 text-zinc-400 hover:text-black dark:hover:text-white transition-colors"
-                                onClick={(e) => { e.stopPropagation(); }}
-                            >
-                                <ThumbsDown size={16} />
-                            </button>
-
-                            <button
-                                className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-white/5 text-zinc-400 hover:text-black dark:hover:text-white transition-colors"
-                                onClick={(e) => { e.stopPropagation(); setShareModalOpen(true); }}
-                                title="Share"
-                            >
-                                <Share2 size={16} />
-                            </button>
-
-                            <button
-                                className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-white/5 text-zinc-400 hover:text-black dark:hover:text-white transition-colors"
-                                onClick={(e) => { e.stopPropagation(); if (onOpenVideo) onOpenVideo(); }}
-                                title="Create Video"
-                            >
-                                <Video size={16} />
-                            </button>
-
-                            <button
-                                className="p-2 rounded-full hover:bg-zinc-200 dark:hover:bg-white/5 text-zinc-400 hover:text-black dark:hover:text-white transition-colors ml-auto"
                                 onClick={(e) => { e.stopPropagation(); onAddToPlaylist(); }}
                                 title="Add to Playlist"
                             >
@@ -1118,14 +1085,11 @@ const SongItem: React.FC<SongItemProps> = ({
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     if (isTrackA) {
-                                        // Already A → clear A
-                                        onSetAsTrackA?.(); // App.tsx will toggle off
+                                        onSetAsTrackA?.();
                                     } else if (isTrackB) {
-                                        // Already B → clear B
-                                        onSetAsTrackB?.(); // App.tsx will toggle off
+                                        onSetAsTrackB?.();
                                     } else {
-                                        // Not assigned → auto-pick A or B
-                                        onSetAsTrackA?.(); // App.tsx will decide: if A exists, set as B instead
+                                        onSetAsTrackA?.();
                                     }
                                 }}
                                 title={isTrackA ? 'Compare: Track A (click to clear)' : isTrackB ? 'Compare: Track B (click to clear)' : 'Add to comparison'}
@@ -1201,36 +1165,41 @@ const SongItem: React.FC<SongItemProps> = ({
                                     onRemaster={onOpenRemaster}
                                 />
                             </div>
+
+                            {/* Duration & Time — inline after menu */}
+                            <div className="flex items-center gap-3 ml-auto text-[11px] text-zinc-400 dark:text-zinc-500 font-medium">
+                                <span title="Duration">⏱ {song.duration}</span>
+                                {song.createdAt && (
+                                    <span title="Created">
+                                        🕐 {(() => {
+                                            const d = song.createdAt instanceof Date ? song.createdAt : new Date(song.createdAt);
+                                            if (isNaN(d.getTime())) return '';
+                                            const now = new Date();
+                                            const isToday = d.toDateString() === now.toDateString();
+                                            const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
+                                            const isYesterday = d.toDateString() === yesterday.toDateString();
+                                            const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                                            if (isToday) return time;
+                                            if (isYesterday) return `Yesterday ${time}`;
+                                            return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`;
+                                        })()}
+                                    </span>
+                                )}
+                            </div>
                         </div>
                     )}
                 </div>
 
-                {/* Duration & Date */}
-                <div className="text-right self-start pt-1 flex-shrink-0">
-                    <div className="text-xs font-mono text-zinc-500 dark:text-zinc-600">
-                        {song.isGenerating ? (
+                {/* Generating status indicator (replaces duration column when generating) */}
+                {song.isGenerating && (
+                    <div className="text-right self-start pt-1 flex-shrink-0">
+                        <div className="text-xs font-mono">
                             <span className={song.queuePosition ? 'text-amber-500' : 'text-pink-500'}>
                                 {song.queuePosition ? `#${song.queuePosition}` : 'Creating...'}
                             </span>
-                        ) : song.duration}
-                    </div>
-                    {!song.isGenerating && song.createdAt && (
-                        <div className="text-[10px] text-zinc-400 dark:text-zinc-600 mt-0.5">
-                            {(() => {
-                                const d = song.createdAt instanceof Date ? song.createdAt : new Date(song.createdAt);
-                                if (isNaN(d.getTime())) return null;
-                                const now = new Date();
-                                const isToday = d.toDateString() === now.toDateString();
-                                const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
-                                const isYesterday = d.toDateString() === yesterday.toDateString();
-                                const time = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                                if (isToday) return time;
-                                if (isYesterday) return `Yesterday ${time}`;
-                                return `${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} ${time}`;
-                            })()}
                         </div>
-                    )}
-                </div>
+                    </div>
+                )}
             </div>
 
             <ShareModal
