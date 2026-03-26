@@ -323,7 +323,7 @@ export const SongList: React.FC<SongListProps> = ({
                                     backgroundImage: `url(${currentSong.coverUrl})`,
                                     backgroundSize: 'cover',
                                     backgroundPosition: 'center',
-                                    filter: 'brightness(0.18) blur(8px) saturate(1.4)',
+                                    filter: 'brightness(0.18) blur(2px) saturate(1.4)',
                                     transform: 'scale(1.15)',
                                 }}
                             />
