@@ -1,15 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Sliders, ChevronDown, FolderSearch, Settings } from 'lucide-react';
+import { Sliders, ChevronDown, FolderSearch } from 'lucide-react';
 import { useI18n } from '../../context/I18nContext';
 import { useAuth } from '../../context/AuthContext';
 import { generateApi } from '../../services/api';
 import { EditableSlider } from '../EditableSlider';
 import { FileBrowserModal } from '../FileBrowserModal';
 
-export interface AdapterTriggerSetting {
-    useFilename: boolean;
-    placement: 'prepend' | 'append' | 'replace';
-}
 
 export interface AdapterSlot {
     slot: number;
@@ -74,9 +70,8 @@ interface AdaptersAccordionProps {
     globalGroupScales?: { self_attn: number; cross_attn: number; mlp: number };
     onGlobalGroupScaleChange?: (group: string, value: number) => void;
 
-    // Per-adapter trigger word settings
-    adapterTriggerSettings?: Record<string, AdapterTriggerSetting>;
-    onTriggerSettingChange?: (adapterPath: string, setting: AdapterTriggerSetting) => void;
+    // Global trigger word flag (from settings)
+    globalTriggerUseFilename?: boolean;
 
     /** When true, skip the accordion header — used inside DrawerContainers */
     embedded?: boolean;
@@ -118,8 +113,7 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
     onGlobalOverallScaleChange,
     globalGroupScales,
     onGlobalGroupScaleChange,
-    adapterTriggerSettings,
-    onTriggerSettingChange,
+    globalTriggerUseFilename,
     embedded = false,
 }) => {
     const { t } = useI18n();
@@ -127,7 +121,6 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
     const [browsedFiles, setBrowsedFiles] = useState<AdapterFile[]>([]);
     const [showBrowse, setShowBrowse] = useState(false);
     const [expandedLayers, setExpandedLayers] = useState<Set<number>>(new Set());
-    const [expandedSettings, setExpandedSettings] = useState<Set<number>>(new Set());
 
     // Pending drag state for raw range inputs (Role Blend + individual layers)
     // Key format: `${slotNum}-${roleKey}` or `${slotNum}-layer-${layerIdx}`
@@ -445,21 +438,7 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                                     >
                                                         {expandedLayers.has(slot.slot) ? '▼' : '▶'} Layers
                                                     </button>
-                                                    <button
-                                                        onClick={() => setExpandedSettings(prev => {
-                                                            const next = new Set(prev);
-                                                            if (next.has(slot.slot)) next.delete(slot.slot); else next.add(slot.slot);
-                                                            return next;
-                                                        })}
-                                                        className={`text-[10px] flex items-center gap-0.5 transition-colors ${
-                                                            adapterTriggerSettings?.[slot.path]?.useFilename
-                                                                ? 'text-pink-500 dark:text-pink-400'
-                                                                : 'text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300'
-                                                        }`}
-                                                    >
-                                                        <Settings size={10} />
-                                                        {expandedSettings.has(slot.slot) ? '▼' : '▶'}
-                                                    </button>
+
                                                     <button
                                                         onClick={() => onUnloadSlot(slot.slot)}
                                                         disabled={isLoraLoading}
@@ -472,17 +451,17 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
 
                                             {/* Trigger word tag */}
                                             {(() => {
-                                                const setting = adapterTriggerSettings?.[slot.path];
-                                                if (!setting?.useFilename) return null;
+                                                if (!globalTriggerUseFilename) return null;
                                                 const fileName = slot.path.replace(/\\/g, '/').split('/').pop() || '';
                                                 const triggerWord = fileName.replace(/\.safetensors$/i, '').replace(/_/g, ' ');
+                                                const placement = (localStorage.getItem('ace-globalTriggerPlacement') as string) || 'prepend';
                                                 return (
                                                     <div className="flex items-center gap-1.5">
                                                         <span className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-pink-100 dark:bg-pink-900/30 text-pink-600 dark:text-pink-400">
                                                             🏷️ {triggerWord}
                                                         </span>
                                                         <span className="text-[9px] text-zinc-400">
-                                                            ({setting.placement})
+                                                            ({placement})
                                                         </span>
                                                     </div>
                                                 );
@@ -502,55 +481,7 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                             />
                                             </div>
 
-                                            {/* Trigger word settings (expandable) */}
-                                            {expandedSettings.has(slot.slot) && (
-                                                <div className="space-y-2 pl-2 border-l-2 border-pink-500/20 bg-pink-50/30 dark:bg-pink-900/5 rounded-r-lg p-2">
-                                                    <div className="flex items-center justify-between">
-                                                        <div>
-                                                            <span className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-400">Use filename as trigger word</span>
-                                                            <p className="text-[9px] text-zinc-400 dark:text-zinc-500">Auto-inject into caption at generation time</p>
-                                                        </div>
-                                                        <Toggle
-                                                            on={adapterTriggerSettings?.[slot.path]?.useFilename ?? false}
-                                                            onClick={() => {
-                                                                const current = adapterTriggerSettings?.[slot.path] ?? { useFilename: false, placement: 'prepend' as const };
-                                                                onTriggerSettingChange?.(slot.path, { ...current, useFilename: !current.useFilename });
-                                                            }}
-                                                        />
-                                                    </div>
-                                                    {adapterTriggerSettings?.[slot.path]?.useFilename && (
-                                                        <div className="space-y-1.5">
-                                                            <span className="text-[10px] font-semibold text-zinc-600 dark:text-zinc-400">Placement</span>
-                                                            <div className="flex gap-1">
-                                                                {(['prepend', 'append', 'replace'] as const).map((mode) => {
-                                                                    const isActive = (adapterTriggerSettings?.[slot.path]?.placement ?? 'prepend') === mode;
-                                                                    return (
-                                                                        <button
-                                                                            key={mode}
-                                                                            onClick={() => {
-                                                                                const current = adapterTriggerSettings?.[slot.path] ?? { useFilename: true, placement: 'prepend' as const };
-                                                                                onTriggerSettingChange?.(slot.path, { ...current, placement: mode });
-                                                                            }}
-                                                                            className={`flex-1 px-2 py-1 rounded text-[10px] font-semibold transition-colors border ${
-                                                                                isActive
-                                                                                    ? 'bg-pink-500 text-white border-pink-500 shadow-sm'
-                                                                                    : 'bg-zinc-100 dark:bg-black/30 border-zinc-200 dark:border-white/10 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-white/10'
-                                                                            }`}
-                                                                        >
-                                                                            {mode.charAt(0).toUpperCase() + mode.slice(1)}
-                                                                        </button>
-                                                                    );
-                                                                })}
-                                                            </div>
-                                                            <p className="text-[9px] text-zinc-400 dark:text-zinc-500 leading-tight">
-                                                                {(adapterTriggerSettings?.[slot.path]?.placement ?? 'prepend') === 'prepend' && 'Trigger word is added before your style prompt'}
-                                                                {adapterTriggerSettings?.[slot.path]?.placement === 'append' && 'Trigger word is added after your style prompt'}
-                                                                {adapterTriggerSettings?.[slot.path]?.placement === 'replace' && 'Trigger word replaces your style prompt entirely'}
-                                                            </p>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            )}
+
 
                                             {/* Per-group sliders (expandable) */}
                                             {expandedSlots.has(slot.slot) && (

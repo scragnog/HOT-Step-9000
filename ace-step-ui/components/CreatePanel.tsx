@@ -30,7 +30,7 @@ import { GenerateFooter } from './GenerateFooter';
 import { LyricsLibrary } from './LyricsLibrary';
 import { MasteringConsoleModal, MasteringParams as MasteringParamsType } from './MasteringConsoleModal';
 
-import AdaptersAccordion, { AdapterTriggerSetting } from './accordions/AdaptersAccordion';
+import AdaptersAccordion from './accordions/AdaptersAccordion';
 import { LayerAblationPanel } from './accordions/LayerAblationPanel';
 import ScoreSystemAccordion from './accordions/ScoreSystemAccordion';
 import { ActivationSteeringSection } from './sections/ActivationSteeringSection';
@@ -264,8 +264,24 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [globalGroupScales, setGlobalGroupScales] = usePersistedState<{ self_attn: number; cross_attn: number; mlp: number }>('ace-globalGroupScales', { self_attn: 1.0, cross_attn: 1.0, mlp: 1.0 });
   const [adapterLoadingMessage, setAdapterLoadingMessage] = useState<string | null>(null);
 
-  // Per-adapter trigger word settings (persisted by adapter path)
-  const [adapterTriggerSettings, setAdapterTriggerSettings] = usePersistedState<Record<string, AdapterTriggerSetting>>('ace-adapterTriggerSettings', {});
+  // Global trigger word settings (read from localStorage, synced with SettingsModal)
+  const [globalTriggerUseFilename, setGlobalTriggerUseFilename] = useState(() => localStorage.getItem('ace-globalTriggerUseFilename') === 'true');
+  const [globalTriggerPlacement, setGlobalTriggerPlacement] = useState<'prepend' | 'append' | 'replace'>(() =>
+    (localStorage.getItem('ace-globalTriggerPlacement') as 'prepend' | 'append' | 'replace') || 'prepend'
+  );
+
+  // Listen for storage events from SettingsModal to sync global trigger settings
+  useEffect(() => {
+    const handler = (e: StorageEvent) => {
+      if (e.key === 'ace-globalTriggerUseFilename') {
+        setGlobalTriggerUseFilename(e.newValue === 'true');
+      } else if (e.key === 'ace-globalTriggerPlacement') {
+        setGlobalTriggerPlacement((e.newValue as 'prepend' | 'append' | 'replace') || 'prepend');
+      }
+    };
+    window.addEventListener('storage', handler);
+    return () => window.removeEventListener('storage', handler);
+  }, []);
 
   // Activation Steering State
   const [showSteeringPanel, setShowSteeringPanel] = usePersistedState('ace-showSteeringPanel', false);
@@ -721,9 +737,10 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
         setLoraLoaded(true);
         setAdapterTriggerWord((status as any).trigger_word || '');
 
-        // Auto-apply saved trigger word settings for this adapter
-        const savedSetting = adapterTriggerSettings[filePath];
-        if (savedSetting?.useFilename) {
+        // Auto-apply global trigger word setting for this adapter
+        const useFilename = localStorage.getItem('ace-globalTriggerUseFilename') === 'true';
+        const placement = (localStorage.getItem('ace-globalTriggerPlacement') as 'prepend' | 'append' | 'replace') || 'prepend';
+        if (useFilename) {
           const fileName = filePath.replace(/\\/g, '/').split('/').pop() || '';
           const triggerWord = fileName.replace(/\.safetensors$/i, '').replace(/_/g, ' ');
           const newSlot = status.advanced.slots.find((s: any) => s.path === filePath);
@@ -732,9 +749,9 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
               await generateApi.setSlotTriggerWord({
                 slot: newSlot.slot,
                 trigger_word: triggerWord,
-                tag_position: savedSetting.placement || 'prepend',
+                tag_position: placement,
               }, token);
-              console.log(`[TriggerWord] Auto-applied '${triggerWord}' (${savedSetting.placement}) for slot ${newSlot.slot}`);
+              console.log(`[TriggerWord] Auto-applied '${triggerWord}' (${placement}) for slot ${newSlot.slot}`);
             } catch (err) {
               console.error('[TriggerWord] Failed to auto-apply:', err);
             }
@@ -805,33 +822,29 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   };
 
   // ── Trigger word setting handler ──────────────────────────────────────────
-  const handleTriggerSettingChange = async (adapterPath: string, setting: AdapterTriggerSetting) => {
-    // Update persisted state
-    setAdapterTriggerSettings(prev => ({ ...prev, [adapterPath]: setting }));
-
-    if (!token) return;
-
-    // Find the slot for this adapter path
-    const slotData = adapterSlots.find(s => s.path === adapterPath);
-    if (!slotData) return;
-
-    // Derive trigger word from filename
-    const fileName = adapterPath.replace(/\\/g, '/').split('/').pop() || '';
-    const triggerWord = setting.useFilename
-      ? fileName.replace(/\.safetensors$/i, '').replace(/_/g, ' ')
-      : '';
-
-    try {
-      await generateApi.setSlotTriggerWord({
-        slot: slotData.slot,
-        trigger_word: triggerWord,
-        tag_position: setting.placement || 'prepend',
-      }, token);
-      console.log(`[TriggerWord] Set '${triggerWord}' (${setting.placement}) for slot ${slotData.slot}`);
-    } catch (err) {
-      console.error('[TriggerWord] Failed to set:', err);
-    }
-  };
+  // Apply global trigger word settings to all loaded adapter slots
+  useEffect(() => {
+    if (!token || adapterSlots.length === 0) return;
+    const applyGlobalTrigger = async () => {
+      for (const slot of adapterSlots) {
+        const fileName = slot.path.replace(/\\/g, '/').split('/').pop() || '';
+        const triggerWord = globalTriggerUseFilename
+          ? fileName.replace(/\.safetensors$/i, '').replace(/_/g, ' ')
+          : '';
+        try {
+          await generateApi.setSlotTriggerWord({
+            slot: slot.slot,
+            trigger_word: triggerWord,
+            tag_position: globalTriggerPlacement,
+          }, token);
+        } catch (err) {
+          console.error(`[TriggerWord] Failed to set for slot ${slot.slot}:`, err);
+        }
+      }
+    };
+    applyGlobalTrigger();
+  }, [globalTriggerUseFilename, globalTriggerPlacement, token]);
+  // Note: adapterSlots intentionally excluded — triggers are applied per-slot at load time via handleLoadSlot
 
   // ── Global Scale Override handlers ────────────────────────────────────────
   const handleGlobalOverrideToggle = async (enabled: boolean) => {
@@ -3128,8 +3141,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                 onGlobalOverallScaleChange={handleGlobalOverallScaleChange}
                 globalGroupScales={globalGroupScales}
                 onGlobalGroupScaleChange={handleGlobalGroupScaleChange}
-                adapterTriggerSettings={adapterTriggerSettings}
-                onTriggerSettingChange={handleTriggerSettingChange}
+                globalTriggerUseFilename={globalTriggerUseFilename}
               />
               <LayerAblationPanel
                 customMode={true}

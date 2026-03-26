@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, User as UserIcon, Palette, Info, Edit3, ExternalLink, Globe, ChevronDown, Github, Save, Activity, Sliders, Download, Zap } from 'lucide-react';
+import { X, User as UserIcon, Palette, Info, Edit3, ExternalLink, Globe, ChevronDown, Github, Save, Activity, Sliders, Download, Zap, Tag } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
 import { EditProfileModal } from './EditProfileModal';
@@ -45,6 +45,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
     const [mp3Bitrate, setMp3Bitrate] = useState(() => localStorage.getItem('mp3_export_bitrate') || 'V0');
     const [opusBitrate, setOpusBitrate] = useState(() => localStorage.getItem('opus_export_bitrate') || '128');
     const [generateCoverArt, setGenerateCoverArt] = useState(() => localStorage.getItem('generate_cover_art') === 'true');
+
+    // Adapter trigger word settings (global)
+    const [triggerUseFilename, setTriggerUseFilename] = useState(() => localStorage.getItem('ace-globalTriggerUseFilename') === 'true');
+    const [triggerPlacement, setTriggerPlacement] = useState<'prepend' | 'append' | 'replace'>(() =>
+        (localStorage.getItem('ace-globalTriggerPlacement') as 'prepend' | 'append' | 'replace') || 'prepend'
+    );
 
     // Redmond Mode state
     const [redmondEnabled, setRedmondEnabled] = useState(false);
@@ -530,6 +536,62 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
                                     <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${generateCoverArt ? 'translate-x-5' : 'translate-x-0'}`} />
                                 </button>
                             </div>
+                    </div>
+
+                    {/* Adapter Trigger Word Section */}
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 text-zinc-900 dark:text-white">
+                            <Tag size={20} />
+                            <h3 className="font-semibold">Adapters</h3>
+                        </div>
+                        <div className="pl-7 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-zinc-900 dark:text-white font-medium">Use filename as trigger word</p>
+                                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Auto-inject adapter filename into the style prompt at generation time</p>
+                                </div>
+                                <button
+                                    onClick={() => {
+                                        const next = !triggerUseFilename;
+                                        setTriggerUseFilename(next);
+                                        localStorage.setItem('ace-globalTriggerUseFilename', String(next));
+                                        window.dispatchEvent(new StorageEvent('storage', { key: 'ace-globalTriggerUseFilename', newValue: String(next) }));
+                                    }}
+                                    className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${triggerUseFilename ? 'bg-pink-600' : 'bg-zinc-300 dark:bg-zinc-600'}`}
+                                >
+                                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${triggerUseFilename ? 'translate-x-5' : 'translate-x-0'}`} />
+                                </button>
+                            </div>
+                            {triggerUseFilename && (
+                                <div className="space-y-2">
+                                    <p className="text-sm text-zinc-900 dark:text-white font-medium">Placement</p>
+                                    <div className="flex gap-2">
+                                        {(['prepend', 'append', 'replace'] as const).map((mode) => (
+                                            <button
+                                                key={mode}
+                                                onClick={() => {
+                                                    setTriggerPlacement(mode);
+                                                    localStorage.setItem('ace-globalTriggerPlacement', mode);
+                                                    window.dispatchEvent(new StorageEvent('storage', { key: 'ace-globalTriggerPlacement', newValue: mode }));
+                                                }}
+                                                className={`flex-1 px-3 py-2 rounded-lg text-xs font-semibold border transition-colors ${
+                                                    triggerPlacement === mode
+                                                        ? 'bg-pink-600 text-white border-pink-600 shadow-sm'
+                                                        : 'bg-zinc-100 dark:bg-zinc-800 border-zinc-300 dark:border-zinc-600 text-zinc-600 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-500'
+                                                }`}
+                                            >
+                                                {mode.charAt(0).toUpperCase() + mode.slice(1)}
+                                            </button>
+                                        ))}
+                                    </div>
+                                    <p className="text-[11px] text-zinc-400 dark:text-zinc-500 leading-tight">
+                                        {triggerPlacement === 'prepend' && 'Trigger word is added before your style prompt'}
+                                        {triggerPlacement === 'append' && 'Trigger word is added after your style prompt'}
+                                        {triggerPlacement === 'replace' && 'Trigger word replaces your style prompt entirely'}
+                                    </p>
+                                </div>
+                            )}
+                        </div>
                     </div>
 
                     {/* Redmond Mode Section */}
