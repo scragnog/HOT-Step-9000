@@ -170,6 +170,17 @@ class CoverArtGenerator:
         target_size = (image.width * 4, image.height * 4)
 
         try:
+            # Shim for basicsr compatibility: torchvision removed
+            # torchvision.transforms.functional_tensor in recent versions,
+            # but basicsr still imports rgb_to_grayscale from there.
+            import sys
+            if "torchvision.transforms.functional_tensor" not in sys.modules:
+                import types
+                _shim = types.ModuleType("torchvision.transforms.functional_tensor")
+                from torchvision.transforms.functional import rgb_to_grayscale
+                _shim.rgb_to_grayscale = rgb_to_grayscale  # type: ignore[attr-defined]
+                sys.modules["torchvision.transforms.functional_tensor"] = _shim
+
             from basicsr.archs.rrdbnet_arch import RRDBNet
             from realesrgan import RealESRGANer
             import torch
