@@ -2750,6 +2750,25 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                   title="Track Setup"
                   onClose={() => setActiveDrawer(null)}
                 >
+                  <LyricsLibrary
+                    setStyle={setStyle}
+                    setLyrics={setLyrics}
+                    setBpm={setBpm}
+                    setKeyScale={setKeyScale}
+                    setTitle={setTitle}
+                    setDuration={setDuration}
+                  />
+                  {/* Title Input (standalone — between library and lyrics for natural flow) */}
+                  <div className="space-y-1.5">
+                    <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400" title="Name for the generated track">Title</label>
+                    <input
+                      type="text"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="Name your song…"
+                      className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white focus:outline-none focus:border-pink-500 dark:focus:border-pink-500 transition-colors"
+                    />
+                  </div>
                   <LyricsSection
                     showLyricsSub={showLyricsSub}
                     setShowLyricsSub={setShowLyricsSub}
@@ -2798,14 +2817,6 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                     effectiveKeyScale={effectiveKeyScale}
                     triggerWord={adapterTriggerWord}
                   />
-                  <LyricsLibrary
-                    setStyle={setStyle}
-                    setLyrics={setLyrics}
-                    setBpm={setBpm}
-                    setKeyScale={setKeyScale}
-                    setTitle={setTitle}
-                    setDuration={setDuration}
-                  />
                   <AudioSelectionSection
                     useReferenceAudio={useReferenceAudio}
                     setUseReferenceAudio={setUseReferenceAudio}
@@ -2852,8 +2863,6 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                     setVocalLanguage={setVocalLanguage}
                     vocalGender={vocalGender}
                     setVocalGender={setVocalGender}
-                    title={title}
-                    setTitle={setTitle}
                     bpm={bpm}
                     setBpm={setBpm}
                     keyScale={keyScale}

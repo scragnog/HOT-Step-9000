@@ -10,8 +10,6 @@ interface TrackDetailsAccordionProps {
     setVocalLanguage: (val: string) => void;
     vocalGender: string;
     setVocalGender: (val: string) => void;
-    title: string;
-    setTitle: (val: string) => void;
 
     // Music Parameters Props
     bpm: number;
@@ -41,7 +39,6 @@ export const TrackDetailsAccordion: React.FC<TrackDetailsAccordionProps> = ({
     instrumental, setInstrumental,
     vocalLanguage, setVocalLanguage,
     vocalGender, setVocalGender,
-    title, setTitle,
     bpm, setBpm, keyScale, setKeyScale, timeSignature, setTimeSignature, duration, setDuration,
     detectedBpm, detectedKey, triggerWord,
     taskType, sourceDuration, tempoScale,
@@ -51,18 +48,6 @@ export const TrackDetailsAccordion: React.FC<TrackDetailsAccordionProps> = ({
 
     return (
         <div className="space-y-4">
-            {/* Title Input */}
-            <div className="space-y-1.5">
-                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400" title={t('titleTooltip')}>{t('title')}</label>
-                <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder={t('nameSong')}
-                    className="w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white focus:outline-none focus:border-pink-500 dark:focus:border-pink-500 transition-colors"
-                />
-            </div>
-
             {/* Instrumental Toggle */}
             <div className="flex items-center justify-between py-1 border-b border-zinc-200 dark:border-white/5 pb-3">
                 <div>

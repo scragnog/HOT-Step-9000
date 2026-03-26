@@ -10,6 +10,7 @@ interface Track {
     keyscale: string;
     duration: number;
     filename: string;
+    is_refined?: boolean;
 }
 
 interface Album {
@@ -196,6 +197,9 @@ export function LyricsLibrary({ setStyle, setLyrics, setBpm, setKeyScale, setTit
                                                                 <span className={`text-xs truncate ${appliedTrack === track.filename ? 'text-green-300' : 'text-zinc-300'}`}>
                                                                     {track.title || track.filename}
                                                                 </span>
+                                                                {track.is_refined && (
+                                                                    <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 shrink-0">✨ Refined</span>
+                                                                )}
                                                                 {track.bpm > 0 && (
                                                                     <span className="text-[10px] text-zinc-600 ml-auto shrink-0">{track.bpm}bpm</span>
                                                                 )}
