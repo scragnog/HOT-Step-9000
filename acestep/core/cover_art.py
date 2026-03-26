@@ -1,8 +1,8 @@
-"""AI-generated cover art using SDXL Turbo.
+"""AI-generated cover art using SDXL Turbo + Real-ESRGAN upscaling.
 
 Provides a :class:`CoverArtGenerator` that lazy-loads ``stabilityai/sdxl-turbo``
-via ``diffusers``, generates a 512×512 image from song metadata (title, style,
-lyrics), and saves it as a WebP file.
+via ``diffusers``, generates a 512x512 image from song metadata (title, style,
+lyrics), upscales it to 2048x2048 via Real-ESRGAN, and saves it as a WebP file.
 
 The model is loaded on first use and unloaded after generation to free VRAM for
 the audio pipeline.
@@ -123,6 +123,7 @@ class CoverArtGenerator:
     def __init__(self, model_id: str = _DEFAULT_MODEL_ID):
         self.model_id = model_id
         self._pipeline = None
+        self._upscaler = None
 
     def _load_pipeline(self, device: str = "cuda"):
         """Lazy-load the SDXL Turbo pipeline."""
@@ -147,8 +148,12 @@ class CoverArtGenerator:
         logger.info(f"[CoverArt] Model loaded successfully on {device}")
 
     def _unload_pipeline(self):
-        """Unload the pipeline and free VRAM."""
+        """Unload the pipeline, upscaler, and free VRAM."""
         import torch
+
+        if self._upscaler is not None:
+            del self._upscaler
+            self._upscaler = None
 
         if self._pipeline is not None:
             del self._pipeline
@@ -156,6 +161,55 @@ class CoverArtGenerator:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             logger.info("[CoverArt] Pipeline unloaded, VRAM freed")
+
+    def _upscale_image(self, image):
+        """Upscale a PIL image 4x using Real-ESRGAN, with Pillow LANCZOS fallback."""
+        import numpy as np
+        from PIL import Image as PILImage
+
+        target_size = (image.width * 4, image.height * 4)
+
+        try:
+            from basicsr.archs.rrdbnet_arch import RRDBNet
+            from realesrgan import RealESRGANer
+            import torch
+
+            if self._upscaler is None:
+                model = RRDBNet(
+                    num_in_ch=3, num_out_ch=3, num_feat=64,
+                    num_block=23, num_grow_ch=32, scale=4,
+                )
+                device = "cuda" if torch.cuda.is_available() else "cpu"
+                half = device == "cuda"
+                self._upscaler = RealESRGANer(
+                    scale=4,
+                    model_path="https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth",
+                    model=model,
+                    tile=0,
+                    tile_pad=10,
+                    pre_pad=0,
+                    half=half,
+                    device=device,
+                )
+                logger.info(f"[CoverArt] Real-ESRGAN upscaler loaded on {device}")
+
+            # Convert PIL to numpy BGR (Real-ESRGAN expects BGR uint8)
+            img_np = np.array(image)[..., ::-1]  # RGB to BGR
+            output, _ = self._upscaler.enhance(img_np, outscale=4)
+            # BGR to RGB to PIL
+            result = PILImage.fromarray(output[..., ::-1])
+            logger.info(f"[CoverArt] Upscaled {image.width} to {result.width}px via Real-ESRGAN")
+            return result
+
+        except ImportError:
+            logger.warning("[CoverArt] realesrgan not installed, using Pillow LANCZOS upscale")
+        except Exception as e:
+            logger.warning(f"[CoverArt] Real-ESRGAN failed ({e}), falling back to Pillow LANCZOS")
+
+        # Fallback: high-quality Pillow resize
+        result = image.resize(target_size, PILImage.LANCZOS)
+        logger.info(f"[CoverArt] Upscaled {image.width} to {result.width}px via Pillow LANCZOS")
+        return result
 
     def generate(
         self,
@@ -201,6 +255,9 @@ class CoverArtGenerator:
                 height=height,
             ).images[0]
 
+            # Upscale 512 to 2048 via Real-ESRGAN (or Pillow fallback)
+            image = self._upscale_image(image)
+
             # Ensure output directory exists
             os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
@@ -222,6 +279,7 @@ class CoverArtGenerator:
                     width=width,
                     height=height,
                 ).images[0]
+                image = self._upscale_image(image)
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
                 image.save(output_path, format="WEBP", quality=85)
                 logger.info(f"[CoverArt] Saved (CPU fallback) to {output_path}")
