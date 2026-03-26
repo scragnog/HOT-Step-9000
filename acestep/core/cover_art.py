@@ -179,8 +179,8 @@ class CoverArtGenerator:
                     num_in_ch=3, num_out_ch=3, num_feat=64,
                     num_block=23, num_grow_ch=32, scale=4,
                 )
-                device = "cuda" if torch.cuda.is_available() else "cpu"
-                half = device == "cuda"
+                # Always use CPU for upscaling — avoids VRAM contention
+                # with ACE-Step audio models. 512→2048 takes ~1-2s on CPU.
                 self._upscaler = RealESRGANer(
                     scale=4,
                     model_path="https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth",
@@ -188,10 +188,10 @@ class CoverArtGenerator:
                     tile=0,
                     tile_pad=10,
                     pre_pad=0,
-                    half=half,
-                    device=device,
+                    half=False,
+                    device="cpu",
                 )
-                logger.info(f"[CoverArt] Real-ESRGAN upscaler loaded on {device}")
+                logger.info("[CoverArt] Real-ESRGAN upscaler loaded on CPU")
 
             # Convert PIL to numpy BGR (Real-ESRGAN expects BGR uint8)
             img_np = np.array(image)[..., ::-1]  # RGB to BGR
@@ -255,7 +255,10 @@ class CoverArtGenerator:
                 height=height,
             ).images[0]
 
-            # Upscale 512 to 2048 via Real-ESRGAN (or Pillow fallback)
+            # Free SDXL VRAM before upscaling (avoids OOM with audio model)
+            self._unload_pipeline()
+
+            # Upscale 512 to 2048 via Real-ESRGAN on CPU (or Pillow fallback)
             image = self._upscale_image(image)
 
             # Ensure output directory exists
@@ -279,6 +282,7 @@ class CoverArtGenerator:
                     width=width,
                     height=height,
                 ).images[0]
+                self._unload_pipeline()
                 image = self._upscale_image(image)
                 os.makedirs(os.path.dirname(output_path), exist_ok=True)
                 image.save(output_path, format="WEBP", quality=85)
