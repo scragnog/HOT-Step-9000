@@ -314,7 +314,20 @@ export const SongList: React.FC<SongListProps> = ({
             <div className="relative flex-1 overflow-y-auto custom-scrollbar p-6 pb-32">
                 {/* Background Visualizer — dimmed, behind content */}
                 {showVisualizerBg && isPlaying && (
-                    <div className="absolute inset-0 z-0 pointer-events-none">
+                    <div className="absolute inset-0 z-0 pointer-events-none overflow-hidden">
+                        {/* Track cover art — blurred & darkened backdrop */}
+                        {currentSong?.coverUrl && (
+                            <div
+                                className="absolute inset-0 transition-[background-image] duration-700"
+                                style={{
+                                    backgroundImage: `url(${currentSong.coverUrl})`,
+                                    backgroundSize: 'cover',
+                                    backgroundPosition: 'center',
+                                    filter: 'brightness(0.18) blur(8px) saturate(1.4)',
+                                    transform: 'scale(1.15)',
+                                }}
+                            />
+                        )}
                         <LiveVisualizer
                             isPlaying={true}
                             className="w-full h-full"
