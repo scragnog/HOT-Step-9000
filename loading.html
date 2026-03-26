@@ -753,7 +753,7 @@
                     // Start auto-launch countdown (10s)
                     if (!window._autoLaunchStarted) {
                         window._autoLaunchStarted = true;
-                        window._autoLaunchRemaining = 10;
+                        window._autoLaunchRemaining = 30;
                         btnLaunch.textContent = `Start summoning bangers (${window._autoLaunchRemaining}s)`;
                         window._autoLaunchInterval = setInterval(() => {
                             window._autoLaunchRemaining--;

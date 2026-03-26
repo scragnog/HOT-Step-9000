@@ -667,7 +667,7 @@ function AppContent() {
           title: s.title,
           lyrics: s.lyrics,
           style: s.style,
-          coverUrl: `https://picsum.photos/seed/${s.id}/400/400`,
+          coverUrl: s.cover_url || `https://picsum.photos/seed/${s.id}/400/400`,
           duration: s.duration && s.duration > 0 ? `${Math.floor(s.duration / 60)}:${String(Math.floor(s.duration % 60)).padStart(2, '0')}` : '0:00',
           createdAt: new Date(s.created_at || s.createdAt),
           tags: s.tags || [],
