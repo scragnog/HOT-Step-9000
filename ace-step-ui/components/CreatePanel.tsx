@@ -846,6 +846,15 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   }, [globalTriggerUseFilename, globalTriggerPlacement, token]);
   // Note: adapterSlots intentionally excluded — triggers are applied per-slot at load time via handleLoadSlot
 
+  // Compute combined trigger word for StyleSection display
+  const computedTriggerWord = useMemo(() => {
+    if (!globalTriggerUseFilename || adapterSlots.length === 0) return '';
+    return adapterSlots.map(slot => {
+      const fileName = slot.path.replace(/\\/g, '/').split('/').pop() || '';
+      return fileName.replace(/\.safetensors$/i, '').replace(/_/g, ' ');
+    }).filter(Boolean).join(', ');
+  }, [globalTriggerUseFilename, adapterSlots]);
+
   // ── Global Scale Override handlers ────────────────────────────────────────
   const handleGlobalOverrideToggle = async (enabled: boolean) => {
     setGlobalScaleOverrideEnabled(enabled);
@@ -2828,7 +2837,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                     timeSignature={timeSignature}
                     effectiveBpm={effectiveBpm}
                     effectiveKeyScale={effectiveKeyScale}
-                    triggerWord={adapterTriggerWord}
+                    triggerWord={computedTriggerWord || adapterTriggerWord}
                   />
                   <AudioSelectionSection
                     useReferenceAudio={useReferenceAudio}
@@ -2886,7 +2895,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                     setDuration={setDuration}
                     detectedBpm={detectedBpm}
                     detectedKey={detectedKey}
-                    triggerWord={adapterTriggerWord}
+                    triggerWord={computedTriggerWord || adapterTriggerWord}
                     taskType={taskType}
                     sourceDuration={sourceDuration}
                     tempoScale={tempoScale}
