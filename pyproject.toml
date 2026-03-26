@@ -54,6 +54,8 @@ dependencies = [
     "audio-separator",
     "onnxruntime",
     "Pillow",
+    "realesrgan",
+    "basicsr",
     "psutil>=5.9.0",
     "huggingface_hub[hf_xet]",
     "xxhash",
