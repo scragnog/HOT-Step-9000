@@ -1117,3 +1117,73 @@ Optional AI-generated album artwork using SDXL Turbo. When enabled in Settings, 
 
 - **Required:** `Pillow` (image handling), `diffusers` (already present for audio generation)
 - **Optional:** CUDA GPU (falls back to CPU if unavailable or OOM)
+
+---
+
+## Per-Adapter Trigger Words
+
+Configurable trigger word injection for Side-Step (LoKR) adapters. Derive trigger words from adapter filenames and configure how they're injected into generation prompts — persisted per-adapter in localStorage.
+
+### What's included
+
+| File | Description |
+|------|-------------|
+| `ace-step-ui/components/accordions/AdaptersAccordion.tsx` | Per-adapter settings panel with trigger word derivation, injection placement controls, and enable/disable toggle |
+| `ace-step-ui/components/CreatePanel.tsx` | State management and API call wiring for trigger word settings |
+
+### How it works
+
+1. Load any adapter → a settings gear icon appears on the adapter slot
+2. Click to expand the trigger word panel — the trigger word is auto-derived from the adapter filename (e.g., `sum41_allkiller.safetensors` → `sum41 allkiller`)
+3. Choose injection placement: **Prepend** (before style prompt) or **Append** (after style prompt)
+4. Toggle trigger word injection on/off per adapter
+5. Settings are persisted in `localStorage` by adapter filename — automatically restored when the same adapter is loaded in future sessions
+
+---
+
+## Matchering Format Support
+
+Transparent on-the-fly conversion of FLAC/WAV reference files to 320kbps MP3 for the Matchering mastering engine. Also increased the upload file size limit to accommodate lossless formats.
+
+### What's included
+
+| File | Description |
+|------|-------------|
+| `acestep/audio_utils.py` | `ensure_mp3_for_matchering(ref_path, temp_dir)` — converts FLAC/WAV to 320kbps MP3 via ffmpeg |
+| `acestep/api/http/mastering_routes.py` | Calls conversion helper before passing reference files to Matchering |
+| `acestep/inference.py` | Integration during inline mastering pipeline |
+| `ace-step-ui/server/src/routes/generate.ts` | Increased multer upload limit from 25MB to 200MB for lossless audio |
+
+### How it works
+
+1. When a FLAC or WAV file is selected as a Matchering reference, the Python backend transparently converts it to a temporary 320kbps MP3 before processing
+2. The conversion uses `ffmpeg` (must be on system PATH)
+3. The multer file size limit was increased from 25MB → 200MB to accommodate large lossless files
+4. Original file is never modified — conversion writes to a temp directory that's cleaned up after processing
+
+---
+
+## Song List UI Refresh
+
+Visual overhaul of the song list with a cover art visualizer backdrop, refined track indicators in the Lyrics Library, and a cleaner card layout.
+
+### What's included
+
+| File | Description |
+|------|-------------|
+| `ace-step-ui/components/SongList.tsx` | Cover art backdrop behind visualizer, card layout redesign (removed clutter, glassy backgrounds, inline duration/time) |
+| `ace-step-ui/components/LiveVisualizer.tsx` | Increased dimmed mode opacity from 0.15 to 0.25 for better visualizer visibility |
+| `ace-step-ui/components/LyricsLibrary.tsx` | ✨ Refined badge for tracks with refined variants |
+| `acestep/api_server.py` | `is_refined` flag in lyrics library scan (detects `_refined_` in filename) |
+| `ace-step-ui/components/CreatePanel.tsx` | Track Setup drawer reorder: Lyrics Library → Title → Lyrics → Style |
+| `ace-step-ui/components/accordions/TrackDetailsAccordion.tsx` | Title field extracted to standalone component |
+
+### Changes in detail
+
+- **Cover art backdrop:** When audio is playing, the currently playing track's SDXL-generated cover art is rendered as a blurred, darkened backdrop behind the visualizer (art → visualizer → track list layering)
+- **Card redesign:** Removed unused buttons (thumbs up/down, share, video). Moved playlist, compare, and menu icons to the left. Duration and creation time now display inline with emoji labels (⏱ / 🕐) after the menu button
+- **Glassy backgrounds:** Selected track uses a semi-transparent blur background; hover uses a lower-opacity transparent effect
+- **White caption text:** Style description text changed from grey to white for better readability against the cover art backdrop
+- **Refined badge:** Tracks in the Lyrics Library that have been through the refinement pipeline display a ✨ Refined amber badge
+- **Drawer reorder:** Track Setup drawer reorganized to a more logical flow: Lyrics Library at top, then Title, Lyrics, Style, Audio, and Track Details
+
