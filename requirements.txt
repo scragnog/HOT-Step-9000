@@ -60,3 +60,5 @@ pyloudnorm
 audio-separator
 onnxruntime
 Pillow
+realesrgan
+basicsr
