@@ -123,7 +123,6 @@ class CoverArtGenerator:
     def __init__(self, model_id: str = _DEFAULT_MODEL_ID):
         self.model_id = model_id
         self._pipeline = None
-        self._upscaler = None
 
     def _load_pipeline(self, device: str = "cuda"):
         """Lazy-load the SDXL Turbo pipeline."""
@@ -148,12 +147,8 @@ class CoverArtGenerator:
         logger.info(f"[CoverArt] Model loaded successfully on {device}")
 
     def _unload_pipeline(self):
-        """Unload the pipeline, upscaler, and free VRAM."""
+        """Unload the SDXL pipeline and free VRAM."""
         import torch
-
-        if self._upscaler is not None:
-            del self._upscaler
-            self._upscaler = None
 
         if self._pipeline is not None:
             del self._pipeline
@@ -164,6 +159,7 @@ class CoverArtGenerator:
 
     def _upscale_image(self, image):
         """Upscale a PIL image 4x using Real-ESRGAN, with Pillow LANCZOS fallback."""
+        import gc
         import numpy as np
         from PIL import Image as PILImage
 
@@ -183,33 +179,35 @@ class CoverArtGenerator:
 
             from basicsr.archs.rrdbnet_arch import RRDBNet
             from realesrgan import RealESRGANer
-            import torch
 
-            if self._upscaler is None:
-                model = RRDBNet(
-                    num_in_ch=3, num_out_ch=3, num_feat=64,
-                    num_block=23, num_grow_ch=32, scale=4,
-                )
-                # Always use CPU for upscaling — avoids VRAM contention
-                # with ACE-Step audio models. 512→2048 takes ~1-2s on CPU.
-                self._upscaler = RealESRGANer(
-                    scale=4,
-                    model_path="https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth",
-                    model=model,
-                    tile=0,
-                    tile_pad=10,
-                    pre_pad=0,
-                    half=False,
-                    device="cpu",
-                )
-                logger.info("[CoverArt] Real-ESRGAN upscaler loaded on CPU")
+            model = RRDBNet(
+                num_in_ch=3, num_out_ch=3, num_feat=64,
+                num_block=23, num_grow_ch=32, scale=4,
+            )
+            # CPU + tile=256 to cap peak RAM (~2GB instead of 50+GB)
+            upscaler = RealESRGANer(
+                scale=4,
+                model_path="https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.pth",
+                model=model,
+                tile=256,
+                tile_pad=10,
+                pre_pad=0,
+                half=False,
+                device="cpu",
+            )
+            logger.info("[CoverArt] Real-ESRGAN upscaler loaded on CPU (tiled)")
 
             # Convert PIL to numpy BGR (Real-ESRGAN expects BGR uint8)
             img_np = np.array(image)[..., ::-1]  # RGB to BGR
-            output, _ = self._upscaler.enhance(img_np, outscale=4)
+            output, _ = upscaler.enhance(img_np, outscale=4)
             # BGR to RGB to PIL
             result = PILImage.fromarray(output[..., ::-1])
             logger.info(f"[CoverArt] Upscaled {image.width} to {result.width}px via Real-ESRGAN")
+
+            # Aggressively free the upscaler model + intermediates
+            del upscaler, model, img_np, output
+            gc.collect()
+
             return result
 
         except ImportError:
