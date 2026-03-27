@@ -404,8 +404,8 @@ class LMStudioProvider(LLMProvider):
         try:
             import httpx
             base_url = self._get_base_url()
-            check_url = base_url[:-3] if base_url.endswith("/v1") else base_url
-            resp = httpx.get(f"{check_url}/models", timeout=3)
+            # LM Studio serves /v1/models — use base_url as-is
+            resp = httpx.get(f"{base_url}/models", timeout=3)
             return resp.status_code == 200
         except Exception:
             return False

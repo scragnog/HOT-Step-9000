@@ -133,7 +133,6 @@ def register_lireek_routes(app: FastAPI) -> None:
         songs_data = [s.model_dump() for s in result.songs]
         lyrics_set = save_lyrics_set(
             artist_id=artist["id"],
-            artist_name=result.artist,
             album=result.album,
             songs=songs_data,
             max_songs=req.max_songs,
