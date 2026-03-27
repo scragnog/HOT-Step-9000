@@ -830,22 +830,32 @@ app.use('/api/redmond', redmondRoutes);
 app.use(['/api/lireek', '/api/llm'], async (req, res) => {
   try {
     const targetUrl = `${config.acestep.apiUrl}${req.originalUrl}`;
-    
-    // Forward the request to Python backend
+
+    // Build clean headers — strip hop-by-hop headers that break proxied requests
+    const skipHeaders = new Set(['content-length', 'connection', 'transfer-encoding', 'host', 'keep-alive']);
+    const headers: Record<string, string> = {
+      'content-type': 'application/json',
+    };
+    for (const [key, val] of Object.entries(req.headers)) {
+      if (!skipHeaders.has(key) && typeof val === 'string') {
+        headers[key] = val;
+      }
+    }
+
+    const body = ['GET', 'HEAD'].includes(req.method)
+      ? undefined
+      : JSON.stringify(req.body);
+
     const response = await fetch(targetUrl, {
       method: req.method,
-      headers: {
-        ...(req.headers as Record<string, string>),
-        host: new URL(config.acestep.apiUrl).host, // Override host header
-      },
-      body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body),
+      headers,
+      body,
     });
 
     // Forward status and headers
     res.status(response.status);
     response.headers.forEach((value, key) => {
-      // Don't forward content-encoding or content-length (Express handles it)
-      if (!['content-encoding', 'content-length'].includes(key.toLowerCase())) {
+      if (!['content-encoding', 'content-length', 'transfer-encoding'].includes(key.toLowerCase())) {
         res.setHeader(key, value);
       }
     });
@@ -863,7 +873,7 @@ app.use(['/api/lireek', '/api/llm'], async (req, res) => {
       res.end();
     }
   } catch (error) {
-    console.error('[Proxy Error]', req.originalUrl, error);
+    console.error('[Proxy Error]', req.method, req.originalUrl, error);
     res.status(502).json({ error: 'Bad Gateway: Python backend unreachable' });
   }
 });

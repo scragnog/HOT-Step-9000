@@ -116,6 +116,9 @@ def register_lireek_routes(app: FastAPI) -> None:
             get_or_create_artist, save_lyrics_set,
         )
 
+        logger.info("fetch-lyrics request: artist=%r, album=%r, max_songs=%d",
+                     req.artist, req.album, req.max_songs)
+
         try:
             result = fetch_lyrics(
                 artist_name=req.artist,
@@ -123,20 +126,29 @@ def register_lireek_routes(app: FastAPI) -> None:
                 max_songs=req.max_songs,
             )
         except ValueError as e:
+            logger.warning("fetch_lyrics ValueError: %s", e)
             raise HTTPException(status_code=404, detail=str(e))
         except Exception as e:
             logger.error("Genius fetch failed: %s", traceback.format_exc())
             raise HTTPException(status_code=500, detail=str(e))
 
+        logger.info("fetch_lyrics returned %d songs for artist=%r album=%r",
+                     len(result.songs), result.artist, result.album)
+
         # Store in DB
         artist = get_or_create_artist(result.artist)
         songs_data = [s.model_dump() for s in result.songs]
+        logger.info("Saving %d songs to DB for artist_id=%d",
+                     len(songs_data), artist["id"])
         lyrics_set = save_lyrics_set(
             artist_id=artist["id"],
             album=result.album,
             songs=songs_data,
             max_songs=req.max_songs,
         )
+
+        logger.info("Saved lyrics_set id=%d with total_songs=%d",
+                     lyrics_set["id"], lyrics_set["total_songs"])
 
         return {
             "artist": artist,
