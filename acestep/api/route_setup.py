@@ -68,7 +68,7 @@ def configure_api_routes(
         CORSMiddleware,
         allow_origins=["null", "http://localhost", "http://127.0.0.1"],
         allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
-        allow_methods=["GET", "POST", "OPTIONS"],
+        allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
         allow_headers=["Content-Type", "Authorization"],
     )
 
