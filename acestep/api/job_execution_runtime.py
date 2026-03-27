@@ -72,6 +72,26 @@ async def run_one_job_runtime(
         log_fn=log_fn,
     )
 
+    # ── Lireek per-job adapter hook ────────────────────────────────────
+    _adapter_path = getattr(req, "lireek_adapter_path", None)
+    if _adapter_path and hasattr(selected_handler, "load_lora"):
+        try:
+            log_fn(f"[Lireek] Loading per-job adapter: {_adapter_path}")
+            selected_handler.load_lora(_adapter_path)
+            _scale = getattr(req, "lireek_adapter_scale", None)
+            if _scale is not None and hasattr(selected_handler, "set_lora_scale"):
+                selected_handler.set_lora_scale(_scale)
+            _group = getattr(req, "lireek_group_scales", None)
+            if _group and hasattr(selected_handler, "set_lora_group_scales"):
+                selected_handler.set_lora_group_scales(
+                    self_attn_scale=_group.get("self_attn", 1.0),
+                    cross_attn_scale=_group.get("cross_attn", 1.0),
+                    mlp_scale=_group.get("mlp", 1.0),
+                )
+            log_fn(f"[Lireek] Per-job adapter ready (scale={_scale}, groups={_group})")
+        except Exception as exc:
+            log_fn(f"[Lireek] WARNING: adapter hook failed: {exc}")
+
     def _blocking_generate() -> dict[str, Any]:
         return build_blocking_result_fn(selected_handler, selected_model_name)
 

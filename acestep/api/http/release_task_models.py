@@ -155,6 +155,11 @@ class GenerateMusicRequest(BaseModel):
     steering_loaded: List[str] = Field(default_factory=list, description="List of loaded steering concept names")
     steering_alphas: Dict[str, float] = Field(default_factory=dict, description="Per-concept alpha values")
 
+    # ── Lireek per-job adapter override ──────────────────────────
+    lireek_adapter_path: Optional[str] = Field(default=None, description="Per-job LoRA adapter path (loaded before generation)")
+    lireek_adapter_scale: Optional[float] = Field(default=None, ge=0.0, le=2.0, description="Per-job adapter scale")
+    lireek_group_scales: Optional[Dict[str, float]] = Field(default=None, description="Per-job adapter group scales {self_attn, cross_attn, mlp}")
+
     class Config:
         """Legacy pydantic config preserving prior population semantics."""
 

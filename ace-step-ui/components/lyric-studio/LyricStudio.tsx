@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Music, Users, Disc3, FileText, Sparkles, ChevronRight, ChevronDown,
-  Plus, Trash2, Download, RefreshCw, Loader2, Search, AlertTriangle, X, Wand2,
+  Plus, Trash2, Download, RefreshCw, Loader2, Search, AlertTriangle, X, Wand2, Play, Settings2, Save,
 } from 'lucide-react';
-import { lireekApi, Artist, LyricsSet, Profile, Generation, SongLyric } from '../../services/lyricStudioApi';
+import { lireekApi, Artist, LyricsSet, Profile, Generation, SongLyric, AlbumPreset } from '../../services/lyricStudioApi';
 import { ProviderSelector } from './ProviderSelector';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -60,6 +60,21 @@ export const LyricStudio: React.FC = () => {
   // Action state
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+
+  // Album presets
+  const [presets, setPresets] = useState<Record<number, AlbumPreset | null>>({});
+  const [presetForm, setPresetForm] = useState<{
+    adapter_path: string;
+    adapter_scale: number;
+    self_attn: number;
+    cross_attn: number;
+    mlp: number;
+    matchering_reference_path: string;
+  }>({
+    adapter_path: '', adapter_scale: 1.0,
+    self_attn: 1.0, cross_attn: 1.0, mlp: 1.0,
+    matchering_reference_path: '',
+  });
 
   // ── Load all data ───────────────────────────────────────────────────────
   const loadAll = useCallback(async () => {
@@ -237,6 +252,87 @@ export const LyricStudio: React.FC = () => {
       await loadAll();
     } catch (err) {
       showToast(`Delete failed: ${(err as Error).message}`);
+    }
+  };
+
+  // ── Album Preset Handlers ───────────────────────────────────────────────
+  const loadPreset = async (lyricsSetId: number) => {
+    try {
+      const res = await lireekApi.getPreset(lyricsSetId);
+      setPresets(prev => ({ ...prev, [lyricsSetId]: res.preset }));
+      if (res.preset) {
+        setPresetForm({
+          adapter_path: res.preset.adapter_path || '',
+          adapter_scale: res.preset.adapter_scale ?? 1.0,
+          self_attn: res.preset.adapter_group_scales?.self_attn ?? 1.0,
+          cross_attn: res.preset.adapter_group_scales?.cross_attn ?? 1.0,
+          mlp: res.preset.adapter_group_scales?.mlp ?? 1.0,
+          matchering_reference_path: res.preset.matchering_reference_path || '',
+        });
+      } else {
+        setPresetForm({ adapter_path: '', adapter_scale: 1.0, self_attn: 1.0, cross_attn: 1.0, mlp: 1.0, matchering_reference_path: '' });
+      }
+    } catch (err) {
+      showToast(`Failed to load preset: ${(err as Error).message}`);
+    }
+  };
+
+  const savePreset = async (lyricsSetId: number) => {
+    setActionLoading(`preset-${lyricsSetId}`);
+    try {
+      await lireekApi.upsertPreset(lyricsSetId, {
+        adapter_path: presetForm.adapter_path || undefined,
+        adapter_scale: presetForm.adapter_scale,
+        adapter_group_scales: { self_attn: presetForm.self_attn, cross_attn: presetForm.cross_attn, mlp: presetForm.mlp },
+        matchering_reference_path: presetForm.matchering_reference_path || undefined,
+      });
+      showToast('Preset saved');
+      await loadPreset(lyricsSetId);
+    } catch (err) {
+      showToast(`Save failed: ${(err as Error).message}`);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  // ── Generate Audio from Lyrics ──────────────────────────────────────────
+  const handleGenerateAudio = async (gen: Generation) => {
+    setActionLoading(`audio-${gen.id}`);
+    try {
+      // Find the album preset for this generation's profile -> lyrics_set
+      const profile = profiles.find(p => p.id === gen.profile_id);
+      let preset: AlbumPreset | null = null;
+      if (profile) {
+        const res = await lireekApi.getPreset(profile.lyrics_set_id);
+        preset = res.preset;
+      }
+
+      const payload: any = {
+        lyrics: gen.lyrics,
+        prompt: gen.caption || '',
+        audio_duration: gen.duration || 180,
+      };
+      if (gen.bpm) payload.bpm = gen.bpm;
+      if (gen.key) payload.key_scale = gen.key;
+      if (preset?.adapter_path) {
+        payload.lireek_adapter_path = preset.adapter_path;
+        payload.lireek_adapter_scale = preset.adapter_scale;
+        if (preset.adapter_group_scales) {
+          payload.lireek_group_scales = preset.adapter_group_scales;
+        }
+      }
+      if (preset?.matchering_reference_path) {
+        payload.mastering_params = { mode: 'matchering', reference_file: preset.matchering_reference_path };
+      }
+
+      const res = await lireekApi.submitAudioGeneration(payload);
+      showToast(`Audio job queued: ${res.job_id}`);
+      // Link the audio generation
+      await lireekApi.linkAudio(gen.id, res.job_id);
+    } catch (err) {
+      showToast(`Audio generation failed: ${(err as Error).message}`);
+    } finally {
+      setActionLoading(null);
     }
   };
 
@@ -483,6 +579,52 @@ export const LyricStudio: React.FC = () => {
                 <span className="text-xs text-zinc-500">{albumProfiles.length} profile(s)</span>
               </div>
 
+              {/* Album Preset Panel */}
+              <details className="mb-6" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) loadPreset(ls.id); }}>
+                <summary className="flex items-center gap-2 text-sm font-semibold text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-zinc-300 transition-colors">
+                  <Settings2 className="w-4 h-4" /> Album Preset
+                </summary>
+                <div className="mt-3 p-4 rounded-xl bg-white/5 border border-white/5 space-y-3">
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Adapter Path</label>
+                    <input type="text" value={presetForm.adapter_path} onChange={e => setPresetForm(p => ({ ...p, adapter_path: e.target.value }))}
+                      placeholder="D:\\path\\to\\adapter.safetensors" className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-white/10 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-pink-500/50" />
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase mb-1">Scale</label>
+                      <input type="number" step={0.1} min={0} max={2} value={presetForm.adapter_scale} onChange={e => setPresetForm(p => ({ ...p, adapter_scale: parseFloat(e.target.value) || 1 }))}
+                        className="w-full px-2 py-1.5 rounded-lg bg-zinc-800 border border-white/10 text-sm text-white focus:outline-none focus:border-pink-500/50" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase mb-1">Self-Attn</label>
+                      <input type="number" step={0.1} min={0} max={2} value={presetForm.self_attn} onChange={e => setPresetForm(p => ({ ...p, self_attn: parseFloat(e.target.value) || 1 }))}
+                        className="w-full px-2 py-1.5 rounded-lg bg-zinc-800 border border-white/10 text-sm text-white focus:outline-none focus:border-pink-500/50" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase mb-1">Cross-Attn</label>
+                      <input type="number" step={0.1} min={0} max={2} value={presetForm.cross_attn} onChange={e => setPresetForm(p => ({ ...p, cross_attn: parseFloat(e.target.value) || 1 }))}
+                        className="w-full px-2 py-1.5 rounded-lg bg-zinc-800 border border-white/10 text-sm text-white focus:outline-none focus:border-pink-500/50" />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] text-zinc-500 uppercase mb-1">MLP</label>
+                      <input type="number" step={0.1} min={0} max={2} value={presetForm.mlp} onChange={e => setPresetForm(p => ({ ...p, mlp: parseFloat(e.target.value) || 1 }))}
+                        className="w-full px-2 py-1.5 rounded-lg bg-zinc-800 border border-white/10 text-sm text-white focus:outline-none focus:border-pink-500/50" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Matchering Reference</label>
+                    <input type="text" value={presetForm.matchering_reference_path} onChange={e => setPresetForm(p => ({ ...p, matchering_reference_path: e.target.value }))}
+                      placeholder="D:\\path\\to\\reference.wav" className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-white/10 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-pink-500/50" />
+                  </div>
+                  <button onClick={() => savePreset(ls.id)} disabled={actionLoading === `preset-${ls.id}`}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pink-500/20 text-pink-300 hover:bg-pink-500/30 text-sm font-medium transition-colors disabled:opacity-50">
+                    {actionLoading === `preset-${ls.id}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                    Save Preset
+                  </button>
+                </div>
+              </details>
+
               {/* Songs list */}
               <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Songs</h3>
               <div className="space-y-1.5">
@@ -609,6 +751,14 @@ export const LyricStudio: React.FC = () => {
                 >
                   {actionLoading === `export-${gen.id}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
                   Export
+                </button>
+                <button
+                  onClick={() => handleGenerateAudio(gen)}
+                  disabled={actionLoading === `audio-${gen.id}`}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-pink-500/30 to-purple-500/30 text-white hover:from-pink-500/40 hover:to-purple-500/40 text-sm font-semibold transition-all disabled:opacity-50 border border-pink-500/20"
+                >
+                  {actionLoading === `audio-${gen.id}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Play className="w-3.5 h-3.5" />}
+                  Generate Audio
                 </button>
                 <button
                   onClick={() => handleDeleteGeneration(gen.id)}

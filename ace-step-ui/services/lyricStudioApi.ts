@@ -209,4 +209,18 @@ export const lireekApi = {
 
   getAudioGenerations: (generationId: number): Promise<{ audio_generations: AudioGeneration[] }> =>
     api(`/api/lireek/generations/${generationId}/audio`),
+
+  // ── Direct Audio Generation ─────────────────────────────────────────
+  submitAudioGeneration: (params: {
+    lyrics: string;
+    prompt: string;
+    bpm?: number;
+    key_scale?: string;
+    audio_duration?: number;
+    lireek_adapter_path?: string;
+    lireek_adapter_scale?: number;
+    lireek_group_scales?: { self_attn: number; cross_attn: number; mlp: number };
+    mastering_params?: { mode: string; reference_file?: string };
+  }): Promise<{ job_id: string }> =>
+    api('/api/generate', { method: 'POST', body: params }),
 };
