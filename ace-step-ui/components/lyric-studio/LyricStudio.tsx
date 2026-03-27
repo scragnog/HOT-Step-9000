@@ -4,7 +4,7 @@ import {
   Plus, Trash2, Download, RefreshCw, Loader2, Search, AlertTriangle, X, Wand2, Play, Settings2, Save,
 } from 'lucide-react';
 import { lireekApi, Artist, LyricsSet, Profile, Generation, SongLyric, AlbumPreset } from '../../services/lyricStudioApi';
-import { ProviderSelector } from './ProviderSelector';
+import { TripleProviderSelector, ModelSelections, loadSelections, saveSelections } from './ProviderSelector';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -53,9 +53,11 @@ export const LyricStudio: React.FC = () => {
   const [fetchMaxSongs, setFetchMaxSongs] = useState(50);
   const [fetching, setFetching] = useState(false);
 
-  // LLM provider
-  const [provider, setProvider] = useState('gemini');
-  const [model, setModel] = useState('');
+  // LLM provider selections (per-role)
+  const [modelSelections, setModelSelections] = useState<ModelSelections>(loadSelections);
+
+  // Expanded song index for lyrics preview
+  const [expandedSong, setExpandedSong] = useState<string | null>(null);
 
   // Action state
   const [actionLoading, setActionLoading] = useState<string | null>(null);
@@ -155,6 +157,7 @@ export const LyricStudio: React.FC = () => {
   const handleBuildProfile = async (lyricsSetId: number) => {
     setActionLoading(`profile-${lyricsSetId}`);
     try {
+      const { provider, model } = modelSelections.profiling;
       await lireekApi.buildProfile(lyricsSetId, { provider, model: model || undefined });
       showToast('Profile built successfully');
       await loadAll();
@@ -168,6 +171,7 @@ export const LyricStudio: React.FC = () => {
   const handleGenerate = async (profileId: number) => {
     setActionLoading(`generate-${profileId}`);
     try {
+      const { provider, model } = modelSelections.generation;
       await lireekApi.generateLyrics(profileId, {
         profile_id: profileId,
         provider,
@@ -185,6 +189,7 @@ export const LyricStudio: React.FC = () => {
   const handleRefine = async (generationId: number) => {
     setActionLoading(`refine-${generationId}`);
     try {
+      const { provider, model } = modelSelections.refinement;
       await lireekApi.refineLyrics(generationId, { provider, model: model || undefined });
       showToast('Lyrics refined successfully');
       await loadAll();
@@ -523,14 +528,14 @@ export const LyricStudio: React.FC = () => {
           })}
         </div>
 
-        {/* Provider selector at bottom of tree panel */}
+        {/* Provider selectors at bottom of tree panel */}
         <div className="px-3 py-2 border-t border-white/5">
-          <ProviderSelector
-            selectedProvider={provider}
-            selectedModel={model}
-            onProviderChange={setProvider}
-            onModelChange={setModel}
-            compact
+          <TripleProviderSelector
+            selections={modelSelections}
+            onSelectionsChange={(sel) => {
+              setModelSelections(sel);
+              saveSelections(sel);
+            }}
           />
         </div>
       </div>
@@ -627,14 +632,29 @@ export const LyricStudio: React.FC = () => {
 
               {/* Songs list */}
               <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Songs</h3>
-              <div className="space-y-1.5">
-                {songs.map((song, i) => (
-                  <div key={i} className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors group">
-                    <span className="text-xs text-zinc-600 w-5 text-right">{i + 1}</span>
-                    <span className="text-sm text-white truncate flex-1">{song.title}</span>
-                    <span className="text-[10px] text-zinc-600">{song.lyrics?.length || 0} chars</span>
-                  </div>
-                ))}
+              <div className="space-y-1">
+                {songs.map((song, i) => {
+                  const songKey = `${ls.id}-${i}`;
+                  const isExpanded = expandedSong === songKey;
+                  return (
+                    <div key={i}>
+                      <div
+                        className="flex items-center gap-2 px-3 py-2 rounded-lg bg-white/5 hover:bg-white/10 transition-colors group cursor-pointer"
+                        onClick={() => setExpandedSong(isExpanded ? null : songKey)}
+                      >
+                        {isExpanded ? <ChevronDown className="w-3 h-3 text-zinc-500 flex-shrink-0" /> : <ChevronRight className="w-3 h-3 text-zinc-500 flex-shrink-0" />}
+                        <span className="text-xs text-zinc-600 w-5 text-right">{i + 1}</span>
+                        <span className="text-sm text-white truncate flex-1">{song.title}</span>
+                        <span className="text-[10px] text-zinc-600">{song.lyrics?.length || 0} chars</span>
+                      </div>
+                      {isExpanded && song.lyrics && (
+                        <pre className="mx-3 mt-1 mb-2 p-3 rounded-lg bg-black/40 border border-white/5 text-xs text-zinc-300 whitespace-pre-wrap font-mono leading-relaxed max-h-[40vh] overflow-y-auto scrollbar-hide">
+                          {song.lyrics}
+                        </pre>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           );
