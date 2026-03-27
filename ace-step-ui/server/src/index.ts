@@ -826,6 +826,48 @@ app.use('/api/analyze', analyzeRoutes);
 app.use('/api/model', modelRoutes);
 app.use('/api/redmond', redmondRoutes);
 
+// Generic proxy for Python backend routes not handled by Express
+app.use(['/api/lireek', '/api/llm'], async (req, res) => {
+  try {
+    const targetUrl = `${config.acestep.apiUrl}${req.originalUrl}`;
+    
+    // Forward the request to Python backend
+    const response = await fetch(targetUrl, {
+      method: req.method,
+      headers: {
+        ...(req.headers as Record<string, string>),
+        host: new URL(config.acestep.apiUrl).host, // Override host header
+      },
+      body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body),
+    });
+
+    // Forward status and headers
+    res.status(response.status);
+    response.headers.forEach((value, key) => {
+      // Don't forward content-encoding or content-length (Express handles it)
+      if (!['content-encoding', 'content-length'].includes(key.toLowerCase())) {
+        res.setHeader(key, value);
+      }
+    });
+
+    // Stream the response body
+    if (response.body) {
+      const reader = response.body.getReader();
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        res.write(value);
+      }
+      res.end();
+    } else {
+      res.end();
+    }
+  } catch (error) {
+    console.error('[Proxy Error]', req.originalUrl, error);
+    res.status(502).json({ error: 'Bad Gateway: Python backend unreachable' });
+  }
+});
+
 // Error handler
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   console.error('Unhandled error:', err);
