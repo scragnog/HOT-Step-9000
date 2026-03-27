@@ -61,6 +61,10 @@ dependencies = [
     "xxhash",
     "typer-slim>=0.21.1",
     "loguru",
+    # Lireek lyrics integration
+    "beautifulsoup4>=4.12",
+    "httpx>=0.27",
+    "nltk>=3.8",
 ]
 
 [[tool.uv.index]]

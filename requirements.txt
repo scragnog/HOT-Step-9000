@@ -62,3 +62,8 @@ onnxruntime
 Pillow
 realesrgan
 basicsr
+
+# Lireek lyrics integration
+beautifulsoup4>=4.12
+httpx>=0.27
+nltk>=3.8
