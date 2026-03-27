@@ -975,3 +975,31 @@ export const loraApi = {
     api('/api/lora/status', { token }),
 };
 
+// LLM Provider API (Lireek integration)
+export interface LlmProviderInfo {
+  id: string;
+  name: string;
+  available: boolean;
+  models: string[];
+  default_model: string;
+}
+
+export const llmApi = {
+  getProviders: (): Promise<{ providers: LlmProviderInfo[] }> =>
+    api('/api/llm/providers'),
+
+  getProviderModels: (providerId: string): Promise<{
+    provider_id: string;
+    models: string[];
+    default_model: string;
+  }> => api(`/api/llm/providers/${providerId}/models`),
+
+  getSettings: (): Promise<{ settings: Record<string, string> }> =>
+    api('/api/llm/settings'),
+
+  updateSettings: (settings: Record<string, string>): Promise<{
+    updated: string[];
+    count: number;
+  }> => api('/api/llm/settings', { method: 'POST', body: { settings } }),
+};
+
