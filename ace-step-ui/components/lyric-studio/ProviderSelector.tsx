@@ -2,7 +2,6 @@ import React, { useState, useEffect, useRef } from 'react';
 import { llmApi, LlmProviderInfo } from '../../services/api';
 
 // ── Global provider cache ─────────────────────────────────────────────────
-// Shared across all ProviderSelector instances — only fetched once per session
 let _providerCache: LlmProviderInfo[] | null = null;
 let _providerCacheTime = 0;
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -27,19 +26,19 @@ export interface ModelSelections {
   refinement: { provider: string; model: string };
 }
 
-function loadSelections(): ModelSelections {
+export function loadSelections(): ModelSelections {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (raw) return JSON.parse(raw);
   } catch { /* ignore */ }
   return {
-    profiling: { provider: 'gemini', model: '' },
-    generation: { provider: 'gemini', model: '' },
-    refinement: { provider: 'gemini', model: '' },
+    profiling: { provider: '', model: '' },
+    generation: { provider: '', model: '' },
+    refinement: { provider: '', model: '' },
   };
 }
 
-function saveSelections(sel: ModelSelections) {
+export function saveSelections(sel: ModelSelections) {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(sel));
 }
 
@@ -50,9 +49,8 @@ const RowSelector: React.FC<{
   providers: LlmProviderInfo[];
   selectedProvider: string;
   selectedModel: string;
-  onProviderChange: (p: string) => void;
-  onModelChange: (m: string) => void;
-}> = ({ label, color, providers, selectedProvider, selectedModel, onProviderChange, onModelChange }) => {
+  onSelectionChange: (provider: string, model: string) => void;
+}> = ({ label, color, providers, selectedProvider, selectedModel, onSelectionChange }) => {
   const currentProvider = providers.find(p => p.id === selectedProvider);
   const models = currentProvider?.models || [];
 
@@ -63,9 +61,9 @@ const RowSelector: React.FC<{
         value={selectedProvider}
         onChange={e => {
           const pid = e.target.value;
-          onProviderChange(pid);
           const prov = providers.find(p => p.id === pid);
-          if (prov?.default_model) onModelChange(prov.default_model);
+          // Atomic update: change provider AND model together
+          onSelectionChange(pid, prov?.default_model || '');
         }}
         className="flex-[0.8] min-w-0 px-1.5 py-1 rounded bg-zinc-800 border border-white/10 text-[11px] text-white focus:outline-none focus:border-pink-500/50 appearance-none cursor-pointer"
         title={`${label} Provider`}
@@ -76,7 +74,7 @@ const RowSelector: React.FC<{
       </select>
       <select
         value={selectedModel}
-        onChange={e => onModelChange(e.target.value)}
+        onChange={e => onSelectionChange(selectedProvider, e.target.value)}
         className="flex-1 min-w-0 px-1.5 py-1 rounded bg-zinc-800 border border-white/10 text-[11px] text-white focus:outline-none focus:border-pink-500/50 appearance-none cursor-pointer"
         title={`${label} Model`}
       >
@@ -101,15 +99,19 @@ export const TripleProviderSelector: React.FC<TripleProviderSelectorProps> = ({
 }) => {
   const [providers, setProviders] = useState<LlmProviderInfo[]>(_providerCache || []);
   const [loading, setLoading] = useState(!_providerCache);
+  // Use ref to always have latest selections for the async callback
+  const selectionsRef = useRef(selections);
+  selectionsRef.current = selections;
 
   useEffect(() => {
     getCachedProviders()
       .then(p => {
         setProviders(p);
-        // Auto-select first available provider for any unset slots
+        // Auto-select first available provider ONLY for empty slots
         if (p.length > 0) {
           const first = p[0];
-          const updated = { ...selections };
+          const current = selectionsRef.current;
+          const updated = { ...current };
           let changed = false;
           for (const role of ['profiling', 'generation', 'refinement'] as const) {
             if (!updated[role].provider || !p.find(pp => pp.id === updated[role].provider)) {
@@ -117,17 +119,20 @@ export const TripleProviderSelector: React.FC<TripleProviderSelectorProps> = ({
               changed = true;
             }
           }
-          if (changed) onSelectionsChange(updated);
+          if (changed) {
+            onSelectionsChange(updated);
+            saveSelections(updated);
+          }
         }
       })
       .catch(err => console.error('Failed to load LLM providers:', err))
       .finally(() => setLoading(false));
   }, []);
 
-  const update = (role: keyof ModelSelections, field: 'provider' | 'model', value: string) => {
+  const updateRole = (role: keyof ModelSelections, provider: string, model: string) => {
     const updated = {
-      ...selections,
-      [role]: { ...selections[role], [field]: value },
+      ...selectionsRef.current,
+      [role]: { provider, model },
     };
     onSelectionsChange(updated);
     saveSelections(updated);
@@ -158,8 +163,7 @@ export const TripleProviderSelector: React.FC<TripleProviderSelectorProps> = ({
         providers={providers}
         selectedProvider={selections.profiling.provider}
         selectedModel={selections.profiling.model}
-        onProviderChange={v => update('profiling', 'provider', v)}
-        onModelChange={v => update('profiling', 'model', v)}
+        onSelectionChange={(p, m) => updateRole('profiling', p, m)}
       />
       <RowSelector
         label="Generate"
@@ -167,8 +171,7 @@ export const TripleProviderSelector: React.FC<TripleProviderSelectorProps> = ({
         providers={providers}
         selectedProvider={selections.generation.provider}
         selectedModel={selections.generation.model}
-        onProviderChange={v => update('generation', 'provider', v)}
-        onModelChange={v => update('generation', 'model', v)}
+        onSelectionChange={(p, m) => updateRole('generation', p, m)}
       />
       <RowSelector
         label="Refine"
@@ -176,8 +179,7 @@ export const TripleProviderSelector: React.FC<TripleProviderSelectorProps> = ({
         providers={providers}
         selectedProvider={selections.refinement.provider}
         selectedModel={selections.refinement.model}
-        onProviderChange={v => update('refinement', 'provider', v)}
-        onModelChange={v => update('refinement', 'model', v)}
+        onSelectionChange={(p, m) => updateRole('refinement', p, m)}
       />
     </div>
   );
@@ -272,5 +274,3 @@ export const ProviderSelector: React.FC<ProviderSelectorProps> = ({
     </div>
   );
 };
-
-export { loadSelections, saveSelections };

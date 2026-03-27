@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { usePersistedState } from '../../hooks/usePersistedState';
 import {
   Music, Users, Disc3, FileText, Sparkles, ChevronRight, ChevronDown,
   Plus, Trash2, Download, RefreshCw, Loader2, Search, AlertTriangle, X, Wand2, Play, Settings2, Save,
@@ -37,6 +38,7 @@ export const LyricStudio: React.FC = () => {
   // ── UI state ────────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sidebarWidth, setSidebarWidth] = usePersistedState('lireek-sidebarWidth', 320);
   const [expandedArtists, setExpandedArtists] = useState<Set<number>>(new Set());
   const [expandedAlbums, setExpandedAlbums] = useState<Set<number>>(new Set());
   const [expandedProfiles, setExpandedProfiles] = useState<Set<number>>(new Set());
@@ -358,7 +360,7 @@ export const LyricStudio: React.FC = () => {
   return (
     <div className="flex-1 flex h-full overflow-hidden bg-zinc-950">
       {/* ── Left Panel: Tree + Fetch ─────────────────────────────────────── */}
-      <div className="w-80 flex-shrink-0 border-r border-white/5 flex flex-col h-full overflow-hidden">
+      <div className="flex-shrink-0 border-r border-white/5 flex flex-col h-full overflow-hidden" style={{ width: sidebarWidth }}>
         {/* Header */}
         <div className="px-4 py-3 border-b border-white/5 flex items-center justify-between">
           <div className="flex items-center gap-2">
@@ -538,6 +540,32 @@ export const LyricStudio: React.FC = () => {
             }}
           />
         </div>
+      </div>
+
+      {/* Resize handle */}
+      <div
+        className="flex-shrink-0 w-1.5 h-full cursor-col-resize group z-20 flex items-center hover:bg-pink-500/20 active:bg-pink-500/30 transition-colors"
+        onMouseDown={(e) => {
+          e.preventDefault();
+          const startX = e.clientX;
+          const startW = sidebarWidth;
+          const onMove = (ev: MouseEvent) => {
+            const newW = Math.min(600, Math.max(240, startW + ev.clientX - startX));
+            setSidebarWidth(newW);
+          };
+          const onUp = () => {
+            document.removeEventListener('mousemove', onMove);
+            document.removeEventListener('mouseup', onUp);
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+          };
+          document.body.style.cursor = 'col-resize';
+          document.body.style.userSelect = 'none';
+          document.addEventListener('mousemove', onMove);
+          document.addEventListener('mouseup', onUp);
+        }}
+      >
+        <div className="w-0.5 h-8 rounded-full bg-zinc-600 group-hover:bg-pink-400 transition-colors" />
       </div>
 
       {/* ── Right Panel: Detail View ─────────────────────────────────────── */}
