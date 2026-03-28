@@ -48,6 +48,8 @@ _SCHEMA = """\
 CREATE TABLE IF NOT EXISTS artists (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     name        TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+    image_url   TEXT,
+    genius_id   INTEGER,
     created_at  TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -127,6 +129,18 @@ def _row_to_dict(row: sqlite3.Row) -> dict[str, Any]:
 
 # ── Init ──────────────────────────────────────────────────────────────────────
 
+_MIGRATIONS = [
+    # (check_sql, migrate_sql_list)
+    (
+        "SELECT image_url FROM artists LIMIT 0",
+        [
+            "ALTER TABLE artists ADD COLUMN image_url TEXT",
+            "ALTER TABLE artists ADD COLUMN genius_id INTEGER",
+        ],
+    ),
+]
+
+
 def init_db() -> None:
     """Create the database file and tables if they don't exist."""
     _DB_DIR.mkdir(parents=True, exist_ok=True)
@@ -134,6 +148,18 @@ def init_db() -> None:
     try:
         conn.executescript(_SCHEMA)
         conn.commit()
+        # Run migrations for existing databases
+        for check_sql, migrate_sqls in _MIGRATIONS:
+            try:
+                conn.execute(check_sql)
+            except sqlite3.OperationalError:
+                for sql in migrate_sqls:
+                    try:
+                        conn.execute(sql)
+                    except sqlite3.OperationalError:
+                        pass  # column already exists
+                conn.commit()
+                logger.info("Applied migration: %s", migrate_sqls[0][:60])
         logger.info("Lireek database initialised at %s", _DB_PATH)
     finally:
         conn.close()
@@ -170,6 +196,26 @@ def list_artists() -> list[dict[str, Any]]:
             "GROUP BY a.id ORDER BY a.name"
         ).fetchall()
         return [_row_to_dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+def update_artist_image(artist_id: int, image_url: str, genius_id: Optional[int] = None) -> bool:
+    """Update the artist's image URL and optionally their Genius ID."""
+    conn = _connect()
+    try:
+        if genius_id is not None:
+            conn.execute(
+                "UPDATE artists SET image_url = ?, genius_id = ? WHERE id = ?",
+                (image_url, genius_id, artist_id),
+            )
+        else:
+            conn.execute(
+                "UPDATE artists SET image_url = ? WHERE id = ?",
+                (image_url, artist_id),
+            )
+        conn.commit()
+        return True
     finally:
         conn.close()
 

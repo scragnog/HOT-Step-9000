@@ -79,6 +79,29 @@ def register_lireek_routes(app: FastAPI) -> None:
             raise HTTPException(status_code=404, detail="Artist not found")
         return {"deleted": True}
 
+    @app.post("/api/lireek/artists/{artist_id}/refresh-image")
+    async def refresh_artist_image(artist_id: int):
+        """Fetch artist image from Genius and store it."""
+        from acestep.api.lireek.lireek_db import update_artist_image
+        from acestep.api.lireek.genius_service import get_artist_image_url
+        import sqlite3 as _sqlite3
+        conn = None
+        try:
+            from acestep.api.lireek.lireek_db import _connect, _row_to_dict
+            conn = _connect()
+            row = conn.execute("SELECT * FROM artists WHERE id = ?", (artist_id,)).fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="Artist not found")
+            artist = _row_to_dict(row)
+            image_url = get_artist_image_url(artist["name"])
+            if image_url:
+                update_artist_image(artist_id, image_url)
+                return {"image_url": image_url}
+            raise HTTPException(status_code=404, detail="Could not find artist image on Genius")
+        finally:
+            if conn:
+                conn.close()
+
     # ── Lyrics Sets ───────────────────────────────────────────────────────
 
     @app.get("/api/lireek/lyrics-sets")
@@ -116,7 +139,7 @@ def register_lireek_routes(app: FastAPI) -> None:
         """Fetch lyrics from Genius and store in the database."""
         from acestep.api.lireek.genius_service import fetch_lyrics
         from acestep.api.lireek.lireek_db import (
-            get_or_create_artist, save_lyrics_set,
+            get_or_create_artist, save_lyrics_set, update_artist_image,
         )
 
         logger.info("fetch-lyrics request: artist=%r, album=%r, max_songs=%d",
@@ -149,6 +172,19 @@ def register_lireek_routes(app: FastAPI) -> None:
             songs=songs_data,
             max_songs=req.max_songs,
         )
+
+        # Store artist image from Genius if available
+        if result.artist_image_url:
+            try:
+                update_artist_image(
+                    artist["id"], result.artist_image_url,
+                    genius_id=result.genius_artist_id,
+                )
+                artist["image_url"] = result.artist_image_url
+                artist["genius_id"] = result.genius_artist_id
+                logger.info("Stored artist image for '%s'", result.artist)
+            except Exception as e:
+                logger.warning("Failed to store artist image: %s", e)
 
         logger.info("Saved lyrics_set id=%d with total_songs=%d",
                      lyrics_set["id"], lyrics_set["total_songs"])

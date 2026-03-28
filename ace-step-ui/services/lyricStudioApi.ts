@@ -31,6 +31,9 @@ async function api<T>(endpoint: string, options: {
 export interface Artist {
   id: number;
   name: string;
+  image_url?: string;
+  genius_id?: number;
+  lyrics_set_count?: number;
   created_at: string;
 }
 
@@ -104,6 +107,9 @@ export const lireekApi = {
 
   deleteArtist: (id: number): Promise<{ deleted: boolean }> =>
     api(`/api/lireek/artists/${id}`, { method: 'DELETE' }),
+
+  refreshArtistImage: (id: number): Promise<{ image_url: string }> =>
+    api(`/api/lireek/artists/${id}/refresh-image`, { method: 'POST' }),
 
   // ── Lyrics Sets ─────────────────────────────────────────────────────────
   listLyricsSets: (artistId?: number): Promise<{ lyrics_sets: LyricsSet[] }> =>

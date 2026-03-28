@@ -33,6 +33,8 @@ class LyricsSearchResponse(BaseModel):
     album: Optional[str] = None
     songs: list[SongLyrics]
     total_songs: int
+    artist_image_url: Optional[str] = None
+    genius_artist_id: Optional[int] = None
 
 
 # ── Profile ───────────────────────────────────────────────────────────────────

@@ -332,6 +332,7 @@ def fetch_lyrics(
     scrape_delay = 0.3
     songs: list[SongLyrics] = []
     artist_id = None
+    artist_image_url: Optional[str] = None
 
     # ── Detect artist URL ──────────────────────────────────────────────────
     if "genius.com/artists/" in artist_name:
@@ -342,6 +343,7 @@ def fetch_lyrics(
             try:
                 artist_details = _api_get_artist_details(artist_id)
                 actual_name = artist_details.get("name")
+                artist_image_url = artist_details.get("image_url")
                 if actual_name:
                     logger.info("Resolved URL '%s' to artist '%s' (ID: %d)", url, actual_name, artist_id)
                     artist_name = actual_name
@@ -445,9 +447,32 @@ def fetch_lyrics(
             + ". Please check the spelling and try again."
         )
 
+    # Capture artist image if we have an artist_id but no image yet
+    if artist_id and not artist_image_url:
+        try:
+            artist_details = _api_get_artist_details(artist_id)
+            artist_image_url = artist_details.get("image_url")
+        except Exception as e:
+            logger.warning("Could not fetch artist image: %s", e)
+
     return LyricsSearchResponse(
         artist=artist_name,
         album=album_name,
         songs=songs,
         total_songs=len(songs),
+        artist_image_url=artist_image_url,
+        genius_artist_id=artist_id,
     )
+
+
+def get_artist_image_url(artist_name: str) -> Optional[str]:
+    """Look up an artist on Genius and return their image URL."""
+    try:
+        aid = _find_artist_id(artist_name)
+        if aid is None:
+            return None
+        details = _api_get_artist_details(aid)
+        return details.get("image_url")
+    except Exception as e:
+        logger.warning("Failed to fetch artist image for '%s': %s", artist_name, e)
+        return None
