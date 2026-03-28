@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Plus, Trash2, Eye, Loader2, Users, Sparkles, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, Eye, Loader2, Users, Sparkles, AlertTriangle, ChevronDown, ChevronRight } from 'lucide-react';
 import { lireekApi, Profile } from '../../../services/lyricStudioApi';
 import {
   useStreamingStore,
@@ -109,7 +109,14 @@ export const ProfilesTab: React.FC<ProfilesTabProps> = ({
                 key={profile.id}
                 className={`group rounded-xl border border-white/5 hover:border-white/10 bg-white/[0.01] overflow-hidden transition-colors ls2-card-in ls2-stagger-${Math.min(idx + 1, 11)}`}
               >
-                <div className="flex items-center gap-3 px-4 py-3">
+              <div
+                className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-white/[0.02] transition-colors"
+                onClick={() => setSelectedProfile(selectedProfile?.id === profile.id ? null : profile)}
+              >
+                {selectedProfile?.id === profile.id
+                  ? <ChevronDown className="w-4 h-4 text-zinc-500 flex-shrink-0" />
+                  : <ChevronRight className="w-4 h-4 text-zinc-500 flex-shrink-0" />
+                }
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                       <span className="text-xs px-2 py-0.5 rounded-md bg-indigo-500/10 text-indigo-400 font-medium">
@@ -130,17 +137,10 @@ export const ProfilesTab: React.FC<ProfilesTabProps> = ({
                       {new Date(profile.created_at).toLocaleDateString()}
                     </p>
                   </div>
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      onClick={() => setSelectedProfile(selectedProfile?.id === profile.id ? null : profile)}
-                      className="p-2 rounded-lg hover:bg-white/5 text-zinc-400 hover:text-white transition-colors"
-                      title="View profile"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </button>
+                  <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
                     <button
                       onClick={() => handleDelete(profile)}
-                      className="p-2 rounded-lg hover:bg-red-500/10 text-zinc-400 hover:text-red-400 transition-colors"
+                      className="p-2 rounded-lg hover:bg-red-500/10 text-zinc-400 hover:text-red-400 transition-colors opacity-0 group-hover:opacity-100"
                       title="Delete profile"
                     >
                       <Trash2 className="w-4 h-4" />

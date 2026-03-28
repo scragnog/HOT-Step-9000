@@ -246,7 +246,7 @@ export const WrittenSongsTab: React.FC<WrittenSongsTabProps> = ({
                       /* Read view */
                       <div>
                         <pre className="px-4 py-3 text-sm text-zinc-300 whitespace-pre-wrap font-sans leading-relaxed max-h-80 overflow-y-auto">
-                          {gen.lyrics}
+                          {gen.lyrics || '(No lyrics available)'}
                         </pre>
                         <div className="flex items-center gap-2 px-4 py-2 border-t border-white/5 bg-white/[0.01]">
                           <button

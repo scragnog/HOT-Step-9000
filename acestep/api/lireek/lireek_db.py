@@ -295,7 +295,7 @@ def update_lyrics_set_image(lyrics_set_id: int, image_url: str) -> bool:
         conn.close()
 
 
-def get_lyrics_sets(artist_id: Optional[int] = None) -> list[dict[str, Any]]:
+def get_lyrics_sets(artist_id: Optional[int] = None, include_full: bool = False) -> list[dict[str, Any]]:
     conn = _connect()
     try:
         if artist_id:
@@ -315,11 +315,12 @@ def get_lyrics_sets(artist_id: Optional[int] = None) -> list[dict[str, Any]]:
         results = []
         for r in rows:
             d = _row_to_dict(r)
-            # For the listing, strip full lyrics — only return titles + char counts
             songs_raw = d.get("songs", "[]")
             songs = json.loads(songs_raw) if isinstance(songs_raw, str) else songs_raw
             d["total_songs"] = len(songs) if isinstance(songs, list) else 0
-            d["songs"] = json.dumps([{"title": s.get("title", ""), "chars": len(s.get("lyrics", ""))} for s in songs]) if isinstance(songs, list) else "[]"
+            if not include_full:
+                # Strip full lyrics — only return titles + char counts for listings
+                d["songs"] = json.dumps([{"title": s.get("title", ""), "chars": len(s.get("lyrics", ""))} for s in songs]) if isinstance(songs, list) else "[]"
             results.append(d)
         return results
     finally:
@@ -382,6 +383,31 @@ def remove_song_from_set(lyrics_set_id: int, song_index: int) -> Optional[dict[s
         conn.close()
 
 
+def update_song_lyrics(lyrics_set_id: int, song_index: int, new_lyrics: str) -> Optional[dict[str, Any]]:
+    """Update the lyrics of a single song by index within a lyrics set."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT songs FROM lyrics_sets WHERE id = ?", (lyrics_set_id,)
+        ).fetchone()
+        if not row:
+            return None
+
+        songs = json.loads(row["songs"])
+        if song_index < 0 or song_index >= len(songs):
+            return None
+
+        songs[song_index]["lyrics"] = new_lyrics
+        conn.execute(
+            "UPDATE lyrics_sets SET songs = ? WHERE id = ?",
+            (json.dumps(songs, ensure_ascii=False), lyrics_set_id),
+        )
+        conn.commit()
+        return get_lyrics_set(lyrics_set_id)
+    finally:
+        conn.close()
+
+
 # ── Profiles ──────────────────────────────────────────────────────────────────
 
 def save_profile(
@@ -412,7 +438,7 @@ def save_profile(
         conn.close()
 
 
-def get_profiles(lyrics_set_id: Optional[int] = None) -> list[dict[str, Any]]:
+def get_profiles(lyrics_set_id: Optional[int] = None, include_full: bool = False) -> list[dict[str, Any]]:
     conn = _connect()
     try:
         if lyrics_set_id:
@@ -428,8 +454,17 @@ def get_profiles(lyrics_set_id: Optional[int] = None) -> list[dict[str, Any]]:
         results = []
         for r in rows:
             d = _row_to_dict(r)
-            # Strip heavy profile_data from list — fetch via get_profile(id) for full data
-            d.pop("profile_data", None)
+            if include_full:
+                # Parse JSON profile_data for full view
+                pd = d.get("profile_data")
+                if isinstance(pd, str):
+                    try:
+                        d["profile_data"] = json.loads(pd)
+                    except json.JSONDecodeError:
+                        d["profile_data"] = {}
+            else:
+                # Strip heavy profile_data from list
+                d.pop("profile_data", None)
             results.append(d)
         return results
     finally:
@@ -519,6 +554,7 @@ def save_generation(
 def get_generations(
     profile_id: Optional[int] = None,
     lyrics_set_id: Optional[int] = None,
+    include_full: bool = False,
 ) -> list[dict[str, Any]]:
     conn = _connect()
     try:
@@ -541,10 +577,11 @@ def get_generations(
         results = []
         for r in rows:
             d = _row_to_dict(r)
-            # Strip heavy text from list — fetch via get_generation(id) for full data
-            d.pop("lyrics", None)
-            d.pop("system_prompt", None)
-            d.pop("user_prompt", None)
+            if not include_full:
+                # Strip heavy text from list — fetch via get_generation(id) for full data
+                d.pop("lyrics", None)
+                d.pop("system_prompt", None)
+                d.pop("user_prompt", None)
             results.append(d)
         return results
     finally:

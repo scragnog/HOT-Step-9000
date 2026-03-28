@@ -115,9 +115,13 @@ export const lireekApi = {
   setArtistImage: (id: number, imageUrl: string): Promise<{ image_url: string }> =>
     api(`/api/lireek/artists/${id}/set-image`, { method: 'POST', body: { image_url: imageUrl } }),
 
-  // ── Lyrics Sets ─────────────────────────────────────────────────────────
-  listLyricsSets: (artistId?: number): Promise<{ lyrics_sets: LyricsSet[] }> =>
-    api(`/api/lireek/lyrics-sets${artistId != null ? `?artist_id=${artistId}` : ''}`),
+  listLyricsSets: (artistId?: number, includeFull?: boolean): Promise<{ lyrics_sets: LyricsSet[] }> => {
+    const params = new URLSearchParams();
+    if (artistId != null) params.set('artist_id', String(artistId));
+    if (includeFull) params.set('include_full', 'true');
+    const qs = params.toString();
+    return api(`/api/lireek/lyrics-sets${qs ? `?${qs}` : ''}`);
+  },
 
   getLyricsSet: (id: number): Promise<LyricsSet> =>
     api(`/api/lireek/lyrics-sets/${id}`),
@@ -127,6 +131,9 @@ export const lireekApi = {
 
   removeSong: (lyricsSetId: number, songIndex: number): Promise<any> =>
     api(`/api/lireek/lyrics-sets/${lyricsSetId}/songs/${songIndex}`, { method: 'DELETE' }),
+
+  editSong: (lyricsSetId: number, songIndex: number, lyrics: string): Promise<LyricsSet> =>
+    api(`/api/lireek/lyrics-sets/${lyricsSetId}/songs/${songIndex}`, { method: 'PUT', body: { lyrics } }),
 
   refreshAlbumImage: (id: number): Promise<{ image_url: string }> =>
     api(`/api/lireek/lyrics-sets/${id}/refresh-image`, { method: 'POST' }),
@@ -139,9 +146,13 @@ export const lireekApi = {
   }): Promise<{ artist: Artist; lyrics_set: LyricsSet; songs_fetched: number }> =>
     api('/api/lireek/fetch-lyrics', { method: 'POST', body: params }),
 
-  // ── Profiles ────────────────────────────────────────────────────────────
-  listProfiles: (lyricsSetId?: number): Promise<{ profiles: Profile[] }> =>
-    api(`/api/lireek/profiles${lyricsSetId != null ? `?lyrics_set_id=${lyricsSetId}` : ''}`),
+  listProfiles: (lyricsSetId?: number, includeFull?: boolean): Promise<{ profiles: Profile[] }> => {
+    const params = new URLSearchParams();
+    if (lyricsSetId != null) params.set('lyrics_set_id', String(lyricsSetId));
+    if (includeFull) params.set('include_full', 'true');
+    const qs = params.toString();
+    return api(`/api/lireek/profiles${qs ? `?${qs}` : ''}`);
+  },
 
   getProfile: (id: number): Promise<Profile> =>
     api(`/api/lireek/profiles/${id}`),
@@ -155,9 +166,13 @@ export const lireekApi = {
   }): Promise<Profile> =>
     api(`/api/lireek/lyrics-sets/${lyricsSetId}/build-profile`, { method: 'POST', body: params }),
 
-  // ── Generations ─────────────────────────────────────────────────────────
-  listGenerations: (profileId?: number): Promise<{ generations: Generation[] }> =>
-    api(`/api/lireek/generations${profileId != null ? `?profile_id=${profileId}` : ''}`),
+  listGenerations: (profileId?: number, includeFull?: boolean): Promise<{ generations: Generation[] }> => {
+    const params = new URLSearchParams();
+    if (profileId != null) params.set('profile_id', String(profileId));
+    if (includeFull) params.set('include_full', 'true');
+    const qs = params.toString();
+    return api(`/api/lireek/generations${qs ? `?${qs}` : ''}`);
+  },
 
   listAllGenerations: (): Promise<{ generations: Generation[] }> =>
     api('/api/lireek/generations/all'),

@@ -140,14 +140,19 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
   // ── Load album detail data ──
   const loadAlbumData = useCallback(async (albumId: number) => {
     try {
-      const profileRes = await lireekApi.listProfiles(albumId);
+      // Fetch the full lyrics set (with actual lyrics text for SourceLyricsTab)
+      const fullAlbum = await lireekApi.getLyricsSet(albumId);
+      setNav(prev => ({ ...prev, selectedAlbum: fullAlbum }));
+
+      // Fetch profiles with full profile_data
+      const profileRes = await lireekApi.listProfiles(albumId, true);
       setProfiles(profileRes.profiles);
 
-      // Load generations from all profiles under this album
+      // Load generations with full lyrics from all profiles under this album
       const allGens: Generation[] = [];
       for (const p of profileRes.profiles) {
         try {
-          const genRes = await lireekApi.listGenerations(p.id);
+          const genRes = await lireekApi.listGenerations(p.id, true);
           allGens.push(...genRes.generations);
         } catch { /* no generations for this profile */ }
       }
@@ -164,6 +169,7 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
   }, [loadAlbums]);
 
   const handleSelectAlbum = useCallback((album: LyricsSet) => {
+    // Set the album immediately (with stripped data), then loadAlbumData will replace with full data
     setNav(prev => ({ ...prev, level: 'album-detail', selectedAlbum: album }));
     setActiveTab('source-lyrics');
     loadAlbumData(album.id);
@@ -232,9 +238,19 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
     try {
       await lireekApi.removeSong(nav.selectedAlbum.id, index);
       showToast('Song removed');
-      // Reload the album to get updated songs
       const updated = await lireekApi.getLyricsSet(nav.selectedAlbum.id);
       setNav(prev => ({ ...prev, selectedAlbum: updated }));
+    } catch (err: any) {
+      showToast(`Failed: ${err.message}`);
+    }
+  }, [nav.selectedAlbum, showToast]);
+
+  const handleEditSong = useCallback(async (index: number, lyrics: string) => {
+    if (!nav.selectedAlbum) return;
+    try {
+      const updated = await lireekApi.editSong(nav.selectedAlbum.id, index, lyrics);
+      setNav(prev => ({ ...prev, selectedAlbum: updated }));
+      showToast('Lyrics updated');
     } catch (err: any) {
       showToast(`Failed: ${err.message}`);
     }
@@ -386,6 +402,7 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
                   <SourceLyricsTab
                     album={nav.selectedAlbum}
                     onDeleteSong={handleDeleteSong}
+                    onEditSong={handleEditSong}
                   />
                 )}
                 {activeTab === 'profiles' && (

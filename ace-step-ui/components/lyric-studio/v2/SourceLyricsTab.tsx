@@ -12,11 +12,14 @@ function parseSongs(songs: SongLyric[] | string): SongLyric[] {
 interface SourceLyricsTabProps {
   album: LyricsSet;
   onDeleteSong: (index: number) => void;
+  onEditSong?: (index: number, lyrics: string) => void;
 }
 
-export const SourceLyricsTab: React.FC<SourceLyricsTabProps> = ({ album, onDeleteSong }) => {
+export const SourceLyricsTab: React.FC<SourceLyricsTabProps> = ({ album, onDeleteSong, onEditSong }) => {
   const songs = parseSongs(album.songs);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editText, setEditText] = useState('');
 
   if (songs.length === 0) {
     return (
@@ -36,6 +39,8 @@ export const SourceLyricsTab: React.FC<SourceLyricsTabProps> = ({ album, onDelet
     <div className="p-4 space-y-1">
       {songs.map((song, idx) => {
         const isExpanded = expandedIdx === idx;
+        const isEditing = editingIdx === idx;
+        const lyrics = song.lyrics || '';
         return (
           <div
             key={idx}
@@ -44,7 +49,7 @@ export const SourceLyricsTab: React.FC<SourceLyricsTabProps> = ({ album, onDelet
             {/* Song header */}
             <button
               className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-white/[0.02] transition-colors"
-              onClick={() => setExpandedIdx(isExpanded ? null : idx)}
+              onClick={() => { setExpandedIdx(isExpanded ? null : idx); setEditingIdx(null); }}
             >
               {isExpanded
                 ? <ChevronDown className="w-4 h-4 text-zinc-500 flex-shrink-0" />
@@ -54,7 +59,7 @@ export const SourceLyricsTab: React.FC<SourceLyricsTabProps> = ({ album, onDelet
                 {song.title}
               </span>
               <span className="text-xs text-zinc-500">
-                {(song.lyrics || '').split('\n').length} lines
+                {lyrics.split('\n').length} lines
               </span>
             </button>
 
@@ -62,22 +67,63 @@ export const SourceLyricsTab: React.FC<SourceLyricsTabProps> = ({ album, onDelet
             {isExpanded && (
               <div className="border-t border-white/5">
                 <div className="px-4 py-3">
-                  <pre className="text-sm text-zinc-300 whitespace-pre-wrap font-sans leading-relaxed max-h-96 overflow-y-auto">
-                    {song.lyrics || '(No lyrics available)'}
-                  </pre>
+                  {isEditing ? (
+                    <textarea
+                      value={editText}
+                      onChange={e => setEditText(e.target.value)}
+                      className="w-full h-80 text-sm text-zinc-200 bg-black/30 border border-white/10 rounded-lg p-3 font-sans leading-relaxed resize-y focus:outline-none focus:border-indigo-500/50"
+                    />
+                  ) : (
+                    <pre className="text-sm text-zinc-300 whitespace-pre-wrap font-sans leading-relaxed max-h-96 overflow-y-auto">
+                      {lyrics || '(No lyrics available)'}
+                    </pre>
+                  )}
                 </div>
                 <div className="flex items-center gap-2 px-4 py-2 border-t border-white/5 bg-white/[0.01]">
-                  <button
-                    onClick={() => {
-                      if (confirm(`Delete "${song.title}" from this album?`)) {
-                        onDeleteSong(idx);
-                      }
-                    }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                    Delete
-                  </button>
+                  {isEditing ? (
+                    <>
+                      <button
+                        onClick={() => {
+                          if (onEditSong) onEditSong(idx, editText);
+                          setEditingIdx(null);
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                      >
+                        <Save className="w-3 h-3" />
+                        Save
+                      </button>
+                      <button
+                        onClick={() => setEditingIdx(null)}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-zinc-400 hover:bg-white/5 transition-colors"
+                      >
+                        <X className="w-3 h-3" />
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {onEditSong && (
+                        <button
+                          onClick={() => { setEditingIdx(idx); setEditText(lyrics); }}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-indigo-400 hover:bg-indigo-500/10 transition-colors"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          Edit
+                        </button>
+                      )}
+                      <button
+                        onClick={() => {
+                          if (confirm(`Delete "${song.title}" from this album?`)) {
+                            onDeleteSong(idx);
+                          }
+                        }}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        Delete
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
             )}

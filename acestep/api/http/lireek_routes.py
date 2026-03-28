@@ -154,9 +154,9 @@ def register_lireek_routes(app: FastAPI) -> None:
     # ── Lyrics Sets ───────────────────────────────────────────────────────
 
     @app.get("/api/lireek/lyrics-sets")
-    async def list_lyrics_sets(artist_id: Optional[int] = None):
+    async def list_lyrics_sets(artist_id: Optional[int] = None, include_full: bool = False):
         from acestep.api.lireek.lireek_db import get_lyrics_sets
-        return {"lyrics_sets": get_lyrics_sets(artist_id)}
+        return {"lyrics_sets": get_lyrics_sets(artist_id, include_full=include_full)}
 
     @app.get("/api/lireek/lyrics-sets/{lyrics_set_id}")
     async def get_lyrics_set(lyrics_set_id: int):
@@ -177,6 +177,17 @@ def register_lireek_routes(app: FastAPI) -> None:
     async def remove_song(lyrics_set_id: int, song_index: int):
         from acestep.api.lireek.lireek_db import remove_song_from_set
         result = remove_song_from_set(lyrics_set_id, song_index)
+        if not result:
+            raise HTTPException(status_code=404, detail="Song or lyrics set not found")
+        return result
+
+    class EditSongRequest(BaseModel):
+        lyrics: str
+
+    @app.put("/api/lireek/lyrics-sets/{lyrics_set_id}/songs/{song_index}")
+    async def edit_song(lyrics_set_id: int, song_index: int, body: EditSongRequest):
+        from acestep.api.lireek.lireek_db import update_song_lyrics
+        result = update_song_lyrics(lyrics_set_id, song_index, body.lyrics)
         if not result:
             raise HTTPException(status_code=404, detail="Song or lyrics set not found")
         return result
@@ -247,9 +258,9 @@ def register_lireek_routes(app: FastAPI) -> None:
     # ── Profiles ──────────────────────────────────────────────────────────
 
     @app.get("/api/lireek/profiles")
-    async def list_profiles(lyrics_set_id: Optional[int] = None):
+    async def list_profiles(lyrics_set_id: Optional[int] = None, include_full: bool = False):
         from acestep.api.lireek.lireek_db import get_profiles
-        return {"profiles": get_profiles(lyrics_set_id)}
+        return {"profiles": get_profiles(lyrics_set_id, include_full=include_full)}
 
     @app.get("/api/lireek/profiles/{profile_id}")
     async def get_profile(profile_id: int):
@@ -310,9 +321,9 @@ def register_lireek_routes(app: FastAPI) -> None:
     # ── Generations ───────────────────────────────────────────────────────
 
     @app.get("/api/lireek/generations")
-    async def list_generations(profile_id: Optional[int] = None):
+    async def list_generations(profile_id: Optional[int] = None, include_full: bool = False):
         from acestep.api.lireek.lireek_db import get_generations
-        return {"generations": get_generations(profile_id=profile_id)}
+        return {"generations": get_generations(profile_id=profile_id, include_full=include_full)}
 
     @app.get("/api/lireek/generations/all")
     async def list_all_generations():
