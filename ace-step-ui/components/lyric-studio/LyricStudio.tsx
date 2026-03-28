@@ -534,29 +534,29 @@ export const LyricStudio: React.FC<{ onPlaySong?: (song: Song) => void }> = ({ o
             params.loraPath = preset.adapter_path;
             params.loraScale = preset.adapter_scale ?? 1.0;
           }
-          // Prepend trigger word to caption (derive from adapter filename)
-          const useFilename = localStorage.getItem('ace-globalTriggerUseFilename') === 'true';
-          const placement = (localStorage.getItem('ace-globalTriggerPlacement') as 'prepend' | 'append' | 'replace') || 'prepend';
-          if (useFilename) {
-            const fileName = preset.adapter_path.replace(/\\/g, '/').split('/').pop() || '';
-            const triggerWord = fileName.replace(/\.safetensors$/i, '');
-            if (triggerWord && params.style) {
-              const current = (params.style as string).trim();
-              if (!current.toLowerCase().includes(triggerWord.toLowerCase())) {
-                if (placement === 'replace') {
-                  params.style = triggerWord;
-                } else if (placement === 'append') {
-                  params.style = current ? `${current}, ${triggerWord}` : triggerWord;
-                } else {
-                  params.style = current ? `${triggerWord}, ${current}` : triggerWord;
-                }
-                console.log(`[LyricStudio] Trigger word '${triggerWord}' ${placement}ed → '${params.style}'`);
-              }
-            }
-          }
         } catch (loadErr) {
           console.warn('[LyricStudio] Failed to load adapter, continuing without:', loadErr);
           showToast('Warning: adapter failed to load, generating without');
+        }
+        // Prepend trigger word to caption (derive from adapter filename — always, even if load failed)
+        const useFilename = localStorage.getItem('ace-globalTriggerUseFilename') === 'true';
+        const placement = (localStorage.getItem('ace-globalTriggerPlacement') as 'prepend' | 'append' | 'replace') || 'prepend';
+        if (useFilename) {
+          const fileName = preset.adapter_path.replace(/\\/g, '/').split('/').pop() || '';
+          const triggerWord = fileName.replace(/\.safetensors$/i, '');
+          if (triggerWord) {
+            const current = ((params.style as string) || '').trim();
+            if (!current.toLowerCase().includes(triggerWord.toLowerCase())) {
+              if (placement === 'replace') {
+                params.style = triggerWord;
+              } else if (placement === 'append') {
+                params.style = current ? `${current}, ${triggerWord}` : triggerWord;
+              } else {
+                params.style = current ? `${triggerWord}, ${current}` : triggerWord;
+              }
+              console.log(`[LyricStudio] Trigger word '${triggerWord}' ${placement}ed → '${params.style}'`);
+            }
+          }
         }
       }
       // ── Matchering from album preset ──
