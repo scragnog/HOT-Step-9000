@@ -1,11 +1,23 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { lireekApi, Artist, LyricsSet, Profile, Generation, AlbumPreset } from '../../../services/lyricStudioApi';
+import { lireekApi, Artist, LyricsSet, Profile, Generation, AlbumPreset, SongLyric } from '../../../services/lyricStudioApi';
 import { ArtistGrid } from './ArtistGrid';
 import { ArtistSidebar } from './ArtistSidebar';
 import { AlbumGrid } from './AlbumGrid';
 import { AlbumHeader } from './AlbumHeader';
 import { FetchLyricsModal } from './FetchLyricsModal';
+import { ContentTabs, TabId } from './ContentTabs';
+import { SourceLyricsTab } from './SourceLyricsTab';
+import { ProfilesTab } from './ProfilesTab';
+import { WrittenSongsTab } from './WrittenSongsTab';
+import { RecordingsTab } from './RecordingsTab';
 import { Song } from '../../../types';
+
+function parseSongs(songs: SongLyric[] | string): SongLyric[] {
+  if (typeof songs === 'string') {
+    try { return JSON.parse(songs); } catch { return []; }
+  }
+  return songs || [];
+}
 
 // ── Navigation state ─────────────────────────────────────────────────────────
 
@@ -30,8 +42,13 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
   // ── Data ──
   const [artists, setArtists] = useState<Artist[]>([]);
   const [albums, setAlbums] = useState<LyricsSet[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [generations, setGenerations] = useState<Generation[]>([]);
   const [artistsLoading, setArtistsLoading] = useState(true);
   const [albumsLoading, setAlbumsLoading] = useState(false);
+
+  // ── Tabs ──
+  const [activeTab, setActiveTab] = useState<TabId>('source-lyrics');
 
   // ── Modals ──
   const [fetchModalOpen, setFetchModalOpen] = useState(false);
@@ -39,10 +56,10 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
 
   // ── Toast ──
   const [toast, setToast] = useState<string | null>(null);
-  const showToast = (msg: string) => {
+  const showToast = useCallback((msg: string) => {
     setToast(msg);
     setTimeout(() => setToast(null), 3500);
-  };
+  }, []);
 
   // ── Load artists ──
   const loadArtists = useCallback(async () => {
@@ -72,6 +89,26 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
     }
   }, []);
 
+  // ── Load album detail data ──
+  const loadAlbumData = useCallback(async (albumId: number) => {
+    try {
+      const profileRes = await lireekApi.listProfiles(albumId);
+      setProfiles(profileRes.profiles);
+
+      // Load generations from all profiles under this album
+      const allGens: Generation[] = [];
+      for (const p of profileRes.profiles) {
+        try {
+          const genRes = await lireekApi.listGenerations(p.id);
+          allGens.push(...genRes.generations);
+        } catch { /* no generations for this profile */ }
+      }
+      setGenerations(allGens);
+    } catch (err) {
+      console.error('[LyricStudioV2] Failed to load album data:', err);
+    }
+  }, []);
+
   // ── Navigation handlers ──
   const handleSelectArtist = useCallback((artist: Artist) => {
     setNav({ level: 'albums', selectedArtist: artist, selectedAlbum: null });
@@ -80,16 +117,22 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
 
   const handleSelectAlbum = useCallback((album: LyricsSet) => {
     setNav(prev => ({ ...prev, level: 'album-detail', selectedAlbum: album }));
-  }, []);
+    setActiveTab('source-lyrics');
+    loadAlbumData(album.id);
+  }, [loadAlbumData]);
 
   const handleBackToArtists = useCallback(() => {
     setNav({ level: 'artists', selectedArtist: null, selectedAlbum: null });
     setAlbums([]);
-    loadArtists(); // Refresh counts
+    setProfiles([]);
+    setGenerations([]);
+    loadArtists();
   }, [loadArtists]);
 
   const handleBackToAlbums = useCallback(() => {
     setNav(prev => ({ ...prev, level: 'albums', selectedAlbum: null }));
+    setProfiles([]);
+    setGenerations([]);
   }, []);
 
   // ── Actions ──
@@ -102,7 +145,7 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
     } catch (err: any) {
       showToast(`Failed to delete: ${err.message}`);
     }
-  }, [loadArtists]);
+  }, [loadArtists, showToast]);
 
   const handleRefreshImage = useCallback(async (artist: Artist) => {
     try {
@@ -113,7 +156,7 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
     } catch (err: any) {
       showToast(`Couldn't find image: ${err.message}`);
     }
-  }, []);
+  }, [showToast]);
 
   const handleDeleteAlbum = useCallback(async (album: LyricsSet) => {
     if (!confirm(`Delete album "${album.album || 'Top Songs'}" and all associated data?`)) return;
@@ -124,21 +167,41 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
     } catch (err: any) {
       showToast(`Failed to delete: ${err.message}`);
     }
-  }, [nav.selectedArtist, loadAlbums]);
+  }, [nav.selectedArtist, loadAlbums, showToast]);
+
+  const handleDeleteSong = useCallback(async (index: number) => {
+    if (!nav.selectedAlbum) return;
+    try {
+      await lireekApi.removeSong(nav.selectedAlbum.id, index);
+      showToast('Song removed');
+      // Reload the album to get updated songs
+      const updated = await lireekApi.getLyricsSet(nav.selectedAlbum.id);
+      setNav(prev => ({ ...prev, selectedAlbum: updated }));
+    } catch (err: any) {
+      showToast(`Failed: ${err.message}`);
+    }
+  }, [nav.selectedAlbum, showToast]);
 
   const handleFetchLyrics = useCallback(async (artist: string, album: string, maxSongs: number) => {
     const res = await lireekApi.fetchLyrics({ artist, album: album || undefined, max_songs: maxSongs });
     showToast(`Fetched ${res.songs_fetched} songs`);
     await loadArtists();
-    // If we're in album view for this artist, reload albums too
     if (nav.selectedArtist && res.artist.id === nav.selectedArtist.id) {
       await loadAlbums(nav.selectedArtist.id);
     }
-    // Navigate to the new artist's albums if we were on artist grid
     if (nav.level === 'artists') {
       handleSelectArtist(res.artist);
     }
-  }, [loadArtists, loadAlbums, nav.selectedArtist, nav.level, handleSelectArtist]);
+  }, [loadArtists, loadAlbums, nav.selectedArtist, nav.level, handleSelectArtist, showToast]);
+
+  const handleGenerateAudio = useCallback((gen: Generation) => {
+    showToast(`Audio generation for "${gen.title}" — use the V1 view for now`);
+    // TODO: Port handleGenerateAudio from V1 in Phase 4
+  }, [showToast]);
+
+  const handlePlaySong = useCallback((song: Song) => {
+    onPlaySong?.(song);
+  }, [onPlaySong]);
 
   const openFetchForArtist = useCallback(() => {
     setFetchModalPrefill(nav.selectedArtist?.name);
@@ -149,6 +212,12 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
     setFetchModalPrefill(undefined);
     setFetchModalOpen(true);
   }, []);
+
+  const refreshAlbumData = useCallback(() => {
+    if (nav.selectedAlbum) {
+      loadAlbumData(nav.selectedAlbum.id);
+    }
+  }, [nav.selectedAlbum, loadAlbumData]);
 
   // ── Keyboard shortcuts ──
   useEffect(() => {
@@ -166,6 +235,9 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, [nav.level, fetchModalOpen, handleBackToAlbums, handleBackToArtists]);
+
+  // ── Render helpers ──
+  const sourceLyricsCount = nav.selectedAlbum ? parseSongs(nav.selectedAlbum.songs).length : 0;
 
   // ── Render ──
   return (
@@ -194,7 +266,6 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
 
         {nav.level === 'albums' && nav.selectedArtist && (
           <div className="h-full flex">
-            {/* Left: artist sidebar */}
             <div className="w-56 flex-shrink-0 border-r border-white/5 overflow-hidden">
               <ArtistSidebar
                 artists={artists}
@@ -203,7 +274,6 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
                 onBack={handleBackToArtists}
               />
             </div>
-            {/* Right: album grid */}
             <div className="flex-1 overflow-y-auto">
               <AlbumGrid
                 albums={albums}
@@ -225,22 +295,50 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
                 artist={nav.selectedArtist}
                 album={nav.selectedAlbum}
                 onBack={handleBackToAlbums}
-                onOpenPreset={() => showToast('Preset settings coming in Phase 2')}
+                onOpenPreset={() => showToast('Preset settings coming next')}
               />
             </div>
-            {/* Right: tabbed content (placeholder for Phase 3) */}
-            <div className="flex-1 overflow-y-auto">
-              <div className="flex flex-col items-center justify-center h-full text-center p-8">
-                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center mb-4">
-                  <span className="text-2xl">🚧</span>
-                </div>
-                <h3 className="text-lg font-semibold text-zinc-300 mb-2">
-                  Content Tabs Coming Soon
-                </h3>
-                <p className="text-sm text-zinc-500 max-w-sm">
-                  Source Lyrics, Profiles, Written Songs, and Recordings tabs will appear here.
-                </p>
-              </div>
+            {/* Right: tabbed content */}
+            <div className="flex-1 overflow-hidden">
+              <ContentTabs
+                activeTab={activeTab}
+                onTabChange={setActiveTab}
+                sourceLyricsCount={sourceLyricsCount}
+                profilesCount={profiles.length}
+                writtenSongsCount={generations.length}
+                recordingsCount={0}
+              >
+                {activeTab === 'source-lyrics' && (
+                  <SourceLyricsTab
+                    album={nav.selectedAlbum}
+                    onDeleteSong={handleDeleteSong}
+                  />
+                )}
+                {activeTab === 'profiles' && (
+                  <ProfilesTab
+                    lyricsSetId={nav.selectedAlbum.id}
+                    profiles={profiles}
+                    onRefresh={refreshAlbumData}
+                    showToast={showToast}
+                  />
+                )}
+                {activeTab === 'written-songs' && (
+                  <WrittenSongsTab
+                    generations={generations}
+                    profiles={profiles}
+                    onRefresh={refreshAlbumData}
+                    onGenerateAudio={handleGenerateAudio}
+                    showToast={showToast}
+                  />
+                )}
+                {activeTab === 'recordings' && (
+                  <RecordingsTab
+                    generations={generations}
+                    onPlaySong={handlePlaySong}
+                    showToast={showToast}
+                  />
+                )}
+              </ContentTabs>
             </div>
           </div>
         )}
