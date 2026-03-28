@@ -141,6 +141,7 @@ def register_lora_routes(
                         except Exception as exc:
                             logger.warning(f"Failed to apply initial scale for slot {request.slot}: {exc}")
                     if request.group_scales is not None:
+                        logger.info(f"[LoRA Load] Applying group scales for slot {request.slot}: {request.group_scales}")
                         try:
                             handler.set_slot_group_scales(
                                 slot=request.slot,
@@ -148,8 +149,11 @@ def register_lora_routes(
                                 cross_attn_scale=request.group_scales.get("cross_attn", 1.0),
                                 mlp_scale=request.group_scales.get("mlp", 1.0),
                             )
+                            logger.info(f"[LoRA Load] Group scales applied successfully for slot {request.slot}")
                         except Exception as exc:
                             logger.warning(f"Failed to apply initial group scales for slot {request.slot}: {exc}")
+                    else:
+                        logger.info(f"[LoRA Load] No group_scales in request for slot {request.slot}")
                     return wrap_response({"message": result, "lora_path": request.lora_path, "slot": request.slot})
                 else:
                     raise HTTPException(status_code=400, detail=result)
@@ -386,6 +390,7 @@ def register_lora_routes(
         """Set per-group LoRA scales for a specific adapter slot."""
         handler = _require_initialized_handler(app)
         try:
+            logger.info(f"[Slot Group Scales] Setting scales for slot {request.slot}: self_attn={request.self_attn}, cross_attn={request.cross_attn}, mlp={request.mlp}")
             result = handler.set_slot_group_scales(
                 slot=request.slot,
                 self_attn_scale=request.self_attn,

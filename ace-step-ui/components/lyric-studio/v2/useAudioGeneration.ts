@@ -143,12 +143,18 @@ export function useAudioGeneration({ profiles, showToast, onJobLinked }: UseAudi
             params.loraScale = preset.adapter_scale ?? 1.0;
             // Apply group scales if they differ
             if (preset.adapter_group_scales) {
+              console.log('[LyricStudioV2] Applying group scales to already-loaded adapter:', JSON.stringify(preset.adapter_group_scales), 'slot:', existingSlot.slot);
               try {
                 await generateApi.setSlotGroupScales({
                   slot: existingSlot.slot,
                   ...preset.adapter_group_scales,
                 }, token);
-              } catch { /* non-critical */ }
+                console.log('[LyricStudioV2] Group scales applied successfully');
+              } catch (gsErr) {
+                console.warn('[LyricStudioV2] Failed to apply group scales:', gsErr);
+              }
+            } else {
+              console.log('[LyricStudioV2] No adapter_group_scales in preset, skipping group scale application');
             }
           } else {
             // Unload existing adapters first
@@ -158,11 +164,13 @@ export function useAudioGeneration({ profiles, showToast, onJobLinked }: UseAudi
             } else {
               showToast('Loading adapter...');
             }
-            await generateApi.loadLora({
+            const loadPayload: any = {
               lora_path: preset.adapter_path,
               scale: preset.adapter_scale ?? 1.0,
               ...(preset.adapter_group_scales ? { group_scales: preset.adapter_group_scales } : {}),
-            }, token);
+            };
+            console.log('[LyricStudioV2] Loading adapter with payload:', JSON.stringify(loadPayload));
+            await generateApi.loadLora(loadPayload, token);
             params.loraLoaded = true;
             params.loraPath = preset.adapter_path;
             params.loraScale = preset.adapter_scale ?? 1.0;
