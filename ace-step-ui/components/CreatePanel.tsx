@@ -1519,16 +1519,16 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   // now persisted via usePersistedState. When the backend becomes available
   // (fetchedModels populated), we check if the backend already has adapters
   // loaded (browser refresh) or needs them reloaded (server restart).
-  const adapterAutoReloadDoneRef = useRef(false);
   useEffect(() => {
-    if (adapterAutoReloadDoneRef.current) return;
+    // Guard: only auto-reload once per browser session (survives component remounts)
+    if (sessionStorage.getItem('ace-adapterAutoReloadDone')) return;
     if (!token || fetchedModels.length === 0) return;
     // Read persisted slots (current state at mount time)
     if (adapterSlots.length === 0) {
-      adapterAutoReloadDoneRef.current = true;
+      sessionStorage.setItem('ace-adapterAutoReloadDone', '1');
       return;
     }
-    adapterAutoReloadDoneRef.current = true;
+    sessionStorage.setItem('ace-adapterAutoReloadDone', '1');
     const slotsToReload = [...adapterSlots];
 
     (async () => {
@@ -2547,9 +2547,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       if (json.duration !== undefined) setDuration(json.duration);
       if (json.loraPath !== undefined) setLoraPath(json.loraPath);
       if (json.loraScale !== undefined) setLoraScale(json.loraScale);
-      if (json.loraLoaded !== undefined) setLoraLoaded(json.loraLoaded);
-      if (json.advancedAdapters !== undefined) setAdvancedAdapters(json.advancedAdapters);
-      if (json.adapterSlots !== undefined) setAdapterSlots(json.adapterSlots);
+      // NOTE: Do NOT set loraLoaded/advancedAdapters/adapterSlots from import.
+      // Those trigger auto-reload logic that can corrupt tensors mid-generation.
       if (json.autoMaster !== undefined) setAutoMaster(json.autoMaster);
       if (json.masteringParams !== undefined) setMasteringParams(json.masteringParams);
       console.log('[CreatePanel] Applied Lyric Studio import:', json.title);

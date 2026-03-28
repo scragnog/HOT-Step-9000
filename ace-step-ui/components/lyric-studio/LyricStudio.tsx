@@ -487,16 +487,28 @@ export const LyricStudio: React.FC = () => {
 
       // ── Load adapter from album preset via API ──
       if (preset?.adapter_path) {
-        showToast('Loading adapter...');
         try {
-          await generateApi.loadLora({
-            lora_path: preset.adapter_path,
-            scale: preset.adapter_scale ?? 1.0,
-            ...(preset.adapter_group_scales ? { group_scales: preset.adapter_group_scales } : {}),
-          }, token);
-          params.loraLoaded = true;
-          params.loraPath = preset.adapter_path;
-          params.loraScale = preset.adapter_scale ?? 1.0;
+          // Check if the adapter is already loaded to avoid corrupting an active generation
+          const loraStatus = await generateApi.getLoraStatus(token);
+          const alreadyLoaded = loraStatus?.advanced?.slots?.some(
+            (s: any) => s.path === preset.adapter_path
+          );
+          if (alreadyLoaded) {
+            console.log('[LyricStudio] Adapter already loaded, skipping reload');
+            params.loraLoaded = true;
+            params.loraPath = preset.adapter_path;
+            params.loraScale = preset.adapter_scale ?? 1.0;
+          } else {
+            showToast('Loading adapter...');
+            await generateApi.loadLora({
+              lora_path: preset.adapter_path,
+              scale: preset.adapter_scale ?? 1.0,
+              ...(preset.adapter_group_scales ? { group_scales: preset.adapter_group_scales } : {}),
+            }, token);
+            params.loraLoaded = true;
+            params.loraPath = preset.adapter_path;
+            params.loraScale = preset.adapter_scale ?? 1.0;
+          }
         } catch (loadErr) {
           console.warn('[LyricStudio] Failed to load adapter, continuing without:', loadErr);
           showToast('Warning: adapter failed to load, generating without');
@@ -553,19 +565,8 @@ export const LyricStudio: React.FC = () => {
     if (preset?.adapter_path) {
       importData.loraPath = preset.adapter_path;
       importData.loraScale = preset.adapter_scale ?? 1.0;
-      importData.loraLoaded = true;
-      if (preset.adapter_group_scales) {
-        importData.advancedAdapters = true;
-        importData.adapterSlots = [{
-          slot: 0,
-          name: preset.adapter_path.split(/[\\/]/).pop() || 'lireek',
-          path: preset.adapter_path,
-          type: 'lokr',
-          scale: preset.adapter_scale ?? 1.0,
-          delta_keys: 0,
-          group_scales: preset.adapter_group_scales,
-        }];
-      }
+      // NOTE: Do NOT include loraLoaded/advancedAdapters/adapterSlots here.
+      // CreatePanel would try to auto-load them, corrupting tensors mid-generation.
     }
     if (preset?.matchering_reference_path) {
       importData.autoMaster = true;
