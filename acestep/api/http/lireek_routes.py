@@ -650,3 +650,54 @@ def register_lireek_routes(app: FastAPI) -> None:
     async def get_audio_generations(generation_id: int):
         from acestep.api.lireek.lireek_db import get_audio_generations
         return {"audio_generations": get_audio_generations(generation_id)}
+
+    # ── Prompt Management ─────────────────────────────────────────────────
+
+    # Register all prompt defaults on mount
+    from acestep.api.lireek.prompt_manager import register_default, list_prompts, load_prompt, save_prompt, reset_prompt
+    from acestep.api.lireek.generation_service import (
+        GENERATION_SYSTEM_PROMPT,
+        REFINEMENT_SYSTEM_PROMPT,
+        SONG_METADATA_SYSTEM_PROMPT,
+    )
+    from acestep.api.lireek.profiler_service import (
+        _PROFILE_PROMPT_1,
+        _PROFILE_PROMPT_2,
+        _PROFILE_PROMPT_3,
+        _SUBJECT_SYSTEM_PROMPT,
+    )
+    register_default("generation", GENERATION_SYSTEM_PROMPT)
+    register_default("refinement", REFINEMENT_SYSTEM_PROMPT)
+    register_default("metadata", SONG_METADATA_SYSTEM_PROMPT)
+    register_default("profiler_1_themes", _PROFILE_PROMPT_1)
+    register_default("profiler_2_tone", _PROFILE_PROMPT_2)
+    register_default("profiler_3_imagery", _PROFILE_PROMPT_3)
+    register_default("profiler_4_subjects", _SUBJECT_SYSTEM_PROMPT)
+
+    @app.get("/api/lireek/prompts")
+    async def get_prompts():
+        """List all prompts with name, source, and content."""
+        return {"prompts": list_prompts()}
+
+    @app.get("/api/lireek/prompts/{name}")
+    async def get_prompt(name: str):
+        """Get a single prompt by name."""
+        content = load_prompt(name)
+        if not content:
+            raise HTTPException(404, f"Prompt '{name}' not found")
+        return {"name": name, "content": content}
+
+    @app.put("/api/lireek/prompts/{name}")
+    async def update_prompt(name: str, body: dict):
+        """Save a prompt override to file."""
+        content = body.get("content", "")
+        if not content:
+            raise HTTPException(400, "content is required")
+        path = save_prompt(name, content)
+        return {"name": name, "path": str(path), "source": "file"}
+
+    @app.delete("/api/lireek/prompts/{name}")
+    async def delete_prompt(name: str):
+        """Reset a prompt to its default (delete the file override)."""
+        reset_prompt(name)
+        return {"name": name, "status": "reset"}

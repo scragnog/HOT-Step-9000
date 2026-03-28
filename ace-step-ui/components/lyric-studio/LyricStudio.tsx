@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { usePersistedState } from '../../hooks/usePersistedState';
 import {
   Music, Users, Disc3, FileText, Sparkles, ChevronRight, ChevronDown,
-  Plus, Trash2, Download, RefreshCw, Loader2, Search, AlertTriangle, X, Wand2, Play, Settings2, Save, ListOrdered,
+  Plus, Trash2, Download, RefreshCw, Loader2, Search, AlertTriangle, X, Wand2, Play, Settings2, Save, ListOrdered, Code2,
 } from 'lucide-react';
 import { lireekApi, Artist, LyricsSet, Profile, Generation, SongLyric, AlbumPreset } from '../../services/lyricStudioApi';
 import { TripleProviderSelector, ModelSelections, loadSelections, saveSelections } from './ProviderSelector';
@@ -15,6 +15,7 @@ import {
   doSkipThinking,
 } from '../../stores/streamingStore';
 import { QueuePanel } from './QueuePanel';
+import { PromptEditor } from './PromptEditor';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -77,6 +78,8 @@ export const LyricStudio: React.FC = () => {
   const stream = useStreamingStore();
   // Queue modal
   const [queueOpen, setQueueOpen] = useState(false);
+  // Prompt editor modal
+  const [promptEditorOpen, setPromptEditorOpen] = useState(false);
 
   // Album presets
   const [presets, setPresets] = useState<Record<number, AlbumPreset | null>>({});
@@ -399,6 +402,13 @@ export const LyricStudio: React.FC = () => {
                 </button>
               ) : null;
             })()}
+            <button
+              onClick={() => setPromptEditorOpen(true)}
+              className="p-1.5 rounded-lg hover:bg-white/5 text-zinc-400 hover:text-white transition-colors"
+              title="Edit System Prompts"
+            >
+              <Code2 className="w-4 h-4" />
+            </button>
             <button
               onClick={() => setQueueOpen(true)}
               className="p-1.5 rounded-lg hover:bg-white/5 text-zinc-400 hover:text-white transition-colors"
@@ -1035,6 +1045,12 @@ export const LyricStudio: React.FC = () => {
         profilingModel={modelSelections.profiling}
         generationModel={modelSelections.generation}
         refinementModel={modelSelections.refinement}
+      />
+
+      {/* Prompt Editor Modal */}
+      <PromptEditor
+        open={promptEditorOpen}
+        onClose={() => setPromptEditorOpen(false)}
       />
     </div>
   );

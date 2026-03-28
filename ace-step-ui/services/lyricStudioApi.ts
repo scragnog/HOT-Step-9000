@@ -223,6 +223,16 @@ export const lireekApi = {
     mastering_params?: { mode: string; reference_file?: string };
   }): Promise<{ job_id: string }> =>
     api('/api/generate', { method: 'POST', body: params }),
+
+  // ── Prompts ───────────────────────────────────────────────────────────
+  listPrompts: (): Promise<{ prompts: { name: string; source: string; content: string; has_default: boolean }[] }> =>
+    api('/api/lireek/prompts'),
+
+  savePrompt: (name: string, content: string): Promise<{ name: string; path: string; source: string }> =>
+    api(`/api/lireek/prompts/${name}`, { method: 'PUT', body: { content } }),
+
+  resetPrompt: (name: string): Promise<{ name: string; status: string }> =>
+    api(`/api/lireek/prompts/${name}`, { method: 'DELETE' }),
 };
 
 // ── SSE Streaming ─────────────────────────────────────────────────────────
