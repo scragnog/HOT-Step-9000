@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Play, Trash2, Headphones, ChevronDown, ChevronRight, Loader2, Clock, X, Filter } from 'lucide-react';
 import { lireekApi, Generation, AudioGeneration } from '../../../services/lyricStudioApi';
 import { generateApi } from '../../../services/api';
@@ -27,120 +27,139 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
   const [loading, setLoading] = useState(true);
   const [expandedGenId, setExpandedGenId] = useState<number | null>(null);
 
-  // Apply filter if set — memoize to prevent infinite re-render
-  const filteredGenerations = useMemo(() => 
+  // Keep a ref to generations so the effect callback can read current data
+  // without depending on the array reference
+  const generationsRef = useRef(generations);
+  generationsRef.current = generations;
+
+  // Stable key: only re-fetch when the set of generation IDs or filter changes
+  const genKey = useMemo(() => {
+    const ids = generations.map(g => g.id).sort().join(',');
+    return `${ids}|${filterGenerationId ?? 'all'}`;
+  }, [generations, filterGenerationId]);
+
+  // Filtered view for rendering (cheap, no effect dependency)
+  const filteredGenerations = useMemo(() =>
     filterGenerationId
       ? generations.filter(g => g.id === filterGenerationId)
       : generations,
     [generations, filterGenerationId]
   );
 
-  // Load audio generations for ALL lyric generations
-  const loadAudioGens = useCallback(async () => {
-    if (!token) return;
-    setLoading(true);
-    try {
-      // First get the full job history for cross-referencing
-      let jobHistory: Record<string, any> = {};
-      try {
-        const historyRes = await generateApi.getHistory(token);
-        if (historyRes?.jobs) {
-          for (const job of historyRes.jobs) {
-            const id = job.jobId || job.id;
-            if (id) jobHistory[id] = job;
-          }
-        }
-      } catch { /* history not available */ }
+  // Load audio generations — keyed only on genKey + token (stable strings)
+  useEffect(() => {
+    if (!token || genKey === '|all') {
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
 
-      const results: SongGroup[] = [];
-      for (const gen of filteredGenerations) {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const gens = filterGenerationId
+          ? generationsRef.current.filter(g => g.id === filterGenerationId)
+          : generationsRef.current;
+
+        // Get full job history for cross-referencing
+        let jobHistory: Record<string, any> = {};
         try {
-          const res = await lireekApi.getAudioGenerations(gen.id);
-          if (res.audio_generations.length > 0) {
-            const songs: Song[] = [];
-            for (const ag of res.audio_generations) {
-              try {
-                // Try job status endpoint first
-                let jobRes = await generateApi.getStatus(ag.job_id, token);
-                if (jobRes?.status === 'succeeded' && jobRes.result?.audioUrls) {
-                  for (const audioUrl of jobRes.result.audioUrls) {
-                    songs.push({
-                      id: ag.job_id,
-                      title: gen.title || 'Untitled',
-                      style: gen.caption || '',
-                      lyrics: gen.lyrics || '',
-                      coverUrl: '',
-                      duration: String(jobRes.result.duration || 0),
-                      createdAt: new Date(ag.created_at),
-                      tags: [],
-                      audioUrl: audioUrl,
-                    });
-                  }
-                } else if (!jobRes || jobRes.status === 'pending' || jobRes.status === 'queued') {
-                  // Check history as fallback
-                  const historyJob = jobHistory[ag.job_id];
-                  if (historyJob?.status === 'succeeded' && historyJob.result?.audioUrls) {
-                    for (const audioUrl of historyJob.result.audioUrls) {
+          const historyRes = await generateApi.getHistory(token);
+          if (historyRes?.jobs) {
+            for (const job of historyRes.jobs) {
+              const id = job.jobId || job.id;
+              if (id) jobHistory[id] = job;
+            }
+          }
+        } catch { /* history not available */ }
+
+        const results: SongGroup[] = [];
+        for (const gen of gens) {
+          if (cancelled) return;
+          try {
+            const res = await lireekApi.getAudioGenerations(gen.id);
+            if (res.audio_generations.length > 0) {
+              const songs: Song[] = [];
+              for (const ag of res.audio_generations) {
+                if (cancelled) return;
+                try {
+                  const jobRes = await generateApi.getStatus(ag.job_id, token);
+                  if (jobRes?.status === 'succeeded' && jobRes.result?.audioUrls) {
+                    for (const audioUrl of jobRes.result.audioUrls) {
                       songs.push({
                         id: ag.job_id,
                         title: gen.title || 'Untitled',
                         style: gen.caption || '',
                         lyrics: gen.lyrics || '',
                         coverUrl: '',
-                        duration: String(historyJob.result.duration || 0),
+                        duration: String(jobRes.result.duration || 0),
                         createdAt: new Date(ag.created_at),
                         tags: [],
-                        audioUrl: audioUrl,
+                        audioUrl,
                       });
                     }
+                  } else {
+                    // Fallback to history
+                    const hj = jobHistory[ag.job_id];
+                    if (hj?.status === 'succeeded' && hj.result?.audioUrls) {
+                      for (const audioUrl of hj.result.audioUrls) {
+                        songs.push({
+                          id: ag.job_id,
+                          title: gen.title || 'Untitled',
+                          style: gen.caption || '',
+                          lyrics: gen.lyrics || '',
+                          coverUrl: '',
+                          duration: String(hj.result.duration || 0),
+                          createdAt: new Date(ag.created_at),
+                          tags: [],
+                          audioUrl,
+                        });
+                      }
+                    }
                   }
-                }
-              } catch {
-                // Job status endpoint failed — try history as fallback
-                const historyJob = jobHistory[ag.job_id];
-                if (historyJob?.status === 'succeeded' && historyJob.result?.audioUrls) {
-                  for (const audioUrl of historyJob.result.audioUrls) {
-                    songs.push({
-                      id: ag.job_id,
-                      title: gen.title || 'Untitled',
-                      style: gen.caption || '',
-                      lyrics: gen.lyrics || '',
-                      coverUrl: '',
-                      duration: String(historyJob.result.duration || 0),
-                      createdAt: new Date(ag.created_at),
-                      tags: [],
-                      audioUrl: audioUrl,
-                    });
+                } catch {
+                  const hj = jobHistory[ag.job_id];
+                  if (hj?.status === 'succeeded' && hj.result?.audioUrls) {
+                    for (const audioUrl of hj.result.audioUrls) {
+                      songs.push({
+                        id: ag.job_id,
+                        title: gen.title || 'Untitled',
+                        style: gen.caption || '',
+                        lyrics: gen.lyrics || '',
+                        coverUrl: '',
+                        duration: String(hj.result.duration || 0),
+                        createdAt: new Date(ag.created_at),
+                        tags: [],
+                        audioUrl,
+                      });
+                    }
+                  } else {
+                    console.warn(`[RecordingsTab] Could not resolve job ${ag.job_id}`);
                   }
-                } else {
-                  console.warn(`[RecordingsTab] Could not resolve job ${ag.job_id} — not in status or history`);
                 }
               }
+              results.push({ generation: gen, audioGens: res.audio_generations, songs });
             }
-            results.push({
-              generation: gen,
-              audioGens: res.audio_generations,
-              songs,
-            });
-          }
-        } catch { /* no audio gens for this one */ }
+          } catch { /* no audio gens */ }
+        }
+        if (!cancelled) setGroups(results);
+      } catch (err) {
+        console.error('[RecordingsTab] Failed to load:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
       }
-      setGroups(results);
-    } catch (err) {
-      console.error('[RecordingsTab] Failed to load:', err);
-    } finally {
-      setLoading(false);
-    }
-  }, [filteredGenerations, token]);
+    };
 
-  useEffect(() => { loadAudioGens(); }, [loadAudioGens]);
+    load();
+    return () => { cancelled = true; };
+  }, [genKey, token]); // ← stable string deps only!
 
   // Auto-expand when filtering to a single generation
   useEffect(() => {
     if (filterGenerationId && groups.length === 1) {
       setExpandedGenId(groups[0].generation.id);
     }
-  }, [filterGenerationId, groups]);
+  }, [filterGenerationId, groups.length]);
 
   if (loading) {
     return (
