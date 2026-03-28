@@ -773,28 +773,139 @@ export const LyricStudio: React.FC = () => {
                 <span className="text-xs text-zinc-500">{profileGens.length} generation(s)</span>
               </div>
 
-              {/* Profile highlights */}
+              {/* Profile analysis — full section layout */}
               <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Profile Analysis</h3>
-              <div className="grid grid-cols-2 gap-3 mb-6">
-                {pd.genres && (
-                  <ProfileCard label="Genres" value={Array.isArray(pd.genres) ? pd.genres.join(', ') : pd.genres} />
-                )}
-                {pd.themes && (
-                  <ProfileCard label="Themes" value={Array.isArray(pd.themes) ? pd.themes.join(', ') : pd.themes} />
-                )}
-                {pd.vocal_style && (
-                  <ProfileCard label="Vocal Style" value={pd.vocal_style} />
-                )}
-                {pd.song_structures && (
-                  <ProfileCard label="Song Structures" value={Array.isArray(pd.song_structures) ? pd.song_structures.join(', ') : pd.song_structures} />
-                )}
-                {pd.bpm_range && (
-                  <ProfileCard label="BPM Range" value={pd.bpm_range} />
-                )}
-                {pd.key_preferences && (
-                  <ProfileCard label="Key Preferences" value={Array.isArray(pd.key_preferences) ? pd.key_preferences.join(', ') : pd.key_preferences} />
-                )}
+
+              {/* Tags row: Themes + Subjects */}
+              {pd.themes?.length > 0 && (
+                <div className="mb-4">
+                  <span className="text-[10px] text-amber-400 uppercase tracking-wider font-semibold">Themes</span>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {(Array.isArray(pd.themes) ? pd.themes : [pd.themes]).map((t: string, i: number) => (
+                      <span key={i} className="px-2 py-0.5 rounded-md text-xs bg-amber-500/15 text-amber-300 border border-amber-500/20">{t}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {pd.common_subjects?.length > 0 && (
+                <div className="mb-4">
+                  <span className="text-[10px] text-green-400 uppercase tracking-wider font-semibold">Common Subjects</span>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {(Array.isArray(pd.common_subjects) ? pd.common_subjects : [pd.common_subjects]).map((s: string, i: number) => (
+                      <span key={i} className="px-2 py-0.5 rounded-md text-xs bg-green-500/15 text-green-300 border border-green-500/20">{s}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {pd.subject_categories?.length > 0 && (
+                <div className="mb-4">
+                  <span className="text-[10px] text-blue-400 uppercase tracking-wider font-semibold">Subject Categories</span>
+                  <div className="flex flex-wrap gap-1.5 mt-1">
+                    {(Array.isArray(pd.subject_categories) ? pd.subject_categories : [pd.subject_categories]).map((c: string, i: number) => (
+                      <span key={i} className="px-2 py-0.5 rounded-md text-xs bg-blue-500/15 text-blue-300 border border-blue-500/20">{c}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Inline stats row */}
+              <div className="flex flex-wrap gap-3 mb-4">
+                {pd.avg_verse_lines > 0 && <MetaBadge label="Avg Verse" value={`${pd.avg_verse_lines} lines`} color="blue" />}
+                {pd.avg_chorus_lines > 0 && <MetaBadge label="Avg Chorus" value={`${pd.avg_chorus_lines} lines`} color="pink" />}
+                {pd.rhyme_schemes?.length > 0 && <MetaBadge label="Rhyme" value={pd.rhyme_schemes.slice(0, 3).join(', ')} color="purple" />}
+                {pd.perspective && <MetaBadge label="Voice" value={typeof pd.perspective === 'string' ? pd.perspective.split('—')[0].trim() : ''} color="amber" />}
               </div>
+
+              {/* Text sections */}
+              {[  
+                { label: 'Tone & Mood', value: pd.tone_and_mood, color: 'text-pink-400' },
+                { label: 'Vocabulary', value: pd.vocabulary_notes, color: 'text-blue-400' },
+                { label: 'Structural Patterns', value: pd.structural_patterns, color: 'text-purple-400' },
+                { label: 'Narrative Techniques', value: pd.narrative_techniques, color: 'text-green-400' },
+                { label: 'Imagery Patterns', value: pd.imagery_patterns, color: 'text-amber-400' },
+                { label: 'Signature Devices', value: pd.signature_devices, color: 'text-cyan-400' },
+                { label: 'Emotional Arc', value: pd.emotional_arc, color: 'text-rose-400' },
+              ].filter(s => s.value).map((section, i) => (
+                <div key={i} className="mb-4">
+                  <span className={`text-[10px] uppercase tracking-wider font-semibold ${section.color}`}>{section.label}</span>
+                  <p className="text-sm text-zinc-300 mt-1 leading-relaxed">{section.value}</p>
+                </div>
+              ))}
+
+              {/* Song subjects */}
+              {pd.song_subjects && Object.keys(pd.song_subjects).length > 0 && (
+                <details className="mb-4">
+                  <summary className="text-[10px] text-amber-400 uppercase tracking-wider font-semibold cursor-pointer hover:text-amber-300">
+                    Song Subjects ({Object.keys(pd.song_subjects).length} songs)
+                  </summary>
+                  <div className="mt-2 space-y-1">
+                    {Object.entries(pd.song_subjects).map(([title, subject]: [string, any]) => (
+                      <div key={title} className="flex gap-2 text-xs">
+                        <span className="text-zinc-400 font-medium shrink-0 w-32 truncate" title={title}>{title}</span>
+                        <span className="text-zinc-500">{subject}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+              )}
+
+              {/* Stats sections */}
+              {(pd.meter_stats || pd.vocabulary_stats || pd.repetition_stats || pd.rhyme_quality) && (
+                <details className="mb-4">
+                  <summary className="text-[10px] text-zinc-500 uppercase tracking-wider cursor-pointer hover:text-zinc-300">Detailed Stats</summary>
+                  <div className="mt-2 grid grid-cols-2 gap-3">
+                    {pd.meter_stats && (
+                      <div className="p-3 rounded-lg bg-white/5 border border-white/5">
+                        <span className="text-[10px] text-blue-400 uppercase tracking-wider font-semibold">Meter</span>
+                        <div className="text-xs text-zinc-400 mt-1 space-y-0.5">
+                          <div>Avg syllables: {pd.meter_stats.avg_syllables_per_line}/line</div>
+                          <div>σ = {pd.meter_stats.syllable_std_dev}</div>
+                          <div>Words: {pd.meter_stats.avg_words_per_line}/line</div>
+                        </div>
+                      </div>
+                    )}
+                    {pd.vocabulary_stats && (
+                      <div className="p-3 rounded-lg bg-white/5 border border-white/5">
+                        <span className="text-[10px] text-green-400 uppercase tracking-wider font-semibold">Vocabulary</span>
+                        <div className="text-xs text-zinc-400 mt-1 space-y-0.5">
+                          <div>TTR: {pd.vocabulary_stats.type_token_ratio}</div>
+                          <div>{pd.vocabulary_stats.total_words} words ({pd.vocabulary_stats.unique_words} unique)</div>
+                          <div>Contractions: {pd.vocabulary_stats.contraction_pct}%</div>
+                        </div>
+                      </div>
+                    )}
+                    {pd.repetition_stats && (
+                      <div className="p-3 rounded-lg bg-white/5 border border-white/5">
+                        <span className="text-[10px] text-pink-400 uppercase tracking-wider font-semibold">Repetition</span>
+                        <div className="text-xs text-zinc-400 mt-1 space-y-0.5">
+                          <div>Chorus: {pd.repetition_stats.chorus_repetition_pct}% repeated</div>
+                          <div>Pattern: {pd.repetition_stats.pattern}</div>
+                        </div>
+                      </div>
+                    )}
+                    {pd.rhyme_quality && (
+                      <div className="p-3 rounded-lg bg-white/5 border border-white/5">
+                        <span className="text-[10px] text-purple-400 uppercase tracking-wider font-semibold">Rhyme Quality</span>
+                        <div className="text-xs text-zinc-400 mt-1 space-y-0.5">
+                          <div>Perfect: {pd.rhyme_quality.perfect}</div>
+                          <div>Slant: {pd.rhyme_quality.slant}</div>
+                          <div>Assonance: {pd.rhyme_quality.assonance}</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </details>
+              )}
+
+              {/* Raw summary */}
+              {pd.raw_summary && (
+                <details className="mb-4">
+                  <summary className="text-[10px] text-zinc-500 uppercase tracking-wider cursor-pointer hover:text-zinc-300">Full Summary</summary>
+                  <div className="mt-2 p-3 rounded-lg bg-black/40 border border-white/5 text-sm text-zinc-300 whitespace-pre-wrap leading-relaxed max-h-[40vh] overflow-y-auto scrollbar-hide">
+                    {pd.raw_summary}
+                  </div>
+                </details>
+              )}
 
               {/* Full JSON toggle */}
               <details className="mb-4">
@@ -826,6 +937,7 @@ export const LyricStudio: React.FC = () => {
 
               {/* Metadata badges */}
               <div className="flex flex-wrap gap-2 mb-4">
+                {gen.subject && <MetaBadge label="Subject" value={gen.subject} color="amber" />}
                 {gen.bpm && <MetaBadge label="BPM" value={String(gen.bpm)} color="pink" />}
                 {gen.key && <MetaBadge label="Key" value={gen.key} color="blue" />}
                 {gen.duration && <MetaBadge label="Duration" value={`${gen.duration}s`} color="purple" />}
