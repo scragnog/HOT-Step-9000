@@ -97,6 +97,9 @@ export const LyricStudio: React.FC = () => {
   const [presetGroupsExpanded, setPresetGroupsExpanded] = useState(false);
   const [presetLoading, setPresetLoading] = useState(false);
 
+  // Audio generations linked to lyric generations
+  const [audioGens, setAudioGens] = useState<Record<number, Array<{ job_id: string; created_at: string; status?: string; audioUrl?: string }>>>({});
+
   // Album presets
   const [presets, setPresets] = useState<Record<number, AlbumPreset | null>>({});
   const [presetForm, setPresetForm] = useState<{
@@ -379,6 +382,30 @@ export const LyricStudio: React.FC = () => {
     return () => { cancelled = true; };
   }, [presetForm.adapter_path, token]);
 
+  // ── Fetch linked audio generations for a lyric generation ──────────────
+  const fetchAudioGens = useCallback(async (genId: number) => {
+    if (!token) return;
+    try {
+      const res = await lireekApi.getAudioGenerations(genId);
+      const entries = res.audio_generations || [];
+      // Fetch status for each
+      const withStatus = await Promise.all(entries.map(async (ag: any) => {
+        try {
+          const status = await generateApi.getStatus(ag.job_id || ag.hotstep_job_id, token);
+          return {
+            job_id: ag.job_id || ag.hotstep_job_id,
+            created_at: ag.created_at,
+            status: status.status,
+            audioUrl: status.result?.audioUrls?.[0] || undefined,
+          };
+        } catch {
+          return { job_id: ag.job_id || ag.hotstep_job_id, created_at: ag.created_at, status: 'unknown' };
+        }
+      }));
+      setAudioGens(prev => ({ ...prev, [genId]: withStatus }));
+    } catch { /* ignore */ }
+  }, [token]);
+
   // ── Generate Audio from Lyrics ──────────────────────────────────────────
   const handleGenerateAudio = async (gen: Generation) => {
     if (!token) { showToast('Not authenticated'); return; }
@@ -402,6 +429,63 @@ export const LyricStudio: React.FC = () => {
       };
       if (gen.bpm) params.bpm = gen.bpm;
       if (gen.key) params.keyScale = gen.key;
+
+      // ── Merge persisted CreatePanel generation engine settings ──
+      // These are stored by usePersistedState in CreatePanel with 'ace-' prefix
+      const readPersisted = (key: string) => {
+        try {
+          const raw = localStorage.getItem(key);
+          return raw !== null ? JSON.parse(raw) : undefined;
+        } catch { return undefined; }
+      };
+      // Generation engine
+      const steps = readPersisted('ace-inferenceSteps');
+      if (steps !== undefined) params.inferenceSteps = steps;
+      const method = readPersisted('ace-inferMethod');
+      if (method) params.inferMethod = method;
+      const sched = readPersisted('ace-scheduler');
+      if (sched) params.scheduler = sched;
+      const cfg = readPersisted('ace-guidanceScale');
+      if (cfg !== undefined) params.guidanceScale = cfg;
+      const shiftVal = readPersisted('ace-shift');
+      if (shiftVal !== undefined) params.shift = shiftVal;
+      const gMode = readPersisted('ace-guidanceMode');
+      if (gMode) params.guidanceMode = gMode;
+      const fmt = readPersisted('ace-audioFormat');
+      if (fmt) params.audioFormat = fmt;
+      const rndSeed = readPersisted('ace-randomSeed');
+      if (rndSeed !== undefined) params.randomSeed = rndSeed;
+      const normEn = readPersisted('ace-enableNormalization');
+      if (normEn !== undefined) params.enableNormalization = normEn;
+      const normDb = readPersisted('ace-normalizationDb');
+      if (normDb !== undefined) params.normalizationDb = normDb;
+      const vocL = readPersisted('ace-vocalLanguage');
+      if (vocL) params.vocalLanguage = vocL;
+      const vocG = readPersisted('ace-vocalGender');
+      if (vocG) params.vocalGender = vocG;
+      // LM settings
+      const lmTemp = readPersisted('ace-lmTemperature');
+      if (lmTemp !== undefined) params.lmTemperature = lmTemp;
+      const lmCfg = readPersisted('ace-lmCfgScale');
+      if (lmCfg !== undefined) params.lmCfgScale = lmCfg;
+      const lmTk = readPersisted('ace-lmTopK');
+      if (lmTk !== undefined) params.lmTopK = lmTk;
+      const lmTp = readPersisted('ace-lmTopP');
+      if (lmTp !== undefined) params.lmTopP = lmTp;
+      const lmModel = readPersisted('ace-lmModel');
+      if (lmModel) params.lmModel = lmModel;
+      // Advanced guidance
+      const cotMeta = readPersisted('ace-useCotMetas');
+      if (cotMeta !== undefined) params.useCotMetas = cotMeta;
+      const cotCap = readPersisted('ace-useCotCaption');
+      if (cotCap !== undefined) params.useCotCaption = cotCap;
+      const cotLang = readPersisted('ace-useCotLanguage');
+      if (cotLang !== undefined) params.useCotLanguage = cotLang;
+      // Vocoder
+      const vocoder = readPersisted('ace-vocoderModel');
+      if (vocoder) params.vocoderModel = vocoder;
+
+      // ── Adapter from album preset ──
       if (preset?.adapter_path) {
         params.loraPath = preset.adapter_path;
         params.loraScale = preset.adapter_scale ?? 1.0;
@@ -420,6 +504,7 @@ export const LyricStudio: React.FC = () => {
           }];
         }
       }
+      // ── Matchering from album preset ──
       if (preset?.matchering_reference_path) {
         params.autoMaster = true;
         params.masteringParams = { mode: 'matchering', reference_file: preset.matchering_reference_path };
@@ -430,6 +515,8 @@ export const LyricStudio: React.FC = () => {
       showToast(`Audio job queued: ${jobId}`);
       // Link the audio generation
       if (jobId) await lireekApi.linkAudio(gen.id, jobId);
+      // Refresh audio list for this generation
+      fetchAudioGens(gen.id);
     } catch (err) {
       showToast(`Audio generation failed: ${(err as Error).message}`);
     } finally {
@@ -1354,6 +1441,9 @@ export const LyricStudio: React.FC = () => {
                 defaultValue={gen.lyrics}
                 onBlur={(e) => { if (e.target.value !== gen.lyrics) handleSaveGeneration(gen.id, 'lyrics', e.target.value); }}
               />
+
+              {/* ── Linked Audio Generations ── */}
+              <AudioGenSection genId={gen.id} audioGens={audioGens} fetchAudioGens={fetchAudioGens} token={token} />
             </div>
           );
         })()}
@@ -1548,6 +1638,85 @@ const StatCard: React.FC<{ label: string; value: number; color: string }> = ({ l
     <div className="px-4 py-3 rounded-xl bg-white/5 border border-white/5 text-center">
       <div className={`text-2xl font-bold ${colors[color] || 'text-white'}`}>{value}</div>
       <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-0.5">{label}</div>
+    </div>
+  );
+};
+
+// ── Audio Generation Section ─────────────────────────────────────────────
+const AudioGenSection: React.FC<{
+  genId: number;
+  audioGens: Record<number, Array<{ job_id: string; created_at: string; status?: string; audioUrl?: string }>>;
+  fetchAudioGens: (genId: number) => void;
+  token: string;
+}> = ({ genId, audioGens, fetchAudioGens, token }) => {
+  const entries = audioGens[genId];
+  const [loaded, setLoaded] = useState(false);
+
+  // Auto-fetch on first render
+  useEffect(() => {
+    if (!loaded && token) {
+      fetchAudioGens(genId);
+      setLoaded(true);
+    }
+  }, [loaded, token, genId, fetchAudioGens]);
+
+  // Poll running jobs every 5s
+  useEffect(() => {
+    const hasRunning = entries?.some(e => e.status === 'running' || e.status === 'pending' || e.status === 'queued');
+    if (!hasRunning) return;
+    const interval = setInterval(() => fetchAudioGens(genId), 5000);
+    return () => clearInterval(interval);
+  }, [entries, genId, fetchAudioGens]);
+
+  if (!entries || entries.length === 0) return null;
+
+  const statusBadge = (status?: string) => {
+    const styles: Record<string, string> = {
+      succeeded: 'bg-green-900/30 text-green-400',
+      running: 'bg-blue-900/30 text-blue-400',
+      pending: 'bg-yellow-900/30 text-yellow-400',
+      queued: 'bg-yellow-900/30 text-yellow-400',
+      failed: 'bg-red-900/30 text-red-400',
+    };
+    return (
+      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${styles[status || ''] || 'bg-zinc-800 text-zinc-400'}`}>
+        {status || 'unknown'}
+      </span>
+    );
+  };
+
+  return (
+    <div className="mt-4">
+      <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-2">
+        <Music className="w-3.5 h-3.5" /> Audio Generations ({entries.length})
+        <button onClick={() => fetchAudioGens(genId)} className="ml-auto text-zinc-500 hover:text-zinc-300 transition-colors" title="Refresh">
+          <RefreshCw className="w-3 h-3" />
+        </button>
+      </h3>
+      <div className="space-y-2">
+        {entries.map((ag, i) => (
+          <div key={ag.job_id} className="rounded-lg bg-black/30 border border-white/5 p-3 space-y-2">
+            <div className="flex items-center gap-2 text-xs">
+              {statusBadge(ag.status)}
+              <span className="text-zinc-500 font-mono truncate">{ag.job_id.slice(0, 8)}…</span>
+              <span className="text-zinc-600 ml-auto">{new Date(ag.created_at).toLocaleTimeString()}</span>
+            </div>
+            {ag.status === 'running' && (
+              <div className="flex items-center gap-2 text-xs text-blue-400">
+                <Loader2 className="w-3 h-3 animate-spin" /> Generating…
+              </div>
+            )}
+            {ag.status === 'succeeded' && ag.audioUrl && (
+              <audio
+                controls
+                src={ag.audioUrl}
+                className="w-full h-8 rounded"
+                style={{ filter: 'hue-rotate(300deg)' }}
+              />
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
