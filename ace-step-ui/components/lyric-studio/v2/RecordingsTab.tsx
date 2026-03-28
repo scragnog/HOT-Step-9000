@@ -56,7 +56,10 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
       return;
     }
     // Absolute guard: if we already fetched this exact key, skip
-    if (lastFetchedKey.current === genKey) return;
+    if (lastFetchedKey.current === genKey) {
+      setLoading(false); // Ensure we don't get stuck in loading state
+      return;
+    }
     lastFetchedKey.current = genKey;
 
     let cancelled = false;
@@ -68,6 +71,8 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
           ? generationsRef.current.filter(g => g.id === filterGenerationId)
           : generationsRef.current;
 
+        console.log(`[RecordingsTab] Loading audio for ${gens.length} generations (key: ${genKey})`);
+
         // Get full job history for cross-referencing
         let jobHistory: Record<string, any> = {};
         try {
@@ -78,6 +83,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
               if (id) jobHistory[id] = job;
             }
           }
+          console.log(`[RecordingsTab] Job history has ${Object.keys(jobHistory).length} entries`);
         } catch { /* history not available */ }
 
         const results: SongGroup[] = [];
@@ -85,12 +91,14 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
           if (cancelled) return;
           try {
             const res = await lireekApi.getAudioGenerations(gen.id);
+            console.log(`[RecordingsTab] Gen ${gen.id} "${gen.title}" → ${res.audio_generations.length} audio gens`);
             if (res.audio_generations.length > 0) {
               const songs: Song[] = [];
               for (const ag of res.audio_generations) {
                 if (cancelled) return;
                 try {
                   const jobRes = await generateApi.getStatus(ag.job_id, token);
+                  console.log(`[RecordingsTab] Job ${ag.job_id}: status=${jobRes?.status}, audioUrls=${jobRes?.result?.audioUrls?.length ?? 0}`);
                   if (jobRes?.status === 'succeeded' && jobRes.result?.audioUrls) {
                     for (const audioUrl of jobRes.result.audioUrls) {
                       songs.push({
@@ -108,6 +116,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                   } else {
                     // Fallback to history
                     const hj = jobHistory[ag.job_id];
+                    console.log(`[RecordingsTab] History fallback for ${ag.job_id}: found=${!!hj}, status=${hj?.status}`);
                     if (hj?.status === 'succeeded' && hj.result?.audioUrls) {
                       for (const audioUrl of hj.result.audioUrls) {
                         songs.push({
@@ -124,7 +133,8 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                       }
                     }
                   }
-                } catch {
+                } catch (err) {
+                  console.warn(`[RecordingsTab] getStatus failed for ${ag.job_id}:`, err);
                   const hj = jobHistory[ag.job_id];
                   if (hj?.status === 'succeeded' && hj.result?.audioUrls) {
                     for (const audioUrl of hj.result.audioUrls) {
@@ -141,14 +151,18 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                       });
                     }
                   } else {
-                    console.warn(`[RecordingsTab] Could not resolve job ${ag.job_id}`);
+                    console.warn(`[RecordingsTab] Could not resolve job ${ag.job_id} — not in status or history`);
                   }
                 }
               }
+              console.log(`[RecordingsTab] Gen ${gen.id} resolved ${songs.length} playable songs`);
               results.push({ generation: gen, audioGens: res.audio_generations, songs });
             }
-          } catch { /* no audio gens */ }
+          } catch (err) {
+            console.error(`[RecordingsTab] Failed to get audio gens for gen ${gen.id}:`, err);
+          }
         }
+        console.log(`[RecordingsTab] Total groups: ${results.length}, total songs: ${results.reduce((n, g) => n + g.songs.length, 0)}`);
         if (!cancelled) setGroups(results);
       } catch (err) {
         console.error('[RecordingsTab] Failed to load:', err);
