@@ -102,11 +102,14 @@ def register_lireek_routes(app: FastAPI) -> None:
             if conn:
                 conn.close()
 
+    class SetImageRequest(BaseModel):
+        image_url: str
+
     @app.post("/api/lireek/artists/{artist_id}/set-image")
-    async def set_artist_image(artist_id: int, body: dict):
+    async def set_artist_image(artist_id: int, body: SetImageRequest):
         """Set a custom image URL for an artist (user override for wrong images)."""
         from acestep.api.lireek.lireek_db import set_artist_custom_image
-        image_url = body.get("image_url", "").strip()
+        image_url = body.image_url.strip()
         if not image_url:
             raise HTTPException(status_code=400, detail="image_url is required")
         if not set_artist_custom_image(artist_id, image_url):
@@ -134,12 +137,16 @@ def register_lireek_routes(app: FastAPI) -> None:
             album_name = ls.get("album")
             artist_name = ls.get("artist_name", "")
             if not album_name:
+                logger.info("[refresh-album-image] No album name for ls_id=%d, skipping", ls_id)
                 raise HTTPException(status_code=400, detail="No album name — cannot search for cover art")
+            logger.info("[refresh-album-image] Searching Genius for '%s' by '%s'", album_name, artist_name)
             image_url = get_album_cover_art(artist_name, album_name)
             if image_url:
                 update_lyrics_set_image(ls_id, image_url)
+                logger.info("[refresh-album-image] Found cover: %s", image_url)
                 return {"image_url": image_url}
-            raise HTTPException(status_code=404, detail="Could not find album cover on Genius")
+            logger.warning("[refresh-album-image] No cover found for '%s' by '%s'", album_name, artist_name)
+            raise HTTPException(status_code=404, detail=f"Could not find cover art for '{album_name}' by '{artist_name}'")
         finally:
             if conn:
                 conn.close()

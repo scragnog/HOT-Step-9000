@@ -54,7 +54,7 @@ export const SourceLyricsTab: React.FC<SourceLyricsTabProps> = ({ album, onDelet
                 {song.title}
               </span>
               <span className="text-xs text-zinc-500">
-                {song.lyrics.split('\n').length} lines
+                {(song.lyrics || '').split('\n').length} lines
               </span>
             </button>
 
@@ -63,7 +63,7 @@ export const SourceLyricsTab: React.FC<SourceLyricsTabProps> = ({ album, onDelet
               <div className="border-t border-white/5">
                 <div className="px-4 py-3">
                   <pre className="text-sm text-zinc-300 whitespace-pre-wrap font-sans leading-relaxed max-h-96 overflow-y-auto">
-                    {song.lyrics}
+                    {song.lyrics || '(No lyrics available)'}
                   </pre>
                 </div>
                 <div className="flex items-center gap-2 px-4 py-2 border-t border-white/5 bg-white/[0.01]">
