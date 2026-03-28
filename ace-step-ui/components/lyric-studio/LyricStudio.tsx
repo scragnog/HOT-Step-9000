@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { usePersistedState } from '../../hooks/usePersistedState';
 import {
   Music, Users, Disc3, FileText, Sparkles, ChevronRight, ChevronDown,
-  Plus, Trash2, Download, RefreshCw, Loader2, Search, AlertTriangle, X, Wand2, Play, Settings2, Save,
+  Plus, Trash2, Download, RefreshCw, Loader2, Search, AlertTriangle, X, Wand2, Play, Settings2, Save, ListOrdered,
 } from 'lucide-react';
 import { lireekApi, Artist, LyricsSet, Profile, Generation, SongLyric, AlbumPreset } from '../../services/lyricStudioApi';
 import { TripleProviderSelector, ModelSelections, loadSelections, saveSelections } from './ProviderSelector';
@@ -14,6 +14,7 @@ import {
   startStreamRefine,
   doSkipThinking,
 } from '../../stores/streamingStore';
+import { QueuePanel } from './QueuePanel';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -74,6 +75,8 @@ export const LyricStudio: React.FC = () => {
   const [toast, setToast] = useState<string | null>(null);
   // ── Streaming state (from global store — survives navigation) ──────
   const stream = useStreamingStore();
+  // Queue modal
+  const [queueOpen, setQueueOpen] = useState(false);
 
   // Album presets
   const [presets, setPresets] = useState<Record<number, AlbumPreset | null>>({});
@@ -380,6 +383,29 @@ export const LyricStudio: React.FC = () => {
             <h2 className="text-base font-bold text-white">Lyric Studio</h2>
           </div>
           <div className="flex items-center gap-1">
+            {/* Queue badge */}
+            {(() => {
+              const activeQ = stream.queue.filter(q => q.status === 'running' || q.status === 'pending');
+              return activeQ.length > 0 ? (
+                <button
+                  onClick={() => setQueueOpen(true)}
+                  className="relative p-1.5 rounded-lg hover:bg-white/5 text-pink-400 transition-colors"
+                  title={`Queue: ${activeQ.length} active`}
+                >
+                  <ListOrdered className="w-4 h-4" />
+                  <span className="absolute -top-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-pink-500 text-[9px] text-white font-bold flex items-center justify-center">
+                    {activeQ.length}
+                  </span>
+                </button>
+              ) : null;
+            })()}
+            <button
+              onClick={() => setQueueOpen(true)}
+              className="p-1.5 rounded-lg hover:bg-white/5 text-zinc-400 hover:text-white transition-colors"
+              title="Bulk Queue"
+            >
+              <ListOrdered className="w-4 h-4" />
+            </button>
             <button
               onClick={loadAll}
               className="p-1.5 rounded-lg hover:bg-white/5 text-zinc-400 hover:text-white transition-colors"
@@ -998,6 +1024,18 @@ export const LyricStudio: React.FC = () => {
           {toast}
         </div>
       )}
+
+      {/* Queue Modal */}
+      <QueuePanel
+        open={queueOpen}
+        onClose={() => setQueueOpen(false)}
+        artists={artists}
+        lyricsSets={lyricsSets}
+        profiles={profiles}
+        profilingModel={modelSelections.profiling}
+        generationModel={modelSelections.generation}
+        refinementModel={modelSelections.refinement}
+      />
     </div>
   );
 };
