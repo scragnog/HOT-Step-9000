@@ -20,10 +20,11 @@ interface RecordingsTabProps {
   onClearFilter?: () => void;
   onSongCountChange?: (count: number) => void;
   refreshKey?: number;
+  artistName?: string;
 }
 
 export const RecordingsTab: React.FC<RecordingsTabProps> = ({
-  generations, onPlaySong, showToast, filterGenerationId, onClearFilter, onSongCountChange, refreshKey = 0,
+  generations, onPlaySong, showToast, filterGenerationId, onClearFilter, onSongCountChange, refreshKey = 0, artistName,
 }) => {
   const { token } = useAuth();
   const [groups, setGroups] = useState<SongGroup[]>([]);
@@ -96,7 +97,11 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                   const jobRes = await generateApi.getStatus(ag.hotstep_job_id, token);
                   console.log(`[RecordingsTab] Job ${ag.hotstep_job_id}: status=${jobRes?.status}, audioUrls=${jobRes?.result?.audioUrls?.length ?? 0}`);
                   if (jobRes?.status === 'succeeded' && jobRes.result?.audioUrls) {
-                    for (const audioUrl of jobRes.result.audioUrls) {
+                    const originalPaths: string[] | undefined = jobRes.result.original_audio_paths;
+                    for (let ai = 0; ai < jobRes.result.audioUrls.length; ai++) {
+                      const audioUrl = jobRes.result.audioUrls[ai];
+                      const genParams: Record<string, any> = {};
+                      if (originalPaths?.[ai]) genParams.originalAudioUrl = originalPaths[ai];
                       songs.push({
                         id: ag.hotstep_job_id,
                         title: gen.title || 'Untitled',
@@ -107,6 +112,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                         createdAt: new Date(ag.created_at),
                         tags: [],
                         audioUrl,
+                        generationParams: Object.keys(genParams).length > 0 ? genParams : undefined,
                       });
                     }
                   } else {
@@ -196,22 +202,43 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
   }, [showToast]);
 
   // ── Download handler ──
-  const handleDownload = useCallback((song: Song, format: DownloadFormat, _version: DownloadVersion) => {
+  const handleDownload = useCallback((song: Song, format: DownloadFormat, version: DownloadVersion) => {
     if (!song.audioUrl) return;
-    const params = new URLSearchParams({
-      audioUrl: song.audioUrl,
-      format,
-      title: song.title || 'download',
-    });
-    const url = `/api/songs/download?${params.toString()}`;
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${song.title || 'download'}.${format === 'opus' ? 'ogg' : format}`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
+    const prefix = artistName ? `${artistName} - ` : '';
+    const baseTitle = `${prefix}${song.title || 'download'}`;
+
+    const downloadSingleURL = (url: string, suffix: string) => {
+      const targetUrl = new URL('/api/songs/download', window.location.origin);
+      targetUrl.searchParams.set('audioUrl', url);
+      targetUrl.searchParams.set('title', `${baseTitle}${suffix}`);
+      targetUrl.searchParams.set('format', format);
+      if (format === 'mp3') {
+        const br = localStorage.getItem('mp3_export_bitrate');
+        if (br) targetUrl.searchParams.set('mp3Bitrate', br);
+      }
+      if (format === 'opus') {
+        const br = localStorage.getItem('opus_export_bitrate');
+        if (br) targetUrl.searchParams.set('opusBitrate', br);
+      }
+      const a = document.createElement('a');
+      a.href = targetUrl.toString();
+      a.download = `${baseTitle}${suffix}.${format === 'opus' ? 'ogg' : format}`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    };
+
+    if (version === 'mastered' || version === 'both') {
+      downloadSingleURL(song.audioUrl, '');
+    }
+    if (version === 'original' || version === 'both') {
+      const origUrl = song.generationParams?.originalAudioUrl || (song as any).originalAudioUrl;
+      if (origUrl) {
+        setTimeout(() => downloadSingleURL(origUrl, ' (Unmastered)'), version === 'both' ? 500 : 0);
+      }
+    }
     showToast(`Downloading ${format.toUpperCase()}...`);
-  }, [showToast]);
+  }, [showToast, artistName]);
 
   if (loading) {
     return (
@@ -354,7 +381,8 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
         onDownload={(format, version) => {
           if (downloadSong) handleDownload(downloadSong, format, version);
         }}
-        songTitle={downloadSong?.title}
+        songTitle={downloadSong ? `${artistName ? artistName + ' - ' : ''}${downloadSong.title || 'Untitled'}` : undefined}
+        hasOriginal={!!(downloadSong?.generationParams?.originalAudioUrl || (downloadSong as any)?.originalAudioUrl)}
       />
     </>
   );

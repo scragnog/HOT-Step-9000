@@ -578,6 +578,7 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
                   onClearFilter={() => setRecordingsFilter(null)}
                   onSongCountChange={setSongCount}
                   refreshKey={recordingsRefreshKey}
+                  artistName={nav.selectedArtist?.name}
                 />
               </div>
             </div>

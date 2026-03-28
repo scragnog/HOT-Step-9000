@@ -408,6 +408,7 @@ export interface GenerationJob {
     duration?: number;
     keyScale?: string;
     timeSignature?: string;
+    original_audio_paths?: string[];
   };
   error?: string;
 }
