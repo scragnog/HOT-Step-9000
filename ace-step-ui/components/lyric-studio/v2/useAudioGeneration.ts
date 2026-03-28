@@ -123,6 +123,7 @@ export function useAudioGeneration({ profiles, showToast, onJobLinked }: UseAudi
         duration: gen.duration || 180,
       };
       if (gen.bpm) params.bpm = gen.bpm;
+      if (gen.subject) params.coverArtSubject = gen.subject;
       if (gen.key) params.keyScale = gen.key;
 
       // 3) Merge persisted CreatePanel settings
