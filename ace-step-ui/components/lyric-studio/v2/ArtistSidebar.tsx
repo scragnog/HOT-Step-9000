@@ -1,0 +1,81 @@
+import React from 'react';
+import { ChevronLeft } from 'lucide-react';
+import { Artist } from '../../../services/lyricStudioApi';
+
+interface ArtistSidebarProps {
+  artists: Artist[];
+  selectedArtistId: number;
+  onSelectArtist: (artist: Artist) => void;
+  onBack: () => void;
+}
+
+export const ArtistSidebar: React.FC<ArtistSidebarProps> = ({
+  artists, selectedArtistId, onSelectArtist, onBack,
+}) => {
+  const [imageErrors, setImageErrors] = React.useState<Set<number>>(new Set());
+
+  const gradient = (name: string) => {
+    const hash = name.split('').reduce((a, c) => ((a << 5) - a + c.charCodeAt(0)) | 0, 0);
+    const h1 = Math.abs(hash) % 360;
+    return `hsl(${h1}, 50%, 30%)`;
+  };
+
+  return (
+    <div className="flex flex-col h-full bg-zinc-950/50">
+      {/* Back button */}
+      <button
+        onClick={onBack}
+        className="flex items-center gap-2 px-4 py-3 text-sm text-zinc-400 hover:text-white hover:bg-white/5 border-b border-white/5 transition-colors"
+      >
+        <ChevronLeft className="w-4 h-4" />
+        All Artists
+      </button>
+
+      {/* Artist list */}
+      <div className="flex-1 overflow-y-auto py-2">
+        {artists.map((artist) => {
+          const isSelected = artist.id === selectedArtistId;
+          return (
+            <button
+              key={artist.id}
+              className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all ${
+                isSelected
+                  ? 'bg-pink-500/10 border-l-2 border-pink-500'
+                  : 'hover:bg-white/5 border-l-2 border-transparent'
+              }`}
+              onClick={() => onSelectArtist(artist)}
+            >
+              {/* Mini avatar */}
+              <div className="w-8 h-8 flex-shrink-0 rounded-lg overflow-hidden">
+                {artist.image_url && !imageErrors.has(artist.id) ? (
+                  <img
+                    src={artist.image_url}
+                    alt={artist.name}
+                    className="w-full h-full object-cover"
+                    onError={() => setImageErrors(prev => new Set(prev).add(artist.id))}
+                  />
+                ) : (
+                  <div
+                    className="w-full h-full flex items-center justify-center text-xs font-bold text-white/60"
+                    style={{ backgroundColor: gradient(artist.name) }}
+                  >
+                    {artist.name.charAt(0).toUpperCase()}
+                  </div>
+                )}
+              </div>
+
+              <div className="min-w-0 flex-1">
+                <p className={`text-sm font-medium truncate ${isSelected ? 'text-pink-400' : 'text-zinc-300'}`}>
+                  {artist.name}
+                </p>
+                <p className="text-[11px] text-zinc-500">
+                  {artist.lyrics_set_count ?? 0} album{(artist.lyrics_set_count ?? 0) !== 1 ? 's' : ''}
+                </p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+};

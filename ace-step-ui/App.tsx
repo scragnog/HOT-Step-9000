@@ -26,6 +26,7 @@ import { RefineModal } from './components/RefineModal';
 import { MasteringConsoleModal, MasteringParams as MasteringParamsType } from './components/MasteringConsoleModal';
 import { SearchPage } from './components/SearchPage';
 import { LyricStudio } from './components/lyric-studio/LyricStudio';
+import { LyricStudioV2 } from './components/lyric-studio/v2/LyricStudioV2';
 import { LlmSettingsModal } from './components/LlmSettingsModal';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import DebugPanel from './components/DebugPanel';
@@ -1970,7 +1971,9 @@ function AppContent() {
         );
 
       case 'lyric-studio':
-        return <LyricStudio onPlaySong={playSong} />;
+        return localStorage.getItem('lyric-studio-v2') === 'true'
+          ? <LyricStudioV2 onPlaySong={playSong} />
+          : <LyricStudio onPlaySong={playSong} />;
 
 
       case 'create':
