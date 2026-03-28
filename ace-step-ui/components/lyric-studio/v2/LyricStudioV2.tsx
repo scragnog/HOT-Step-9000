@@ -97,7 +97,7 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
   }, []);
 
   // ── Load artists ──
-  const loadArtists = useCallback(async () => {
+  const loadArtists = useCallback(async (): Promise<Artist[]> => {
     setArtistsLoading(true);
     let artistsList: typeof artists = [];
     try {
@@ -127,20 +127,20 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
       };
       fetchNext(0);
     }
+    return artistsList;
   }, []);
 
   // ── Initial load: artists + URL restore ──
   useEffect(() => {
     const init = async () => {
-      await loadArtists();
+      const artistsList = await loadArtists();
       // Restore navigation from URL
       const parsed = parseUrl(window.location.pathname);
       if (parsed.artistId) {
         isRestoringUrl.current = true;
         try {
-          // Load artist
-          const artistRes = await lireekApi.listArtists();
-          const artist = artistRes.artists.find(a => a.id === parsed.artistId);
+          // Use the already-loaded artists list (no redundant fetch)
+          const artist = artistsList.find(a => a.id === parsed.artistId);
           if (!artist) return;
 
           // Load albums
@@ -155,19 +155,8 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
             }
             setNav({ level: 'album-detail', selectedArtist: artist, selectedAlbum: album });
             if (parsed.tab) setActiveTab(parsed.tab);
-            // Load album detail data
-            const fullAlbum = await lireekApi.getLyricsSet(album.id);
-            setNav(prev => ({ ...prev, selectedAlbum: fullAlbum }));
-            const profileRes = await lireekApi.listProfiles(album.id, true);
-            setProfiles(profileRes.profiles);
-            const allGens: Generation[] = [];
-            for (const p of profileRes.profiles) {
-              try {
-                const genRes = await lireekApi.listGenerations(p.id, true);
-                allGens.push(...genRes.generations);
-              } catch { /* no gens */ }
-            }
-            setGenerations(allGens);
+            // Load album data in parallel
+            await loadAlbumData(album.id);
           } else {
             setNav({ level: 'albums', selectedArtist: artist, selectedAlbum: null });
           }
@@ -215,21 +204,23 @@ export const LyricStudioV2: React.FC<{ onPlaySong?: (song: Song) => void }> = ({
   // ── Load album detail data ──
   const loadAlbumData = useCallback(async (albumId: number) => {
     try {
-      // Fetch the full lyrics set (with actual lyrics text for SourceLyricsTab)
-      const fullAlbum = await lireekApi.getLyricsSet(albumId);
+      // Fetch album details and profiles in parallel
+      const [fullAlbum, profileRes] = await Promise.all([
+        lireekApi.getLyricsSet(albumId),
+        lireekApi.listProfiles(albumId, true),
+      ]);
       setNav(prev => ({ ...prev, selectedAlbum: fullAlbum }));
-
-      // Fetch profiles with full profile_data
-      const profileRes = await lireekApi.listProfiles(albumId, true);
       setProfiles(profileRes.profiles);
 
-      // Load generations with full lyrics from all profiles under this album
+      // Load all profile generations in parallel
+      const genResults = await Promise.allSettled(
+        profileRes.profiles.map(p => lireekApi.listGenerations(p.id, true))
+      );
       const allGens: Generation[] = [];
-      for (const p of profileRes.profiles) {
-        try {
-          const genRes = await lireekApi.listGenerations(p.id, true);
-          allGens.push(...genRes.generations);
-        } catch { /* no generations for this profile */ }
+      for (const result of genResults) {
+        if (result.status === 'fulfilled') {
+          allGens.push(...result.value.generations);
+        }
       }
       setGenerations(allGens);
     } catch (err) {

@@ -140,6 +140,14 @@ export const WrittenSongsTab: React.FC<WrittenSongsTabProps> = ({
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); onGenerateAudio(gen); }}
+                      className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-emerald-400 hover:bg-emerald-500/10 transition-colors"
+                      title="Generate audio from these lyrics"
+                    >
+                      <Play className="w-3 h-3" />
+                      Audio
+                    </button>
                     {onViewRecordings && (
                       <button
                         onClick={(e) => { e.stopPropagation(); onViewRecordings(gen.id); }}
