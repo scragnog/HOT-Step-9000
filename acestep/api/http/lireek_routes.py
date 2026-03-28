@@ -651,6 +651,36 @@ def register_lireek_routes(app: FastAPI) -> None:
         from acestep.api.lireek.lireek_db import get_audio_generations
         return {"audio_generations": get_audio_generations(generation_id)}
 
+    # ── Song Management ───────────────────────────────────────────────────
+
+    @app.delete("/api/lireek/lyrics-sets/{lyrics_set_id}/songs/{song_index}")
+    async def remove_song(lyrics_set_id: int, song_index: int):
+        """Remove a song from a lyrics set by index."""
+        from acestep.api.lireek.lireek_db import remove_song_from_set
+        result = remove_song_from_set(lyrics_set_id, song_index)
+        if not result:
+            raise HTTPException(404, "Lyrics set or song index not found")
+        return result
+
+    # ── Generation Editing ────────────────────────────────────────────────
+
+    @app.patch("/api/lireek/generations/{generation_id}")
+    async def patch_generation(generation_id: int, body: dict):
+        """Partial update of a generation's fields."""
+        from acestep.api.lireek.lireek_db import update_generation
+        result = update_generation(generation_id, **body)
+        if not result:
+            raise HTTPException(404, "Generation not found or no valid fields")
+        return result
+
+    @app.delete("/api/lireek/generations/{generation_id}")
+    async def delete_generation_endpoint(generation_id: int):
+        """Delete a single generation."""
+        from acestep.api.lireek.lireek_db import delete_generation
+        if not delete_generation(generation_id):
+            raise HTTPException(404, "Generation not found")
+        return {"deleted": True}
+
     # ── Prompt Management ─────────────────────────────────────────────────
 
     # Register all prompt defaults on mount

@@ -493,6 +493,28 @@ def update_generation_metadata(
         conn.close()
 
 
+def update_generation(generation_id: int, **fields) -> Optional[dict[str, Any]]:
+    """General partial update. Accepts any combination of: title, subject, bpm, key, caption, duration, lyrics."""
+    allowed = {"title", "subject", "bpm", "key", "caption", "duration", "lyrics"}
+    updates = {k: v for k, v in fields.items() if k in allowed and v is not None}
+    if not updates:
+        return None
+
+    conn = _connect()
+    try:
+        set_clause = ", ".join(f"{k} = ?" for k in updates)
+        values = list(updates.values()) + [generation_id]
+        conn.execute(
+            f"UPDATE generations SET {set_clause} WHERE id = ?", values
+        )
+        conn.commit()
+
+        row = conn.execute("SELECT * FROM generations WHERE id = ?", (generation_id,)).fetchone()
+        return _row_to_dict(row) if row else None
+    finally:
+        conn.close()
+
+
 def delete_generation(generation_id: int) -> bool:
     """Delete a single generation by ID."""
     conn = _connect()

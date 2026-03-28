@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { usePersistedState } from '../../hooks/usePersistedState';
 import {
   Music, Users, Disc3, FileText, Sparkles, ChevronRight, ChevronDown,
-  Plus, Trash2, Download, RefreshCw, Loader2, Search, AlertTriangle, X, Wand2, Play, Settings2, Save, ListOrdered, Code2,
+  Plus, Trash2, Download, RefreshCw, Loader2, Search, AlertTriangle, X, Wand2, Play, Settings2, Save, ListOrdered, Code2, Pencil,
 } from 'lucide-react';
 import { lireekApi, Artist, LyricsSet, Profile, Generation, SongLyric, AlbumPreset } from '../../services/lyricStudioApi';
 import { TripleProviderSelector, ModelSelections, loadSelections, saveSelections } from './ProviderSelector';
@@ -277,6 +277,32 @@ export const LyricStudio: React.FC = () => {
       await loadAll();
     } catch (err) {
       showToast(`Delete failed: ${(err as Error).message}`);
+    }
+  };
+
+  const handleRemoveSong = async (lyricsSetId: number, songIndex: number, songTitle: string) => {
+    if (!confirm(`Remove "${songTitle}" from this album?`)) return;
+    try {
+      await lireekApi.removeSong(lyricsSetId, songIndex);
+      showToast(`Removed "${songTitle}"`);
+      await loadAll();
+    } catch (err) {
+      showToast(`Remove failed: ${(err as Error).message}`);
+    }
+  };
+
+  const handleSaveGeneration = async (genId: number, field: string, value: string | number) => {
+    try {
+      const res = await fetch(`/api/lireek/generations/${genId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [field]: value }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+      showToast(`Updated ${field}`);
+      await loadAll();
+    } catch (err) {
+      showToast(`Update failed: ${(err as Error).message}`);
     }
   };
 
@@ -720,7 +746,7 @@ export const LyricStudio: React.FC = () => {
               {/* Songs list */}
               <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Songs</h3>
               <div className="space-y-1">
-                {songs.map((song, i) => {
+              {songs.map((song, i) => {
                   const songKey = `${ls.id}-${i}`;
                   const isExpanded = expandedSong === songKey;
                   return (
@@ -733,6 +759,13 @@ export const LyricStudio: React.FC = () => {
                         <span className="text-xs text-zinc-600 w-5 text-right">{i + 1}</span>
                         <span className="text-sm text-white truncate flex-1">{song.title}</span>
                         <span className="text-[10px] text-zinc-600">{song.lyrics?.length || 0} chars</span>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleRemoveSong(ls.id, i, song.title); }}
+                          className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-red-500/20 text-zinc-500 hover:text-red-400 transition-all"
+                          title="Remove this song"
+                        >
+                          <X className="w-3 h-3" />
+                        </button>
                       </div>
                       {isExpanded && song.lyrics && (
                         <pre className="mx-3 mt-1 mb-2 p-3 rounded-lg bg-black/40 border border-white/5 text-xs text-zinc-300 whitespace-pre-wrap font-mono leading-relaxed max-h-[40vh] overflow-y-auto scrollbar-hide">
@@ -928,30 +961,68 @@ export const LyricStudio: React.FC = () => {
               <div className="flex items-center gap-3 mb-4">
                 <FileText className="w-6 h-6 text-green-400" />
                 <div className="flex-1">
-                  <h2 className="text-xl font-bold text-white">{gen.title || 'Untitled'}</h2>
+                  <input
+                    className="text-xl font-bold text-white bg-transparent border-b border-transparent hover:border-white/20 focus:border-pink-500/50 focus:outline-none w-full transition-colors"
+                    defaultValue={gen.title || 'Untitled'}
+                    onBlur={(e) => { if (e.target.value !== gen.title) handleSaveGeneration(gen.id, 'title', e.target.value); }}
+                  />
                   <p className="text-sm text-zinc-400">
                     {gen.artist_name && `${gen.artist_name} · `}
                     {gen.provider}/{gen.model} · {timeAgo(gen.created_at)}
                     {gen.parent_generation_id && ' · ✨ Refined'}
                   </p>
                 </div>
+                <Pencil className="w-4 h-4 text-zinc-600" title="All fields are editable" />
               </div>
 
-              {/* Metadata badges */}
-              <div className="flex flex-wrap gap-2 mb-4">
-                {gen.subject && <MetaBadge label="Subject" value={gen.subject} color="amber" />}
-                {gen.bpm && <MetaBadge label="BPM" value={String(gen.bpm)} color="pink" />}
-                {gen.key && <MetaBadge label="Key" value={gen.key} color="blue" />}
-                {gen.duration && <MetaBadge label="Duration" value={`${gen.duration}s`} color="purple" />}
-              </div>
-
-              {/* Caption */}
-              {gen.caption && (
-                <div className="mb-4 px-3 py-2 rounded-lg bg-white/5 border border-white/5">
-                  <span className="text-[10px] text-zinc-500 uppercase tracking-wider">Caption</span>
-                  <p className="text-sm text-zinc-300 mt-0.5">{gen.caption}</p>
+              {/* Editable metadata */}
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/5">
+                  <label className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Subject</label>
+                  <input
+                    className="w-full bg-transparent text-sm text-amber-300 focus:outline-none border-b border-transparent hover:border-white/20 focus:border-amber-500/50 transition-colors"
+                    defaultValue={gen.subject || ''}
+                    onBlur={(e) => { if (e.target.value !== (gen.subject || '')) handleSaveGeneration(gen.id, 'subject', e.target.value); }}
+                  />
                 </div>
-              )}
+                <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/5">
+                  <label className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">BPM</label>
+                  <input
+                    type="number"
+                    className="w-full bg-transparent text-sm text-pink-300 focus:outline-none border-b border-transparent hover:border-white/20 focus:border-pink-500/50 transition-colors"
+                    defaultValue={gen.bpm || 0}
+                    onBlur={(e) => { const v = parseInt(e.target.value) || 0; if (v !== gen.bpm) handleSaveGeneration(gen.id, 'bpm', v); }}
+                  />
+                </div>
+                <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/5">
+                  <label className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Key</label>
+                  <input
+                    className="w-full bg-transparent text-sm text-blue-300 focus:outline-none border-b border-transparent hover:border-white/20 focus:border-blue-500/50 transition-colors"
+                    defaultValue={gen.key || ''}
+                    onBlur={(e) => { if (e.target.value !== (gen.key || '')) handleSaveGeneration(gen.id, 'key', e.target.value); }}
+                  />
+                </div>
+                <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/5">
+                  <label className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Duration (seconds)</label>
+                  <input
+                    type="number"
+                    className="w-full bg-transparent text-sm text-purple-300 focus:outline-none border-b border-transparent hover:border-white/20 focus:border-purple-500/50 transition-colors"
+                    defaultValue={gen.duration || 0}
+                    onBlur={(e) => { const v = parseInt(e.target.value) || 0; if (v !== gen.duration) handleSaveGeneration(gen.id, 'duration', v); }}
+                  />
+                </div>
+              </div>
+
+              {/* Editable caption */}
+              <div className="mb-4 px-3 py-2 rounded-lg bg-white/5 border border-white/5">
+                <label className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Caption</label>
+                <textarea
+                  className="w-full bg-transparent text-sm text-zinc-300 focus:outline-none border-b border-transparent hover:border-white/20 focus:border-pink-500/50 transition-colors resize-none"
+                  rows={2}
+                  defaultValue={gen.caption || ''}
+                  onBlur={(e) => { if (e.target.value !== (gen.caption || '')) handleSaveGeneration(gen.id, 'caption', e.target.value); }}
+                />
+              </div>
 
               {/* Actions */}
               <div className="flex items-center gap-2 mb-6">
@@ -987,11 +1058,14 @@ export const LyricStudio: React.FC = () => {
                 </button>
               </div>
 
-              {/* Lyrics */}
+              {/* Editable lyrics */}
               <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-3">Lyrics</h3>
-              <pre className="p-4 rounded-xl bg-black/40 border border-white/5 text-sm text-zinc-200 whitespace-pre-wrap font-mono leading-relaxed max-h-[60vh] overflow-y-auto scrollbar-hide">
-                {gen.lyrics}
-              </pre>
+              <textarea
+                className="w-full p-4 rounded-xl bg-black/40 border border-white/5 text-sm text-zinc-200 font-mono leading-relaxed focus:outline-none focus:border-pink-500/30 resize-y transition-colors scrollbar-hide"
+                style={{ minHeight: '300px' }}
+                defaultValue={gen.lyrics}
+                onBlur={(e) => { if (e.target.value !== gen.lyrics) handleSaveGeneration(gen.id, 'lyrics', e.target.value); }}
+              />
             </div>
           );
         })()}

@@ -224,6 +224,10 @@ export const lireekApi = {
   }): Promise<{ job_id: string }> =>
     api('/api/generate', { method: 'POST', body: params }),
 
+  // ── Song Management ────────────────────────────────────────────────────
+  removeSong: (lyricsSetId: number, songIndex: number): Promise<any> =>
+    api(`/api/lireek/lyrics-sets/${lyricsSetId}/songs/${songIndex}`, { method: 'DELETE' }),
+
   // ── Prompts ───────────────────────────────────────────────────────────
   listPrompts: (): Promise<{ prompts: { name: string; source: string; content: string; has_default: boolean }[] }> =>
     api('/api/lireek/prompts'),
