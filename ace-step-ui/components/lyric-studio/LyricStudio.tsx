@@ -40,9 +40,11 @@ function timeAgo(dateStr: string): string {
   return `${Math.floor(diff / 86400)}d ago`;
 }
 
+import { Song } from '../../types';
+
 // ── Main Component ──────────────────────────────────────────────────────────
 
-export const LyricStudio: React.FC = () => {
+export const LyricStudio: React.FC<{ onPlaySong?: (song: Song) => void }> = ({ onPlaySong }) => {
   const { token } = useAuth();
   // ── Data state ──────────────────────────────────────────────────────────
   const [artists, setArtists] = useState<Artist[]>([]);
@@ -1491,7 +1493,7 @@ export const LyricStudio: React.FC = () => {
               />
 
               {/* ── Linked Audio Generations ── */}
-              <AudioGenSection genId={gen.id} audioGens={audioGens} fetchAudioGens={fetchAudioGens} token={token} />
+              <AudioGenSection genId={gen.id} audioGens={audioGens} fetchAudioGens={fetchAudioGens} token={token} onPlaySong={onPlaySong} genTitle={gen.title} genCaption={gen.caption} />
             </div>
           );
         })()}
@@ -1696,7 +1698,10 @@ const AudioGenSection: React.FC<{
   audioGens: Record<number, Array<{ job_id: string; created_at: string; status?: string; audioUrl?: string }>>;
   fetchAudioGens: (genId: number) => void;
   token: string;
-}> = ({ genId, audioGens, fetchAudioGens, token }) => {
+  onPlaySong?: (song: Song) => void;
+  genTitle?: string;
+  genCaption?: string;
+}> = ({ genId, audioGens, fetchAudioGens, token, onPlaySong, genTitle, genCaption }) => {
   const entries = audioGens[genId];
   const [loaded, setLoaded] = useState(false);
 
@@ -1733,6 +1738,22 @@ const AudioGenSection: React.FC<{
     );
   };
 
+  const handlePlay = (ag: { job_id: string; created_at: string; status?: string; audioUrl?: string }, index: number) => {
+    if (!ag.audioUrl || !onPlaySong) return;
+    const song: Song = {
+      id: `lireek_${genId}_${ag.job_id}`,
+      title: genTitle || `Generation ${index + 1}`,
+      lyrics: '',
+      style: genCaption || '',
+      coverUrl: '',
+      duration: '',
+      createdAt: new Date(ag.created_at),
+      tags: [],
+      audioUrl: ag.audioUrl,
+    };
+    onPlaySong(song);
+  };
+
   return (
     <div className="mt-4">
       <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-2 flex items-center gap-2">
@@ -1755,12 +1776,13 @@ const AudioGenSection: React.FC<{
               </div>
             )}
             {ag.status === 'succeeded' && ag.audioUrl && (
-              <audio
-                controls
-                src={ag.audioUrl}
-                className="w-full h-8 rounded"
-                style={{ filter: 'hue-rotate(300deg)' }}
-              />
+              <button
+                onClick={() => handlePlay(ag, i)}
+                className="flex items-center gap-2 w-full px-3 py-2 rounded-lg bg-green-500/10 hover:bg-green-500/20 text-green-400 text-sm font-medium transition-colors"
+              >
+                <Play className="w-4 h-4 fill-current" />
+                Play in Player
+              </button>
             )}
           </div>
         ))}

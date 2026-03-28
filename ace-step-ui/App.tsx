@@ -1970,7 +1970,7 @@ function AppContent() {
         );
 
       case 'lyric-studio':
-        return <LyricStudio />;
+        return <LyricStudio onPlaySong={playSong} />;
 
 
       case 'create':
