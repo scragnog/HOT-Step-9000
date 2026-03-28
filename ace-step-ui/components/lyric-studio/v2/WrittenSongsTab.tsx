@@ -57,6 +57,7 @@ export const WrittenSongsTab: React.FC<WrittenSongsTabProps> = ({
   const handleSaveField = async (genId: number, field: string, value: any) => {
     try {
       await lireekApi.updateMetadata(genId, { [field]: value });
+      onRefresh();
     } catch (err: any) {
       showToast(`Failed to save: ${err.message}`);
     }

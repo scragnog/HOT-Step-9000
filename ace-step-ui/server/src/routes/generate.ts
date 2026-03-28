@@ -884,8 +884,8 @@ router.get('/status/:jobId', authMiddleware, async (req: AuthenticatedRequest, r
                 await pool.query(
                   `INSERT INTO songs (id, user_id, title, lyrics, style, caption, audio_url,
                                       duration, bpm, key_scale, time_signature, tags, is_public, model, generation_params,
-                                      created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, datetime('now'), datetime('now'))`,
+                                      source, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, datetime('now'), datetime('now'))`,
                   [
                     songId,
                     req.user!.id,
@@ -901,6 +901,7 @@ router.get('/status/:jobId', authMiddleware, async (req: AuthenticatedRequest, r
                     JSON.stringify([]),
                     ditModelVal,
                     JSON.stringify(perSongParams),
+                    params.source || 'create',
                   ]
                 );
 
@@ -950,8 +951,8 @@ router.get('/status/:jobId', authMiddleware, async (req: AuthenticatedRequest, r
                 await pool.query(
                   `INSERT INTO songs (id, user_id, title, lyrics, style, caption, audio_url,
                                       duration, bpm, key_scale, time_signature, tags, is_public, model, generation_params,
-                                      created_at, updated_at)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, datetime('now'), datetime('now'))`,
+                                      source, created_at, updated_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, datetime('now'), datetime('now'))`,
                   [
                     songId,
                     req.user!.id,
@@ -967,6 +968,7 @@ router.get('/status/:jobId', authMiddleware, async (req: AuthenticatedRequest, r
                     JSON.stringify([]),
                     ditModelVal,
                     JSON.stringify(perSongParams),
+                    params.source || 'create',
                   ]
                 );
                 localPaths.push(audioUrl);

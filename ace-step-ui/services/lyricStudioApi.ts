@@ -252,6 +252,9 @@ export const lireekApi = {
   getAudioGenerations: (generationId: number): Promise<{ audio_generations: AudioGeneration[] }> =>
     api(`/api/lireek/generations/${generationId}/audio`),
 
+  deleteAudioGeneration: (agId: number): Promise<{ deleted: boolean }> =>
+    api(`/api/lireek/audio-generations/${agId}`, { method: 'DELETE' }),
+
   // ── Direct Audio Generation ─────────────────────────────────────────
   submitAudioGeneration: (params: {
     lyrics: string;

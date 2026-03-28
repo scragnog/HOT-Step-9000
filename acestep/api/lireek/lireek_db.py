@@ -795,6 +795,19 @@ def get_audio_generations(generation_id: int) -> list[dict[str, Any]]:
         conn.close()
 
 
+def delete_audio_generation(ag_id: int) -> bool:
+    """Delete an audio generation record by ID."""
+    conn = _connect()
+    try:
+        cursor = conn.execute(
+            "DELETE FROM audio_generations WHERE id = ?", (ag_id,)
+        )
+        conn.commit()
+        return cursor.rowcount > 0
+    finally:
+        conn.close()
+
+
 # ── Settings ──────────────────────────────────────────────────────────────────
 
 def get_setting(key: str, default: str = "") -> str:

@@ -182,7 +182,10 @@ export function useAudioGeneration({ profiles, showToast, onJobLinked }: UseAudi
         params.masteringParams = { mode: 'matchering', reference_file: preset.matchering_reference_path };
       }
 
-      // 7) Start generation
+      // 7) Mark as Lyric Studio generation
+      params.source = 'lyric-studio';
+
+      // 8) Start generation
       const res = await generateApi.startGeneration(params as any, token);
       const jobId = res.jobId || (res as any).job_id;
       showToast(`Audio job queued: ${jobId}`);

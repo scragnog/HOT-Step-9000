@@ -188,6 +188,19 @@ function migrate(): void {
       console.error('Failed to add model column:', error);
     }
   }
+
+  try {
+    // Add source column to songs table if it doesn't exist
+    db.exec(`ALTER TABLE songs ADD COLUMN source TEXT DEFAULT 'create'`);
+    console.log('Added source column to songs table');
+  } catch (error) {
+    const errorMsg = String(error);
+    if (errorMsg.includes('duplicate column name')) {
+      console.log('Column source already exists in songs table');
+    } else {
+      console.error('Failed to add source column:', error);
+    }
+  }
 }
 
 // Run migrations

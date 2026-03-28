@@ -391,7 +391,7 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
               COALESCE(u.username, 'Anonymous') as creator
        FROM songs s
        LEFT JOIN users u ON s.user_id = u.id
-       WHERE s.user_id = $1
+       WHERE s.user_id = $1 AND (s.source IS NULL OR s.source = 'create')
        ORDER BY s.created_at DESC`,
       [req.user!.id]
     );

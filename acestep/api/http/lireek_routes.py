@@ -785,6 +785,16 @@ def register_lireek_routes(app: FastAPI) -> None:
         from acestep.api.lireek.lireek_db import get_audio_generations
         return {"audio_generations": get_audio_generations(generation_id)}
 
+    @app.delete("/api/lireek/audio-generations/{ag_id}")
+    async def delete_audio_generation_route(ag_id: int):
+        """Delete an audio generation record."""
+        from acestep.api.lireek.lireek_db import delete_audio_generation
+        deleted = delete_audio_generation(ag_id)
+        if not deleted:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=404, content={"error": "Audio generation not found"})
+        return {"deleted": True}
+
     # ── Song Management ───────────────────────────────────────────────────
 
     @app.delete("/api/lireek/lyrics-sets/{lyrics_set_id}/songs/{song_index}")

@@ -2192,7 +2192,9 @@ function AppContent() {
             } else if (v === 'library') {
               window.history.pushState({}, '', '/library');
             } else if (v === 'lyric-studio') {
-              window.history.pushState({}, '', '/lyric-studio');
+              if (!window.location.pathname.startsWith('/lyric-studio')) {
+                window.history.pushState({}, '', '/lyric-studio');
+              }
             } else if (v === 'search') {
               window.history.pushState({}, '', '/search');
             }
