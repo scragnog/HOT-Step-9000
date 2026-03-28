@@ -2,9 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { usePersistedState } from '../../hooks/usePersistedState';
 import {
   Music, Users, Disc3, FileText, Sparkles, ChevronRight, ChevronDown,
-  Plus, Trash2, Download, RefreshCw, Loader2, Search, AlertTriangle, X, Wand2, Play, Settings2, Save, ListOrdered, Code2, Pencil,
+  Plus, Trash2, Download, RefreshCw, Loader2, Search, AlertTriangle, X, Wand2, Play, Settings2, Save, ListOrdered, Code2, Pencil, FolderSearch,
 } from 'lucide-react';
 import { lireekApi, Artist, LyricsSet, Profile, Generation, SongLyric, AlbumPreset } from '../../services/lyricStudioApi';
+import { generateApi } from '../../services/api';
+import { useAuth } from '../../context/AuthContext';
 import { TripleProviderSelector, ModelSelections, loadSelections, saveSelections } from './ProviderSelector';
 import { StreamingPanel } from './StreamingPanel';
 import {
@@ -16,6 +18,8 @@ import {
 } from '../../stores/streamingStore';
 import { QueuePanel } from './QueuePanel';
 import { PromptEditor } from './PromptEditor';
+import { EditableSlider } from '../EditableSlider';
+import { FileBrowserModal } from '../FileBrowserModal';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -39,6 +43,7 @@ function timeAgo(dateStr: string): string {
 // ── Main Component ──────────────────────────────────────────────────────────
 
 export const LyricStudio: React.FC = () => {
+  const { token } = useAuth();
   // ── Data state ──────────────────────────────────────────────────────────
   const [artists, setArtists] = useState<Artist[]>([]);
   const [lyricsSets, setLyricsSets] = useState<LyricsSet[]>([]);
@@ -84,6 +89,12 @@ export const LyricStudio: React.FC = () => {
   // Detail cache — full data fetched on-demand when an item is selected
   const [detailCache, setDetailCache] = useState<Record<string, any>>({});
   const [detailLoading, setDetailLoading] = useState(false);
+
+  // Preset file browser state
+  const [presetBrowserOpen, setPresetBrowserOpen] = useState(false);
+  const [presetBrowserTarget, setPresetBrowserTarget] = useState<'adapter' | 'matchering'>('adapter');
+  const [detectedAdapterType, setDetectedAdapterType] = useState<'lokr' | 'lora' | 'unknown' | null>(null);
+  const [presetGroupsExpanded, setPresetGroupsExpanded] = useState(false);
 
   // Album presets
   const [presets, setPresets] = useState<Record<number, AlbumPreset | null>>({});
@@ -350,6 +361,19 @@ export const LyricStudio: React.FC = () => {
       setActionLoading(null);
     }
   };
+
+  // Detect adapter type when preset adapter path changes
+  useEffect(() => {
+    if (!presetForm.adapter_path.trim() || !token) {
+      setDetectedAdapterType(null);
+      return;
+    }
+    let cancelled = false;
+    generateApi.detectAdapterType(presetForm.adapter_path.trim(), token)
+      .then(result => { if (!cancelled) setDetectedAdapterType(result.type); })
+      .catch(() => { if (!cancelled) setDetectedAdapterType('unknown'); });
+    return () => { cancelled = true; };
+  }, [presetForm.adapter_path, token]);
 
   // ── Generate Audio from Lyrics ──────────────────────────────────────────
   const handleGenerateAudio = async (gen: Generation) => {
@@ -752,42 +776,168 @@ export const LyricStudio: React.FC = () => {
               <details className="mb-6" onToggle={(e) => { if ((e.target as HTMLDetailsElement).open) loadPreset(ls.id); }}>
                 <summary className="flex items-center gap-2 text-sm font-semibold text-zinc-400 uppercase tracking-wider cursor-pointer hover:text-zinc-300 transition-colors">
                   <Settings2 className="w-4 h-4" /> Album Preset
+                  {presets[ls.id]?.adapter_path && (
+                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-green-900/30 text-green-400 normal-case tracking-normal">
+                      Configured
+                    </span>
+                  )}
                 </summary>
-                <div className="mt-3 p-4 rounded-xl bg-white/5 border border-white/5 space-y-3">
-                  <div>
-                    <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Adapter Path</label>
-                    <input type="text" value={presetForm.adapter_path} onChange={e => setPresetForm(p => ({ ...p, adapter_path: e.target.value }))}
-                      placeholder="D:\\path\\to\\adapter.safetensors" className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-white/10 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-pink-500/50" />
+                <div className="mt-3 p-4 rounded-xl bg-white/5 border border-white/5 space-y-4">
+
+                  {/* ── Adapter Path ── */}
+                  <div className="space-y-2">
+                    <label className="text-xs font-medium text-zinc-400">Adapter Path</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={presetForm.adapter_path}
+                        onChange={e => setPresetForm(p => ({ ...p, adapter_path: e.target.value }))}
+                        placeholder="Path to .safetensors file or adapter folder"
+                        className="flex-1 bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-pink-500"
+                      />
+                      <button
+                        onClick={() => { setPresetBrowserTarget('adapter'); setPresetBrowserOpen(true); }}
+                        title="Browse for adapter files"
+                        className="px-3 py-2 rounded-lg text-xs font-semibold bg-pink-900/20 text-pink-400 hover:bg-pink-900/30 transition-colors flex items-center gap-1.5 flex-shrink-0"
+                      >
+                        <FolderSearch size={14} />
+                        Browse
+                      </button>
+                      {presetForm.adapter_path && (
+                        <button
+                          onClick={() => setPresetForm(p => ({ ...p, adapter_path: '' }))}
+                          className="px-2 py-2 rounded-lg text-xs text-zinc-400 hover:text-red-400 transition-colors flex-shrink-0"
+                          title="Clear selection"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                    {presetForm.adapter_path && (() => {
+                      const fileName = presetForm.adapter_path.split(/[\\/]/).pop() || '';
+                      const tag = detectedAdapterType === 'lokr' ? 'LOKR' : detectedAdapterType === 'lora' ? 'LORA' : '...';
+                      const tagColor = detectedAdapterType === 'lokr'
+                        ? 'bg-purple-900/30 text-purple-400'
+                        : 'bg-pink-900/30 text-pink-400';
+                      return (
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${tagColor}`}>
+                            {tag}
+                          </span>
+                          <span className="text-[10px] text-zinc-500 truncate" title={presetForm.adapter_path}>
+                            {fileName}
+                          </span>
+                        </div>
+                      );
+                    })()}
                   </div>
-                  <div className="grid grid-cols-4 gap-2">
-                    <div>
-                      <label className="block text-[10px] text-zinc-500 uppercase mb-1">Scale</label>
-                      <input type="number" step={0.1} min={0} max={2} value={presetForm.adapter_scale} onChange={e => setPresetForm(p => ({ ...p, adapter_scale: parseFloat(e.target.value) || 1 }))}
-                        className="w-full px-2 py-1.5 rounded-lg bg-zinc-800 border border-white/10 text-sm text-white focus:outline-none focus:border-pink-500/50" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-zinc-500 uppercase mb-1">Self-Attn</label>
-                      <input type="number" step={0.1} min={0} max={2} value={presetForm.self_attn} onChange={e => setPresetForm(p => ({ ...p, self_attn: parseFloat(e.target.value) || 1 }))}
-                        className="w-full px-2 py-1.5 rounded-lg bg-zinc-800 border border-white/10 text-sm text-white focus:outline-none focus:border-pink-500/50" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-zinc-500 uppercase mb-1">Cross-Attn</label>
-                      <input type="number" step={0.1} min={0} max={2} value={presetForm.cross_attn} onChange={e => setPresetForm(p => ({ ...p, cross_attn: parseFloat(e.target.value) || 1 }))}
-                        className="w-full px-2 py-1.5 rounded-lg bg-zinc-800 border border-white/10 text-sm text-white focus:outline-none focus:border-pink-500/50" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-zinc-500 uppercase mb-1">MLP</label>
-                      <input type="number" step={0.1} min={0} max={2} value={presetForm.mlp} onChange={e => setPresetForm(p => ({ ...p, mlp: parseFloat(e.target.value) || 1 }))}
-                        className="w-full px-2 py-1.5 rounded-lg bg-zinc-800 border border-white/10 text-sm text-white focus:outline-none focus:border-pink-500/50" />
-                    </div>
+
+                  {/* ── Adapter Scale ── */}
+                  <EditableSlider
+                    label="Adapter Scale"
+                    value={presetForm.adapter_scale}
+                    min={0}
+                    max={2}
+                    step={0.05}
+                    onChange={(v) => setPresetForm(p => ({ ...p, adapter_scale: v }))}
+                    formatDisplay={(v) => v.toFixed(2)}
+                    helpText="Overall strength of the adapter's influence on the output"
+                  />
+
+                  {/* ── Group Scales (expandable) ── */}
+                  <div className="space-y-2">
+                    <button
+                      onClick={() => setPresetGroupsExpanded(!presetGroupsExpanded)}
+                      className="flex items-center gap-1.5 text-[10px] font-semibold text-zinc-500 hover:text-zinc-300 transition-colors uppercase tracking-wider"
+                    >
+                      {presetGroupsExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
+                      Group Scales
+                    </button>
+                    {presetGroupsExpanded && (
+                      <div className="space-y-2 pl-3 border-l-2 border-pink-500/20">
+                        <EditableSlider
+                          label="Self-Attn"
+                          value={presetForm.self_attn}
+                          min={0}
+                          max={2}
+                          step={0.05}
+                          onChange={(v) => setPresetForm(p => ({ ...p, self_attn: v }))}
+                          formatDisplay={(v) => v.toFixed(2)}
+                          helpText="Controls how audio frames relate to each other over time"
+                          tooltip="Self-Attention: each audio frame attends to all other frames in the sequence. Controls internal temporal coherence — how rhythmic patterns, melodic phrases, and structural transitions hold together over time."
+                        />
+                        <EditableSlider
+                          label="Cross-Attn"
+                          value={presetForm.cross_attn}
+                          min={0}
+                          max={2}
+                          step={0.05}
+                          onChange={(v) => setPresetForm(p => ({ ...p, cross_attn: v }))}
+                          formatDisplay={(v) => v.toFixed(2)}
+                          helpText="How strongly the text prompt shapes the output vs. the adapter's character"
+                          tooltip="Cross-Attention: audio frames attend to the text/style conditioning — the bridge between your prompt and the output. Lowering this lets the adapter's baked-in character dominate over explicit prompt instructions."
+                        />
+                        <EditableSlider
+                          label="MLP"
+                          value={presetForm.mlp}
+                          min={0}
+                          max={2}
+                          step={0.05}
+                          onChange={(v) => setPresetForm(p => ({ ...p, mlp: v }))}
+                          formatDisplay={(v) => v.toFixed(2)}
+                          helpText="Controls the adapter's stored timbre, tonal texture, and sonic character"
+                          tooltip="Feed-Forward Network (MLP): per-frame feature transformation — the 'knowledge store' of learned audio patterns. Vocal timbre, tonal texture, and specific sonic character are thought to live primarily here."
+                        />
+                      </div>
+                    )}
                   </div>
-                  <div>
-                    <label className="block text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Matchering Reference</label>
-                    <input type="text" value={presetForm.matchering_reference_path} onChange={e => setPresetForm(p => ({ ...p, matchering_reference_path: e.target.value }))}
-                      placeholder="D:\\path\\to\\reference.wav" className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-800 border border-white/10 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-pink-500/50" />
+
+                  {/* ── Matchering Reference ── */}
+                  <div className="space-y-2 pt-2 border-t border-white/5">
+                    <label className="text-xs font-medium text-zinc-400">Matchering Reference</label>
+                    <div className="flex gap-2">
+                      <input
+                        type="text"
+                        value={presetForm.matchering_reference_path}
+                        onChange={e => setPresetForm(p => ({ ...p, matchering_reference_path: e.target.value }))}
+                        placeholder="Path to reference audio (.wav, .mp3, .flac)"
+                        className="flex-1 bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-pink-500"
+                      />
+                      <button
+                        onClick={() => { setPresetBrowserTarget('matchering'); setPresetBrowserOpen(true); }}
+                        title="Browse for reference audio"
+                        className="px-3 py-2 rounded-lg text-xs font-semibold bg-amber-900/20 text-amber-400 hover:bg-amber-900/30 transition-colors flex items-center gap-1.5 flex-shrink-0"
+                      >
+                        <FolderSearch size={14} />
+                        Browse
+                      </button>
+                      {presetForm.matchering_reference_path && (
+                        <button
+                          onClick={() => setPresetForm(p => ({ ...p, matchering_reference_path: '' }))}
+                          className="px-2 py-2 rounded-lg text-xs text-zinc-400 hover:text-red-400 transition-colors flex-shrink-0"
+                          title="Clear selection"
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+                    {presetForm.matchering_reference_path && (() => {
+                      const refName = presetForm.matchering_reference_path.split(/[\\/]/).pop() || '';
+                      return (
+                        <div className="flex items-center gap-2">
+                          <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-900/30 text-amber-400">REF</span>
+                          <span className="text-[10px] text-zinc-500 truncate" title={presetForm.matchering_reference_path}>{refName}</span>
+                        </div>
+                      );
+                    })()}
+                    <p className="text-[10px] text-zinc-600">
+                      Audio file to match EQ and loudness characteristics during mastering
+                    </p>
                   </div>
+
+                  {/* ── Save Button ── */}
                   <button onClick={() => savePreset(ls.id)} disabled={actionLoading === `preset-${ls.id}`}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pink-500/20 text-pink-300 hover:bg-pink-500/30 text-sm font-medium transition-colors disabled:opacity-50">
+                    className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-gradient-to-r from-pink-500/20 to-purple-500/20 text-pink-300 hover:from-pink-500/30 hover:to-purple-500/30 text-sm font-medium transition-all disabled:opacity-50 border border-pink-500/10">
                     {actionLoading === `preset-${ls.id}` ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                     Save Preset
                   </button>
@@ -1178,6 +1328,21 @@ export const LyricStudio: React.FC = () => {
       <PromptEditor
         open={promptEditorOpen}
         onClose={() => setPromptEditorOpen(false)}
+      />
+
+      {/* Preset File Browser */}
+      <FileBrowserModal
+        open={presetBrowserOpen}
+        onClose={() => setPresetBrowserOpen(false)}
+        onSelect={(path) => {
+          if (presetBrowserTarget === 'adapter') {
+            setPresetForm(p => ({ ...p, adapter_path: path }));
+          } else {
+            setPresetForm(p => ({ ...p, matchering_reference_path: path }));
+          }
+          setPresetBrowserOpen(false);
+        }}
+        mode="file"
       />
     </div>
   );
