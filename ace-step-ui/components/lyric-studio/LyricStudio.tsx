@@ -485,23 +485,21 @@ export const LyricStudio: React.FC = () => {
       const vocoder = readPersisted('ace-vocoderModel');
       if (vocoder) params.vocoderModel = vocoder;
 
-      // ── Adapter from album preset ──
+      // ── Load adapter from album preset via API ──
       if (preset?.adapter_path) {
-        params.loraPath = preset.adapter_path;
-        params.loraScale = preset.adapter_scale ?? 1.0;
-        params.loraLoaded = true;
-        // If we have group scales, send adapter slots for the backend
-        if (preset.adapter_group_scales) {
-          params.advancedAdapters = true;
-          params.adapterSlots = [{
-            slot: 0,
-            name: preset.adapter_path.split(/[\\/]/).pop() || 'lireek',
-            path: preset.adapter_path,
-            type: 'lokr',
+        showToast('Loading adapter...');
+        try {
+          await generateApi.loadLora({
+            lora_path: preset.adapter_path,
             scale: preset.adapter_scale ?? 1.0,
-            delta_keys: 0,
-            group_scales: preset.adapter_group_scales,
-          }];
+            ...(preset.adapter_group_scales ? { group_scales: preset.adapter_group_scales } : {}),
+          }, token);
+          params.loraLoaded = true;
+          params.loraPath = preset.adapter_path;
+          params.loraScale = preset.adapter_scale ?? 1.0;
+        } catch (loadErr) {
+          console.warn('[LyricStudio] Failed to load adapter, continuing without:', loadErr);
+          showToast('Warning: adapter failed to load, generating without');
         }
       }
       // ── Matchering from album preset ──
@@ -513,10 +511,17 @@ export const LyricStudio: React.FC = () => {
       const res = await generateApi.startGeneration(params, token);
       const jobId = res.jobId || (res as any).job_id;
       showToast(`Audio job queued: ${jobId}`);
-      // Link the audio generation
-      if (jobId) await lireekApi.linkAudio(gen.id, jobId);
-      // Refresh audio list for this generation
-      fetchAudioGens(gen.id);
+
+      // Immediately show a "running" entry in the UI before the link call completes
+      if (jobId) {
+        setAudioGens(prev => ({
+          ...prev,
+          [gen.id]: [...(prev[gen.id] || []), { job_id: jobId, created_at: new Date().toISOString(), status: 'running' }],
+        }));
+        await lireekApi.linkAudio(gen.id, jobId);
+        // Re-fetch to get authoritative data
+        fetchAudioGens(gen.id);
+      }
     } catch (err) {
       showToast(`Audio generation failed: ${(err as Error).message}`);
     } finally {

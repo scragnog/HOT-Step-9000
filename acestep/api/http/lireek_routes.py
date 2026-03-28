@@ -675,9 +675,13 @@ def register_lireek_routes(app: FastAPI) -> None:
     # ── Audio Generation Mapping ──────────────────────────────────────────
 
     @app.post("/api/lireek/generations/{generation_id}/audio")
-    async def link_audio_generation(generation_id: int, job_id: str):
+    async def link_audio_generation(generation_id: int, body: dict):
         """Link a lyric generation to a HOT-Step audio job."""
         from acestep.api.lireek.lireek_db import save_audio_generation
+        job_id = body.get("job_id") or body.get("hotstep_job_id")
+        if not job_id:
+            from fastapi.responses import JSONResponse
+            return JSONResponse(status_code=400, content={"error": "job_id is required"})
         return save_audio_generation(generation_id, job_id)
 
     @app.get("/api/lireek/generations/{generation_id}/audio")
