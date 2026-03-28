@@ -201,8 +201,9 @@ export const lireekApi = {
     key?: string;
     duration?: number;
     subject?: string;
+    lyrics?: string;
   }): Promise<any> =>
-    api(`/api/lireek/generations/${generationId}/metadata`, { method: 'PATCH', body: updates }),
+    api(`/api/lireek/generations/${generationId}`, { method: 'PATCH', body: updates }),
 
   deleteGeneration: (id: number): Promise<{ deleted: boolean }> =>
     api(`/api/lireek/generations/${id}`, { method: 'DELETE' }),

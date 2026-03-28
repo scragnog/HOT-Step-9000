@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Pencil, Music2, Wand2, Play, Loader2, ChevronDown, ChevronRight, Send } from 'lucide-react';
+import { Plus, Trash2, Pencil, Music2, Wand2, Play, Loader2, ChevronDown, ChevronRight, Send, FileText } from 'lucide-react';
 import { lireekApi, Generation, Profile } from '../../../services/lyricStudioApi';
 
 interface WrittenSongsTabProps {
@@ -15,8 +15,6 @@ export const WrittenSongsTab: React.FC<WrittenSongsTabProps> = ({
   generations, profiles, onRefresh, onGenerateAudio, onSendToCreate, showToast,
 }) => {
   const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [editingId, setEditingId] = useState<number | null>(null);
-  const [editValues, setEditValues] = useState<Partial<Generation>>({});
   const [generating, setGenerating] = useState(false);
   const [genCount, setGenCount] = useState(1);
 
@@ -55,27 +53,11 @@ export const WrittenSongsTab: React.FC<WrittenSongsTabProps> = ({
     }
   };
 
-  const startEdit = (gen: Generation) => {
-    setEditingId(gen.id);
-    setEditValues({
-      title: gen.title,
-      caption: gen.caption,
-      bpm: gen.bpm,
-      key: gen.key,
-      duration: gen.duration,
-      subject: gen.subject,
-    });
-  };
-
-  const saveEdit = async () => {
-    if (!editingId) return;
+  const handleSaveField = async (genId: number, field: string, value: any) => {
     try {
-      await lireekApi.updateMetadata(editingId, editValues);
-      showToast('Saved');
-      setEditingId(null);
-      onRefresh();
+      await lireekApi.updateMetadata(genId, { [field]: value });
     } catch (err: any) {
-      showToast(`Failed: ${err.message}`);
+      showToast(`Failed to save: ${err.message}`);
     }
   };
 
@@ -123,7 +105,7 @@ export const WrittenSongsTab: React.FC<WrittenSongsTabProps> = ({
           <div className="w-14 h-14 rounded-full bg-white/5 flex items-center justify-center mb-4">
             <Music2 className="w-7 h-7 text-zinc-600" />
           </div>
-          <h3 className="text-base font-semibold text-zinc-400 mb-2">No written songs yet</h3>
+          <h3 className="text-base font-semibold text-zinc-400 mb-2">No generated lyrics yet</h3>
           <p className="text-sm text-zinc-500 max-w-xs">
             Generate lyrics from a profile to see them here.
           </p>
@@ -132,7 +114,6 @@ export const WrittenSongsTab: React.FC<WrittenSongsTabProps> = ({
         <div className="space-y-1">
           {generations.map((gen, idx) => {
             const isExpanded = expandedId === gen.id;
-            const isEditing = editingId === gen.id;
 
             return (
               <div
@@ -166,123 +147,109 @@ export const WrittenSongsTab: React.FC<WrittenSongsTabProps> = ({
                   </div>
                 </button>
 
-                {/* Expanded content */}
+                {/* Expanded content — V1-style inline-editable layout */}
                 {isExpanded && (
                   <div className="border-t border-white/5">
-                    {isEditing ? (
-                      /* Edit form */
-                      <div className="p-4 space-y-3">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <label className="block text-xs text-zinc-500 mb-1">Title</label>
-                            <input
-                              value={editValues.title || ''}
-                              onChange={(e) => setEditValues(v => ({ ...v, title: e.target.value }))}
-                              className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-pink-500/50"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-zinc-500 mb-1">Subject</label>
-                            <input
-                              value={editValues.subject || ''}
-                              onChange={(e) => setEditValues(v => ({ ...v, subject: e.target.value }))}
-                              className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-pink-500/50"
-                            />
-                          </div>
-                        </div>
-                        <div>
-                          <label className="block text-xs text-zinc-500 mb-1">Caption</label>
-                          <textarea
-                            value={editValues.caption || ''}
-                            onChange={(e) => setEditValues(v => ({ ...v, caption: e.target.value }))}
-                            rows={2}
-                            className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white focus:outline-none focus:border-pink-500/50 resize-none"
+                    <div className="p-4 space-y-4">
+                      {/* Editable title */}
+                      <div className="flex items-center gap-3">
+                        <FileText className="w-5 h-5 text-green-400 flex-shrink-0" />
+                        <input
+                          className="flex-1 text-lg font-bold text-white bg-transparent border-b border-transparent hover:border-white/20 focus:border-pink-500/50 focus:outline-none transition-colors"
+                          defaultValue={gen.title || 'Untitled'}
+                          onBlur={(e) => { if (e.target.value !== gen.title) handleSaveField(gen.id, 'title', e.target.value); }}
+                        />
+                        <Pencil className="w-3.5 h-3.5 text-zinc-600" title="All fields are editable" />
+                      </div>
+
+                      {/* Metadata grid */}
+                      <div className="grid grid-cols-2 gap-3">
+                        <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/5">
+                          <label className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Subject</label>
+                          <input
+                            className="w-full bg-transparent text-sm text-amber-300 focus:outline-none border-b border-transparent hover:border-white/20 focus:border-amber-500/50 transition-colors"
+                            defaultValue={gen.subject || ''}
+                            onBlur={(e) => { if (e.target.value !== (gen.subject || '')) handleSaveField(gen.id, 'subject', e.target.value); }}
                           />
                         </div>
-                        <div className="grid grid-cols-3 gap-3">
-                          <div>
-                            <label className="block text-xs text-zinc-500 mb-1">BPM</label>
-                            <input
-                              type="number"
-                              value={editValues.bpm || ''}
-                              onChange={(e) => setEditValues(v => ({ ...v, bpm: parseInt(e.target.value) || undefined }))}
-                              className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white font-mono focus:outline-none focus:border-pink-500/50"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-zinc-500 mb-1">Key</label>
-                            <input
-                              value={editValues.key || ''}
-                              onChange={(e) => setEditValues(v => ({ ...v, key: e.target.value }))}
-                              className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white font-mono focus:outline-none focus:border-pink-500/50"
-                            />
-                          </div>
-                          <div>
-                            <label className="block text-xs text-zinc-500 mb-1">Duration</label>
-                            <input
-                              type="number"
-                              value={editValues.duration || ''}
-                              onChange={(e) => setEditValues(v => ({ ...v, duration: parseInt(e.target.value) || undefined }))}
-                              className="w-full px-3 py-2 rounded-lg bg-white/5 border border-white/10 text-sm text-white font-mono focus:outline-none focus:border-pink-500/50"
-                            />
-                          </div>
+                        <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/5">
+                          <label className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">BPM</label>
+                          <input
+                            type="number"
+                            className="w-full bg-transparent text-sm text-pink-300 focus:outline-none border-b border-transparent hover:border-white/20 focus:border-pink-500/50 transition-colors"
+                            defaultValue={gen.bpm || 0}
+                            onBlur={(e) => { const v = parseInt(e.target.value) || 0; if (v !== gen.bpm) handleSaveField(gen.id, 'bpm', v); }}
+                          />
                         </div>
-                        <div className="flex items-center gap-2 pt-2">
-                          <button
-                            onClick={saveEdit}
-                            className="px-4 py-2 rounded-lg bg-pink-600 hover:bg-pink-500 text-white text-sm font-medium transition-colors"
-                          >
-                            Save
-                          </button>
-                          <button
-                            onClick={() => setEditingId(null)}
-                            className="px-4 py-2 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300 text-sm font-medium transition-colors"
-                          >
-                            Cancel
-                          </button>
+                        <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/5">
+                          <label className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Key</label>
+                          <input
+                            className="w-full bg-transparent text-sm text-blue-300 focus:outline-none border-b border-transparent hover:border-white/20 focus:border-blue-500/50 transition-colors"
+                            defaultValue={gen.key || ''}
+                            onBlur={(e) => { if (e.target.value !== (gen.key || '')) handleSaveField(gen.id, 'key', e.target.value); }}
+                          />
+                        </div>
+                        <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/5">
+                          <label className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Duration (seconds)</label>
+                          <input
+                            type="number"
+                            className="w-full bg-transparent text-sm text-purple-300 focus:outline-none border-b border-transparent hover:border-white/20 focus:border-purple-500/50 transition-colors"
+                            defaultValue={gen.duration || 0}
+                            onBlur={(e) => { const v = parseInt(e.target.value) || 0; if (v !== gen.duration) handleSaveField(gen.id, 'duration', v); }}
+                          />
                         </div>
                       </div>
-                    ) : (
-                      /* Read view */
+
+                      {/* Editable caption */}
+                      <div className="px-3 py-2 rounded-lg bg-white/5 border border-white/5">
+                        <label className="text-[10px] text-zinc-500 uppercase tracking-wider block mb-1">Caption</label>
+                        <textarea
+                          className="w-full bg-transparent text-sm text-zinc-300 focus:outline-none border-b border-transparent hover:border-white/20 focus:border-pink-500/50 transition-colors resize-none"
+                          rows={2}
+                          defaultValue={gen.caption || ''}
+                          onBlur={(e) => { if (e.target.value !== (gen.caption || '')) handleSaveField(gen.id, 'caption', e.target.value); }}
+                        />
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <button
+                          onClick={() => onGenerateAudio(gen)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-pink-500/30 to-purple-500/30 text-white hover:from-pink-500/40 hover:to-purple-500/40 text-sm font-semibold transition-all border border-pink-500/20"
+                        >
+                          <Play className="w-3.5 h-3.5" />
+                          Generate Audio
+                        </button>
+                        {onSendToCreate && (
+                          <button
+                            onClick={() => onSendToCreate(gen)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 text-sm font-medium transition-colors border border-amber-500/10"
+                          >
+                            <Send className="w-3.5 h-3.5" />
+                            Send to Create
+                          </button>
+                        )}
+                        <div className="flex-1" />
+                        <button
+                          onClick={() => handleDelete(gen)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Delete
+                        </button>
+                      </div>
+
+                      {/* Editable lyrics */}
                       <div>
-                        <pre className="px-4 py-3 text-sm text-zinc-300 whitespace-pre-wrap font-sans leading-relaxed max-h-80 overflow-y-auto">
-                          {gen.lyrics || '(No lyrics available)'}
-                        </pre>
-                        <div className="flex items-center gap-2 px-4 py-2 border-t border-white/5 bg-white/[0.01]">
-                          <button
-                            onClick={() => startEdit(gen)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-zinc-300 hover:bg-white/5 transition-colors"
-                          >
-                            <Pencil className="w-3 h-3" />
-                            Edit
-                          </button>
-                          <button
-                            onClick={() => onGenerateAudio(gen)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-emerald-400 hover:bg-emerald-500/10 transition-colors"
-                          >
-                            <Play className="w-3 h-3" />
-                            Generate Audio
-                          </button>
-                          {onSendToCreate && (
-                            <button
-                              onClick={() => onSendToCreate(gen)}
-                              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-blue-400 hover:bg-blue-500/10 transition-colors"
-                            >
-                              <Send className="w-3 h-3" />
-                              Send to Create
-                            </button>
-                          )}
-                          <div className="flex-1" />
-                          <button
-                            onClick={() => handleDelete(gen)}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-red-400 hover:bg-red-500/10 transition-colors"
-                          >
-                            <Trash2 className="w-3 h-3" />
-                            Delete
-                          </button>
-                        </div>
+                        <h3 className="text-sm font-semibold text-zinc-400 uppercase tracking-wider mb-2">Lyrics</h3>
+                        <textarea
+                          className="w-full p-4 rounded-xl bg-black/40 border border-white/5 text-sm text-zinc-200 font-mono leading-relaxed focus:outline-none focus:border-pink-500/30 resize-y transition-colors"
+                          style={{ minHeight: '300px' }}
+                          defaultValue={gen.lyrics || ''}
+                          onBlur={(e) => { if (e.target.value !== (gen.lyrics || '')) handleSaveField(gen.id, 'lyrics', e.target.value); }}
+                        />
                       </div>
-                    )}
+                    </div>
                   </div>
                 )}
               </div>
