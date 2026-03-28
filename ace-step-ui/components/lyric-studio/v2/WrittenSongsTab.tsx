@@ -80,7 +80,7 @@ export const WrittenSongsTab: React.FC<WrittenSongsTabProps> = ({
           ) : (
             <>
               <Wand2 className="w-4 h-4" />
-              Generate Songs
+              Generate Lyrics
             </>
           )}
         </button>

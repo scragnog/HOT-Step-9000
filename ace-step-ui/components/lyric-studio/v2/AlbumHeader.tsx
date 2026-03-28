@@ -1,6 +1,7 @@
 import React from 'react';
 import { ChevronLeft, Settings2, Disc3, Music, FileText, Users, Music2, Headphones } from 'lucide-react';
 import { Artist, LyricsSet, SongLyric } from '../../../services/lyricStudioApi';
+import { TripleProviderSelector, ModelSelections, loadSelections, saveSelections } from '../ProviderSelector';
 
 function parseSongs(songs: SongLyric[] | string): SongLyric[] {
   if (typeof songs === 'string') {
@@ -23,6 +24,7 @@ export const AlbumHeader: React.FC<AlbumHeaderProps> = ({
   artist, album, onBack, onOpenPreset, profileCount = 0, generationCount = 0, songCount = 0,
 }) => {
   const [imageError, setImageError] = React.useState(false);
+  const [modelSelections, setModelSelections] = React.useState<ModelSelections>(loadSelections);
   const songs = parseSongs(album.songs);
 
   const gradient = (name: string) => {
@@ -93,8 +95,20 @@ export const AlbumHeader: React.FC<AlbumHeaderProps> = ({
         </div>
       </div>
 
+      {/* LLM Model Selector */}
+      <div className="px-4 pb-3">
+        <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold mb-2">LLM Models</p>
+        <TripleProviderSelector
+          selections={modelSelections}
+          onSelectionsChange={(sel) => {
+            setModelSelections(sel);
+            saveSelections(sel);
+          }}
+        />
+      </div>
+
       {/* Preset button */}
-      <div className="px-4 pb-4 mt-auto">
+      <div className="px-4 pb-4">
         <button
           onClick={onOpenPreset}
           className="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-sm text-zinc-300 hover:text-white font-medium transition-all"

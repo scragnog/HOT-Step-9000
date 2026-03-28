@@ -2186,13 +2186,20 @@ function AppContent() {
               setViewingSongId(null);
             }
             setCurrentView(v);
+            // Save current LS URL before navigating away
+            if (v !== 'lyric-studio' && window.location.pathname.startsWith('/lyric-studio/')) {
+              sessionStorage.setItem('lastLyricStudioUrl', window.location.pathname);
+            }
             if (v === 'create') {
               setMobileShowList(false);
               window.history.pushState({}, '', '/');
             } else if (v === 'library') {
               window.history.pushState({}, '', '/library');
             } else if (v === 'lyric-studio') {
-              if (!window.location.pathname.startsWith('/lyric-studio')) {
+              const savedUrl = sessionStorage.getItem('lastLyricStudioUrl');
+              if (savedUrl) {
+                window.history.pushState({}, '', savedUrl);
+              } else if (!window.location.pathname.startsWith('/lyric-studio')) {
                 window.history.pushState({}, '', '/lyric-studio');
               }
             } else if (v === 'search') {
