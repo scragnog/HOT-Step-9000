@@ -87,6 +87,7 @@ def initialize_lifespan_runtime(
     app.state._initialized = False
     app.state._init_error = None
     app.state._init_lock = init_lock
+    app.state._no_init_mode = False
 
     app.state.llm_handler = llm_handler
     app.state._llm_initialized = False

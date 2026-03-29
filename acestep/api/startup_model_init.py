@@ -54,6 +54,7 @@ def initialize_models_at_startup(
         print("[API Server] --no-init mode: Skipping all model loading at startup")
         print("[API Server] Models will be lazy-loaded on first request")
         print("[API Server] Server is ready to accept requests (models not loaded yet)")
+        app.state._no_init_mode = True
         return
 
     print("[API Server] Initializing models at startup...")

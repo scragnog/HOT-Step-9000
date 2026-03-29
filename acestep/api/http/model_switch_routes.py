@@ -21,7 +21,8 @@ def register_model_switch_routes(
     @app.get("/v1/models/list")
     async def list_models(_: None = Depends(verify_api_key)):
         """List available DiT models (includes all downloadable models)."""
-        current_model = get_model_name(app.state._config_path) if getattr(app.state, "_initialized", False) else None
+        no_init = getattr(app.state, "_no_init_mode", False)
+        current_model = get_model_name(app.state._config_path) if getattr(app.state, "_initialized", False) or no_init else None
 
         # Scan checkpoints directory for installed models
         installed = set()
@@ -65,7 +66,8 @@ def register_model_switch_routes(
         Returns active_model: null until initialization is complete.
         """
         import os
-        current_model = get_model_name(app.state._config_path) if getattr(app.state, "_initialized", False) else None
+        no_init_mode = getattr(app.state, "_no_init_mode", False)
+        current_model = get_model_name(app.state._config_path) if getattr(app.state, "_initialized", False) or no_init_mode else None
         # Use actually loaded LM model (may differ from env after hot-switch)
         llm = getattr(app.state, "llm_handler", None)
         prev_params = getattr(llm, "last_init_params", None) if llm else None

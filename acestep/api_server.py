@@ -27,6 +27,7 @@ NOTE:
 
 from __future__ import annotations
 
+import asyncio
 import glob
 import json
 import os
@@ -58,6 +59,7 @@ from acestep.api.job_runtime_state import (
     update_terminal_job_cache as _update_terminal_job_cache,
 )
 from acestep.api.startup_model_init import initialize_models_at_startup
+from acestep.api.http.model_init_service import initialize_models_for_request
 from acestep.api.worker_runtime import start_worker_tasks, stop_worker_tasks
 from acestep.api.server_utils import (
     env_bool as _env_bool,
@@ -237,6 +239,41 @@ def create_app() -> FastAPI:
 
         async def _run_one_job(job_id: str, req: GenerateMusicRequest) -> None:
             llm: LLMHandler = app.state.llm_handler
+
+            # ── Lazy-load models on first generation (no-init mode) ────────
+            if getattr(app.state, "_no_init_mode", False) and not getattr(app.state, "_initialized", False):
+                async with app.state._init_lock:
+                    # Double-check under lock — another job may have initialized already
+                    if not app.state._initialized:
+                        print(f"[API Server] Lazy load: job {job_id} triggering model initialization...")
+                        # Update job stage so the user sees progress in the UI
+                        _update_progress_job_cache(
+                            app_state=app.state,
+                            store=store,
+                            job_id=job_id,
+                            progress=0.0,
+                            stage="Loading models (first run)…",
+                            map_status=_map_status,
+                            result_key_prefix=RESULT_KEY_PREFIX,
+                            result_expire_seconds=RESULT_EXPIRE_SECONDS,
+                        )
+                        loop = asyncio.get_running_loop()
+                        init_llm = _env_bool("ACESTEP_INIT_LLM", False)
+                        await loop.run_in_executor(
+                            app.state.executor,
+                            lambda: initialize_models_for_request(
+                                app_state=app.state,
+                                model_name=None,  # uses _config_path
+                                init_llm=init_llm,
+                                requested_lm_model_path=None,
+                                get_project_root=_get_project_root,
+                                get_model_name=_get_model_name,
+                                ensure_model_downloaded=_ensure_model_downloaded,
+                                env_bool=_env_bool,
+                            ),
+                        )
+                        app.state._no_init_mode = False
+                        print("[API Server] Lazy load: models ready ✓")
 
             def _build_blocking_result(
                 selected_handler: AceStepHandler,
