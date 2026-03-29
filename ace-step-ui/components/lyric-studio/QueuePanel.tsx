@@ -43,10 +43,13 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
   };
 
   const selectAll = () => {
-    const ids = mode === 'profile'
-      ? lyricsSets.map(ls => ls.id)
-      : profiles.map(p => p.id);
-    setSelected(new Set(ids));
+    if (mode === 'profile') {
+      const profiledSetIds = new Set(profiles.map(p => p.lyrics_set_id));
+      const ids = lyricsSets.filter(ls => !profiledSetIds.has(ls.id)).map(ls => ls.id);
+      setSelected(new Set(ids));
+    } else {
+      setSelected(new Set(profiles.map(p => p.id)));
+    }
   };
 
   const handleQueue = () => {
@@ -125,11 +128,16 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
 
         {/* Selection list */}
         <div className="flex-1 overflow-y-auto px-6 py-3 space-y-1 scrollbar-hide" style={{ maxHeight: '300px' }}>
-          {mode === 'profile' ? (
-            lyricsSets.length === 0 ? (
-              <p className="text-zinc-500 text-sm text-center py-4">No albums available</p>
+          {mode === 'profile' ? (() => {
+            // Only show albums that don't already have a profile
+            const profiledSetIds = new Set(profiles.map(p => p.lyrics_set_id));
+            const unprofiled = lyricsSets.filter(ls => !profiledSetIds.has(ls.id));
+            return unprofiled.length === 0 ? (
+              <p className="text-zinc-500 text-sm text-center py-4">
+                {lyricsSets.length === 0 ? 'No albums available' : 'All albums already have profiles ✓'}
+              </p>
             ) : (
-              lyricsSets.map(ls => (
+              <>{unprofiled.map(ls => (
                 <label
                   key={ls.id}
                   className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
@@ -147,9 +155,9 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
                     <span className="text-[10px] text-zinc-500">{ls.artist_name}</span>
                   </div>
                 </label>
-              ))
-            )
-          ) : (
+              ))}</>
+            );
+          })() : (
             profiles.length === 0 ? (
               <p className="text-zinc-500 text-sm text-center py-4">No profiles available — build profiles first</p>
             ) : (
