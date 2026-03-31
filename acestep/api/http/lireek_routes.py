@@ -82,9 +82,9 @@ def register_lireek_routes(app: FastAPI) -> None:
     @app.post("/api/lireek/artists/{artist_id}/refresh-image")
     async def refresh_artist_image(artist_id: int):
         """Fetch artist image from Genius and store it."""
+        import asyncio
         from acestep.api.lireek.lireek_db import update_artist_image
         from acestep.api.lireek.genius_service import get_artist_image_url
-        import sqlite3 as _sqlite3
         conn = None
         try:
             from acestep.api.lireek.lireek_db import _connect, _row_to_dict
@@ -93,7 +93,8 @@ def register_lireek_routes(app: FastAPI) -> None:
             if not row:
                 raise HTTPException(status_code=404, detail="Artist not found")
             artist = _row_to_dict(row)
-            image_url = get_artist_image_url(artist["name"])
+            # Run in thread to avoid blocking the event loop
+            image_url = await asyncio.to_thread(get_artist_image_url, artist["name"])
             if image_url:
                 update_artist_image(artist_id, image_url)
                 return {"image_url": image_url}
@@ -119,6 +120,7 @@ def register_lireek_routes(app: FastAPI) -> None:
     @app.post("/api/lireek/lyrics-sets/{ls_id}/refresh-image")
     async def refresh_album_image(ls_id: int):
         """Fetch album cover art from Genius and store it."""
+        import asyncio
         from acestep.api.lireek.lireek_db import (
             _connect, _row_to_dict, update_lyrics_set_image,
         )
@@ -140,7 +142,8 @@ def register_lireek_routes(app: FastAPI) -> None:
                 logger.info("[refresh-album-image] No album name for ls_id=%d, skipping", ls_id)
                 raise HTTPException(status_code=400, detail="No album name — cannot search for cover art")
             logger.info("[refresh-album-image] Searching Genius for '%s' by '%s'", album_name, artist_name)
-            image_url = get_album_cover_art(artist_name, album_name)
+            # Run in thread to avoid blocking the event loop
+            image_url = await asyncio.to_thread(get_album_cover_art, artist_name, album_name)
             if image_url:
                 update_lyrics_set_image(ls_id, image_url)
                 logger.info("[refresh-album-image] Found cover: %s", image_url)

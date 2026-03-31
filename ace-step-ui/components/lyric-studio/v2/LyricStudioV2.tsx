@@ -222,7 +222,7 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
   }, []);
 
   // ── Load album detail data ──
-  const loadAlbumData = useCallback(async (albumId: number) => {
+  const loadAlbumData = useCallback(async (albumId: number, retries = 2) => {
     const t0 = performance.now();
     console.log(`[loadAlbumData] START albumId=${albumId}`);
     try {
@@ -248,7 +248,12 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
       setGenerations(allGens);
       console.log(`[loadAlbumData] DONE in ${(performance.now() - t0).toFixed(0)}ms — ${allGens.length} generations`);
     } catch (err) {
-      console.error(`[loadAlbumData] FAILED after ${(performance.now() - t0).toFixed(0)}ms:`, err);
+      console.warn(`[loadAlbumData] FAILED after ${(performance.now() - t0).toFixed(0)}ms (retries left: ${retries}):`, err);
+      if (retries > 0) {
+        // Wait briefly then retry — backend may have been busy with a blocking request
+        await new Promise(r => setTimeout(r, 2000));
+        return loadAlbumData(albumId, retries - 1);
+      }
     }
   }, []);
 
