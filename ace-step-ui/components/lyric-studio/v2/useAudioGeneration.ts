@@ -192,6 +192,7 @@ export function useAudioGeneration({ profiles, showToast, onJobLinked }: UseAudi
             }
             const loadPayload: any = {
               lora_path: preset.adapter_path,
+              slot: 0,  // Use advanced adapter slot so group_scales are applied
               scale: effectiveScale,
               ...(effectiveGroupScales ? { group_scales: effectiveGroupScales } : {}),
             };
