@@ -237,6 +237,9 @@ export const lireekApi = {
   deletePreset: (lyricsSetId: number): Promise<{ deleted: boolean }> =>
     api(`/api/lireek/lyrics-sets/${lyricsSetId}/preset`, { method: 'DELETE' }),
 
+  listAllPresets: (): Promise<{ presets: AlbumPreset[] }> =>
+    api('/api/lireek/presets'),
+
   // ── Slop Detection ──────────────────────────────────────────────────────
   slopScan: (text: string): Promise<any> =>
     api('/api/lireek/slop-scan', { method: 'POST', body: { text } }),

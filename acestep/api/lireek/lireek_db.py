@@ -759,6 +759,24 @@ def delete_album_preset(lyrics_set_id: int) -> bool:
         conn.close()
 
 
+def list_all_album_presets() -> list[dict[str, Any]]:
+    """Return every album preset row with adapter_scales JSON unpacked."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT * FROM album_presets ORDER BY updated_at DESC"
+        ).fetchall()
+        results = []
+        for r in rows:
+            d = _row_to_dict(r)
+            if d.get("adapter_scales"):
+                d["adapter_scales"] = json.loads(d["adapter_scales"])
+            results.append(d)
+        return results
+    finally:
+        conn.close()
+
+
 # ── Audio Generations (mapping lyrics → HOT-Step jobs) ────────────────────────
 
 def save_audio_generation(generation_id: int, hotstep_job_id: str) -> dict[str, Any]:

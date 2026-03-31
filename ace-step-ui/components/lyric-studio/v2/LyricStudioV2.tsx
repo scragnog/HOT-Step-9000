@@ -754,6 +754,7 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
         profilingModel={loadSelections().profiling}
         generationModel={loadSelections().generation}
         refinementModel={loadSelections().refinement}
+        showToast={showToast}
       />
 
       {/* Prompt Editor modal */}

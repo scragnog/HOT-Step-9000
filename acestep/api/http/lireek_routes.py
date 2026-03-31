@@ -753,6 +753,26 @@ def register_lireek_routes(app: FastAPI) -> None:
 
     # ── Slop Detection ────────────────────────────────────────────────────
 
+    @app.get("/api/lireek/presets")
+    async def list_all_presets():
+        """List all album presets (bulk view for QueuePanel)."""
+        from acestep.api.lireek.lireek_db import list_all_album_presets
+        raw_list = list_all_album_presets()
+        mapped = []
+        for raw in raw_list:
+            scales = raw.get("adapter_scales") or {}
+            mapped.append({
+                "id": raw.get("id"),
+                "lyrics_set_id": raw.get("lyrics_set_id"),
+                "adapter_path": raw.get("adapter_path"),
+                "adapter_scale": scales.get("scale", 1.0),
+                "adapter_group_scales": scales.get("group_scales"),
+                "matchering_reference_path": raw.get("matchering_ref_path"),
+                "updated_at": raw.get("updated_at", ""),
+            })
+        return {"presets": mapped}
+
+
     @app.post("/api/lireek/slop-scan")
     async def slop_scan(req: SlopScanRequest):
         """Run the AI-slop detector on arbitrary text."""
