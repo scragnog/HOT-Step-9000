@@ -92,6 +92,56 @@ def _postprocess_lyrics(text: str) -> str:
     return '\n'.join(result_lines)
 
 
+def _fix_section_labels(text: str) -> str:
+    """Fix invalid section labels in generated lyrics.
+
+    - Renames [X], [Breakdown], [Drop], [Solo], [Hook] to valid ACE-Step labels
+    - If no [Chorus] exists but [Bridge] repeats, renames repeating bridges to choruses
+    """
+    # Map invalid labels to valid ones
+    INVALID_TO_VALID = {
+        'x': 'Interlude',
+        'breakdown': 'Bridge',
+        'drop': 'Chorus',
+        'solo': 'Interlude',
+        'hook': 'Chorus',
+        'rap': 'Verse',
+        'spoken': 'Verse',
+    }
+
+    lines = text.split('\n')
+    result = []
+    section_headers: list[tuple[int, str]] = []  # (line_index, section_name)
+
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        m = re.match(r'^\[(.+?)(?:\s+\d+)?\]$', stripped)
+        if m:
+            label = m.group(1).strip().lower()
+            if label in INVALID_TO_VALID:
+                new_label = INVALID_TO_VALID[label]
+                # Preserve any number suffix
+                num_match = re.search(r'\d+', stripped)
+                if num_match:
+                    stripped = f'[{new_label} {num_match.group()}]'
+                else:
+                    stripped = f'[{new_label}]'
+            section_headers.append((len(result), stripped))
+        result.append(stripped if stripped.startswith('[') and stripped.endswith(']') else line)
+
+    # Check: if no Chorus exists but Bridge appears multiple times, fix it
+    bridge_indices = [idx for idx, (_, h) in enumerate(section_headers) if 'bridge' in h.lower()]
+    chorus_exists = any('chorus' in h.lower() for _, h in section_headers)
+
+    if not chorus_exists and len(bridge_indices) >= 2:
+        # Rename all but the last bridge to [Chorus]
+        for bi in bridge_indices[:-1]:
+            line_idx, _ = section_headers[bi]
+            result[line_idx] = '[Chorus]'
+
+    return '\n'.join(result)
+
+
 def _enforce_line_counts(text: str) -> str:
     """Enforce valid line counts: verses=4|8, choruses=4|6|8."""
     VERSE_VALID = {4, 8}
@@ -232,6 +282,9 @@ STRUCTURE RULES (MANDATORY — THESE ARE NON-NEGOTIABLE):
 - You MUST follow the EXACT section sequence provided in the blueprint. Do not skip any sections.
 - If the blueprint includes a [Bridge], you MUST write a bridge.
 - If the blueprint includes a [Pre-Chorus], you MUST write a pre-chorus.
+- VALID SECTION LABELS (use ONLY these): [Intro], [Verse 1], [Verse 2], [Verse 3], [Pre-Chorus], [Chorus], [Post-Chorus], [Bridge], [Interlude], [Outro]. Do NOT use [X], [Breakdown], [Drop], [Solo], [Hook], or any other labels.
+- CHORUS IS MANDATORY: Every song MUST have at least one [Chorus]. A chorus is a repeating section — if a section appears more than once, it is a chorus, not a bridge.
+- BRIDGE vs CHORUS: A bridge is a ONE-TIME contrasting section, typically appearing once before the final chorus. It should NOT repeat. If you are writing a section that repeats throughout the song, label it [Chorus], NOT [Bridge].
 - *** LINE COUNT — ABSOLUTE RULE ***
   VERSES: Every verse MUST have EXACTLY 4 lines or EXACTLY 8 lines. NO EXCEPTIONS.
   CHORUSES: Every chorus MUST have EXACTLY 4, 6, or 8 lines. NO EXCEPTIONS.
@@ -719,6 +772,7 @@ def generate_lyrics(
 
     # Post-process
     lyrics_text = _postprocess_lyrics(lyrics_text)
+    lyrics_text = _fix_section_labels(lyrics_text)
     lyrics_text = _fix_a_prefix(lyrics_text)
     lyrics_text = _enforce_line_counts(lyrics_text)
 
@@ -798,6 +852,7 @@ def refine_lyrics(
             lyrics_text = "\n".join(rest)
 
     lyrics_text = _postprocess_lyrics(lyrics_text)
+    lyrics_text = _fix_section_labels(lyrics_text)
     lyrics_text = _fix_a_prefix(lyrics_text)
     lyrics_text = _enforce_line_counts(lyrics_text)
 

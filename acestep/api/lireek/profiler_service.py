@@ -245,6 +245,22 @@ _SECTION_LABEL_MAP = {
     "outro": "O",
     "interlude": "IL",
     "refrain": "C",
+    # Extended mappings for common Genius variants
+    "breakdown": "B",
+    "solo": "IL",
+    "instrumental": "IL",
+    "spoken": "V",
+    "spoken word": "V",
+    "rap": "V",
+    "rap verse": "V",
+    "drop": "C",
+    "buildup": "PC",
+    "build-up": "PC",
+    "build up": "PC",
+    "ad-lib": "IL",
+    "adlib": "IL",
+    "skit": "IL",
+    "tag": "O",
 }
 
 
@@ -254,7 +270,9 @@ def _normalise_section_label(raw_label: str) -> str:
     for key, code in _SECTION_LABEL_MAP.items():
         if key in lower:
             return code
-    return "X"  # unknown
+    # Unknown section — map to Interlude rather than mysterious "X"
+    logger.debug("Unknown section label '%s' — mapping to Interlude", raw_label)
+    return "IL"
 
 
 def _split_into_sections(lyrics: str) -> list[tuple[str, list[str]]]:
@@ -390,11 +408,56 @@ def _analyse_structure(all_songs: list[SongLyrics]) -> tuple[float, float, list[
     avg_v = round(sum(len(s) for s in verse_sections) / max(len(verse_sections), 1), 1)
     avg_c = round(sum(len(s) for s in chorus_sections) / max(len(chorus_sections), 1), 1)
 
-    # Top 3 most common blueprints
+    # Top 3 most common blueprints — validate and normalise
     bp_counter = Counter(blueprints)
-    top_bps = [bp for bp, _ in bp_counter.most_common(3)]
+    top_bps = []
+    for bp, _ in bp_counter.most_common(5):
+        bp = _normalise_blueprint(bp)
+        if bp and bp not in top_bps:
+            top_bps.append(bp)
+        if len(top_bps) >= 3:
+            break
+
+    # Fallback: if no usable blueprints, use a safe default
+    if not top_bps:
+        top_bps = ["V-C-V-C-B-C"]
 
     return avg_v, avg_c, top_bps
+
+
+def _normalise_blueprint(bp: str) -> str:
+    """Validate and fix a song structure blueprint.
+
+    - Filters out unknown 'X' labels
+    - If no chorus exists but bridge repeats: rename repeating bridges to chorus
+    - Ensures at least one Chorus exists
+    """
+    parts = bp.split("-")
+    # Remove any stray 'X' labels
+    parts = [p for p in parts if p != "X"]
+    if not parts:
+        return ""
+
+    # If no chorus but bridge appears multiple times, it's probably a mislabelled chorus
+    has_chorus = "C" in parts
+    bridge_count = parts.count("B")
+    if not has_chorus and bridge_count >= 2:
+        # Rename all but the last Bridge to Chorus (last one stays as actual bridge)
+        result = []
+        bridges_seen = 0
+        for p in parts:
+            if p == "B":
+                bridges_seen += 1
+                # Keep only the last bridge as 'B', rename others to 'C'
+                if bridges_seen < bridge_count:
+                    result.append("C")
+                else:
+                    result.append("B")
+            else:
+                result.append(p)
+        parts = result
+
+    return "-".join(parts)
 
 
 def _analyse_perspective(all_songs: list[SongLyrics]) -> str:
