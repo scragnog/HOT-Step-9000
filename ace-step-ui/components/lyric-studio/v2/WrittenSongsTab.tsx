@@ -1,7 +1,11 @@
 import React, { useState } from 'react';
-import { Trash2, Pencil, Music2, Wand2, Play, ChevronDown, ChevronRight, Send, FileText, Headphones } from 'lucide-react';
+import { Trash2, Pencil, Music2, Wand2, Play, Loader2, ChevronDown, ChevronRight, Send, FileText, Headphones } from 'lucide-react';
 import { lireekApi, Generation, Profile } from '../../../services/lyricStudioApi';
-import { addToQueue } from '../../../stores/streamingStore';
+import {
+  useStreamingStore,
+  startStreamGenerate,
+} from '../../../stores/streamingStore';
+import { StreamingPanel } from '../StreamingPanel';
 
 interface WrittenSongsTabProps {
   generations: Generation[];
@@ -20,23 +24,37 @@ export const WrittenSongsTab: React.FC<WrittenSongsTabProps> = ({
   generationModel, refinementModel,
 }) => {
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  const [generating, setGenerating] = useState(false);
   const [genCount, setGenCount] = useState(1);
+  const streaming = useStreamingStore();
 
-  const handleQuickGenerate = () => {
+  const handleQuickGenerate = async () => {
     if (profiles.length === 0) {
       showToast('Build a profile first');
       return;
     }
+    setGenerating(true);
     const profile = profiles[0];
-    addToQueue({
-      type: 'generate',
-      targetId: profile.id,
-      label: `Generate: ${profile.provider}`,
-      provider: generationModel.provider,
-      model: generationModel.model,
-      count: genCount,
-    });
-    showToast(`Queued ${genCount} generation${genCount > 1 ? 's' : ''} (streaming)`);
+    try {
+      for (let i = 0; i < genCount; i++) {
+        await startStreamGenerate(
+          profile.id,
+          {
+            profile_id: profile.id,
+            provider: generationModel.provider,
+            model: generationModel.model,
+          },
+          () => {
+            onRefresh();
+          },
+        );
+      }
+      showToast(`Generated ${genCount} new song${genCount > 1 ? 's' : ''}`);
+    } catch (err: any) {
+      showToast(`Failed: ${err.message}`);
+    } finally {
+      setGenerating(false);
+    }
   };
 
   const handleDelete = async (gen: Generation) => {
@@ -65,11 +83,20 @@ export const WrittenSongsTab: React.FC<WrittenSongsTabProps> = ({
       <div className="flex items-center gap-3 flex-wrap">
         <button
           onClick={handleQuickGenerate}
-          disabled={profiles.length === 0}
+          disabled={generating || profiles.length === 0}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-zinc-700 disabled:text-zinc-500 text-white text-sm font-semibold transition-all"
         >
-          <Wand2 className="w-4 h-4" />
-          Generate Lyrics
+          {generating ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Generating...
+            </>
+          ) : (
+            <>
+              <Wand2 className="w-4 h-4" />
+              Generate Lyrics
+            </>
+          )}
         </button>
         <div className="flex items-center gap-2">
           <label className="text-xs text-zinc-500">Count:</label>
@@ -87,6 +114,18 @@ export const WrittenSongsTab: React.FC<WrittenSongsTabProps> = ({
           <span className="text-xs text-amber-400/60">Build a profile first</span>
         )}
       </div>
+
+      {/* Streaming panel — shows real-time LLM output during generation */}
+      {streaming.visible && (
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/5 overflow-hidden">
+          <StreamingPanel
+            visible={streaming.visible}
+            streamText={streaming.text}
+            phase={streaming.phase}
+            done={streaming.done}
+          />
+        </div>
+      )}
 
       {/* Generations list */}
       {generations.length === 0 ? (
