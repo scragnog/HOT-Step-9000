@@ -380,6 +380,7 @@ def register_lireek_routes(app: FastAPI) -> None:
         used_bpms = [g.get("bpm", 0) for g in existing if g.get("bpm")]
         used_keys = [g.get("key", "") for g in existing if g.get("key")]
         used_titles = [g.get("title", "") for g in existing if g.get("title")]
+        used_durations = [g.get("duration", 0) for g in existing if g.get("duration")]
 
         try:
             result = generate_lyrics(
@@ -390,6 +391,7 @@ def register_lireek_routes(app: FastAPI) -> None:
                 used_subjects=used_subjects,
                 used_bpms=used_bpms,
                 used_keys=used_keys,
+                used_durations=used_durations,
                 used_titles=used_titles,
             )
         except ValueError as e:
@@ -555,6 +557,7 @@ def register_lireek_routes(app: FastAPI) -> None:
         used_bpms = [g.get("bpm", 0) for g in existing if g.get("bpm")]
         used_keys = [g.get("key", "") for g in existing if g.get("key")]
         used_titles = [g.get("title", "") for g in existing if g.get("title")]
+        used_durations = [g.get("duration", 0) for g in existing if g.get("duration")]
 
         q: queue.Queue = queue.Queue()
 
@@ -574,6 +577,7 @@ def register_lireek_routes(app: FastAPI) -> None:
                     used_subjects=used_subjects,
                     used_bpms=used_bpms,
                     used_keys=used_keys,
+                    used_durations=used_durations,
                     used_titles=used_titles,
                     on_chunk=on_chunk,
                     on_phase=on_phase,

@@ -60,7 +60,6 @@ def _estimate_duration(lyrics: str, bpm: int) -> int:
     total_seconds = vocal_seconds + break_seconds
     estimated = int(total_seconds)
     estimated = max(90, min(estimated, 360))
-    estimated = round(estimated / 5) * 5
     return estimated
 
 
@@ -414,7 +413,7 @@ SUBJECT: Must fit the artist's typical range. Be SPECIFIC and CONCRETE. Do NOT r
 BPM: Realistic tempo (30-300). Vary across generations.
 KEY: Standard notation (e.g. "C Major", "A Minor"). Vary across generations.
 CAPTION: Comma-separated descriptive tags for an AI music generator. Cover genre, instruments, emotion, timbre, vocal characteristics, production style.
-DURATION: Total track duration in seconds, rounded to nearest 5.
+DURATION: Total track duration in seconds. Use a SPECIFIC value (e.g. 198, 234, 257) — do NOT always round to multiples of 5 or 10. Vary naturally.
 
 Do NOT include any text outside the JSON object.
 """
@@ -521,6 +520,7 @@ def _build_generation_prompt(
         for t in used_titles:
             lines.append(f"  ✗ {t}")
         lines.append("You MUST choose a COMPLETELY DIFFERENT title.")
+        lines.append("Do NOT reuse ANY significant word from these titles. If 'Glass' appears in a used title, do NOT put 'Glass' in your new title. Same for all nouns, adjectives, and evocative words. Only common words like 'the', 'a', 'of', 'in' may overlap.")
 
     lines += [
         "", "=== FINAL REMINDERS ===",
@@ -609,6 +609,7 @@ def _plan_song_metadata(
     used_subjects: list[str],
     used_bpms: list[int],
     used_keys: list[str],
+    used_durations: list[int],
     provider_name: str,
     model: Optional[str] = None,
     on_chunk: Optional[Callable[[str], None]] = None,
@@ -647,6 +648,8 @@ def _plan_song_metadata(
         lines.append(f"\nBPMs ALREADY USED (avoid ±5 of these): {', '.join(str(b) for b in used_bpms)}")
     if used_keys:
         lines.append(f"\nKeys ALREADY USED (try different ones): {', '.join(used_keys)}")
+    if used_durations:
+        lines.append(f"\nDurations ALREADY USED (avoid ±10 of these): {', '.join(str(d) for d in used_durations)}")
 
     lines.append("\nPlan the metadata for the next song:")
     user_prompt = "\n".join(lines)
@@ -689,6 +692,7 @@ def generate_lyrics(
     used_subjects: Optional[list[str]] = None,
     used_bpms: Optional[list[int]] = None,
     used_keys: Optional[list[str]] = None,
+    used_durations: Optional[list[int]] = None,
     used_titles: Optional[list[str]] = None,
     on_chunk: Optional[Callable[[str], None]] = None,
     on_phase: Optional[Callable[[str], None]] = None,
@@ -718,7 +722,8 @@ def generate_lyrics(
         try:
             metadata = _plan_song_metadata(
                 profile, used_subjects or [], used_bpms or [],
-                used_keys or [], provider_name, model, on_chunk,
+                used_keys or [], used_durations or [],
+                provider_name, model, on_chunk,
             )
             subject = metadata["subject"]
             bpm = metadata["bpm"]
