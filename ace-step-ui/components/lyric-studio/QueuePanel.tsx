@@ -84,10 +84,8 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
   // Adapter type detection
   const [detectedType, setDetectedType] = useState<'lokr' | 'lora' | 'unknown' | null>(null);
 
-  if (!open) return null;
-
   // ── Load presets when tab switches ──
-  const loadPresets = async () => {
+  const loadPresets = useCallback(async () => {
     setPresetsLoading(true);
     try {
       const res = await lireekApi.listAllPresets();
@@ -101,10 +99,9 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
     } finally {
       setPresetsLoading(false);
     }
-  };
+  }, []);
 
   // Detect adapter type on path change
-  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     if (!adapterPath.trim() || !token) {
       setDetectedType(null);
@@ -116,6 +113,9 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
       .catch(() => { if (!cancelled) setDetectedType('unknown'); });
     return () => { cancelled = true; };
   }, [adapterPath, token]);
+
+  if (!open) return null;
+
 
   const toggleItem = (id: number) => {
     setSelected(prev => {
