@@ -663,6 +663,7 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
                     profiles={profiles}
                     onRefresh={refreshAlbumData}
                     showToast={showToast}
+                    profilingModel={loadSelections().profiling}
                   />
                 )}
                 {activeTab === 'written-songs' && (

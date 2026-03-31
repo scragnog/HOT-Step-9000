@@ -12,16 +12,18 @@ interface ProfilesTabProps {
   profiles: Profile[];
   onRefresh: () => void;
   showToast: (msg: string) => void;
+  profilingModel: { provider: string; model?: string };
 }
 
 export const ProfilesTab: React.FC<ProfilesTabProps> = ({
-  lyricsSetId, profiles, onRefresh, showToast,
+  lyricsSetId, profiles, onRefresh, showToast, profilingModel,
 }) => {
   const [building, setBuilding] = useState(false);
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null);
-  const [provider, setProvider] = useState('openrouter');
-  const [model, setModel] = useState('');
   const streaming = useStreamingStore();
+
+  const provider = profilingModel.provider;
+  const model = profilingModel.model || '';
 
   const handleBuild = async () => {
     setBuilding(true);
