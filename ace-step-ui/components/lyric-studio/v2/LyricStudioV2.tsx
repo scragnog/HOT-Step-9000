@@ -176,8 +176,7 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
             }
             setNav({ level: 'album-detail', selectedArtist: artist, selectedAlbum: album });
             if (parsed.tab) setActiveTab(parsed.tab);
-            // Load album data in parallel
-            await loadAlbumData(album.id);
+            // Album data loaded reactively by the albumId useEffect
           } else {
             setNav({ level: 'albums', selectedArtist: artist, selectedAlbum: null });
           }
@@ -268,9 +267,27 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
   const handleSelectAlbum = useCallback((album: LyricsSet) => {
     setNav(prev => ({ ...prev, level: 'album-detail', selectedAlbum: album }));
     setActiveTab('source-lyrics');
-    loadAlbumData(album.id);
     pushUrl(nav.selectedArtist?.id, album.id, 'source-lyrics');
-  }, [loadAlbumData, pushUrl, nav.selectedArtist]);
+  }, [pushUrl, nav.selectedArtist]);
+
+  // ── Reactive album data loading ──
+  // Fires whenever the selected album changes (from any navigation path)
+  // to ensure profiles, generations, and preset are always fresh.
+  const albumIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    const albumId = nav.selectedAlbum?.id ?? null;
+    if (albumId === albumIdRef.current) return; // same album, skip
+    albumIdRef.current = albumId;
+
+    if (albumId == null) return; // navigated away from album detail
+
+    // Clear stale data immediately so old album's data doesn't flash
+    setProfiles([]);
+    setGenerations([]);
+    setSongCount(0);
+
+    loadAlbumData(albumId);
+  }, [nav.selectedAlbum?.id, loadAlbumData]);
 
   const handleBackToArtists = useCallback(() => {
     setNav({ level: 'artists', selectedArtist: null, selectedAlbum: null });
@@ -322,17 +339,16 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
         loadAlbums(artist.id);
         return;
       }
-      // Album detail
+      // Album detail — reactive useEffect handles data loading
       const album = albums.find(a => a.id === parsed.albumId);
       if (album) {
         setNav({ level: 'album-detail', selectedArtist: artist, selectedAlbum: album });
         if (parsed.tab) setActiveTab(parsed.tab);
-        loadAlbumData(album.id);
       }
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, [artists, albums, loadAlbums, loadAlbumData]);
+  }, [artists, albums, loadAlbums]);
 
   // ── Actions ──
   const handleDeleteArtist = useCallback(async (artist: Artist) => {
