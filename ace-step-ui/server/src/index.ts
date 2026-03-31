@@ -860,6 +860,17 @@ app.use(['/api/lireek', '/api/llm'], async (req, res) => {
       }
     });
 
+    // Check if this is an SSE response (e.g. streaming LLM output)
+    const contentType = response.headers.get('content-type') || '';
+    const isSSE = contentType.includes('text/event-stream');
+
+    if (isSSE) {
+      // Disable Nagle's algorithm so tiny SSE chunks flush immediately
+      // instead of batching in the TCP buffer for minutes
+      res.socket?.setNoDelay(true);
+      res.flushHeaders();
+    }
+
     // Stream the response body
     if (response.body) {
       const reader = response.body.getReader();
@@ -867,6 +878,10 @@ app.use(['/api/lireek', '/api/llm'], async (req, res) => {
         const { done, value } = await reader.read();
         if (done) break;
         res.write(value);
+        // Force-flush SSE data so each chunk reaches the browser immediately
+        if (isSSE) {
+          (res as any).flush?.();
+        }
       }
       res.end();
     } else {
