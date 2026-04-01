@@ -943,6 +943,22 @@ def generate_music(
                     audio_code_string_to_use = all_audio_codes_list
                 else:
                     audio_code_string_to_use = all_audio_codes_list[0] if all_audio_codes_list else ""
+
+                # When thinking mode generates audio codes, the task auto-switches
+                # to "cover" mode internally. But audio_cover_strength defaults to
+                # 0.0 for text2music, meaning cover conditioning would be used for
+                # ZERO diffusion steps — silently discarding the LM's audio codes.
+                # Force cover_strength=1.0 so the codes actually condition the DiT.
+                has_codes = (
+                    (isinstance(audio_code_string_to_use, list) and any(c for c in audio_code_string_to_use))
+                    or (isinstance(audio_code_string_to_use, str) and audio_code_string_to_use.strip())
+                )
+                if has_codes and params.audio_cover_strength <= 0.0:
+                    logger.info(
+                        f"[generate_music] Thinking mode: overriding audio_cover_strength "
+                        f"from {params.audio_cover_strength} → 1.0 (LM audio codes need cover conditioning)"
+                    )
+                    params.audio_cover_strength = 1.0
             else:
                 # For "dit" mode, keep user-provided codes or empty
                 audio_code_string_to_use = params.audio_codes
