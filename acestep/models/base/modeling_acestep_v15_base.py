@@ -1867,6 +1867,32 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         erg_scale: float = 1.0,
         **kwargs,
     ):
+        # ── DIAGNOSTIC: dump all generate_audio kwargs ─────────────────
+        from loguru import logger as _ga_log
+        _ga_log.info(
+            f"[DIAG-GA] generate_audio ENTRY: "
+            f"audio_cover_strength={audio_cover_strength}, "
+            f"is_covers={is_covers.tolist() if is_covers is not None else None}, "
+            f"has_precomputed_hints={precomputed_lm_hints_25Hz is not None}, "
+            f"hints_shape={tuple(precomputed_lm_hints_25Hz.shape) if precomputed_lm_hints_25Hz is not None else None}, "
+            f"src_latents_shape={tuple(src_latents.shape)}, "
+            f"infer_steps={infer_steps}, infer_method={infer_method}, "
+            f"guidance_mode={guidance_mode}, diffusion_guidance_sale={diffusion_guidance_sale}, "
+            f"shift={shift}, scheduler={scheduler}, "
+            f"cover_noise_strength={cover_noise_strength}, "
+            f"seed={seed}, "
+            f"audio_codes={'present' if audio_codes is not None else None}, "
+            f"extra_kwargs={list(kwargs.keys())}"
+        )
+        if precomputed_lm_hints_25Hz is not None:
+            _ga_log.info(
+                f"[DIAG-GA] hints stats: "
+                f"mean={precomputed_lm_hints_25Hz.float().mean().item():.6f}, "
+                f"std={precomputed_lm_hints_25Hz.float().std().item():.6f}, "
+                f"min={precomputed_lm_hints_25Hz.float().min().item():.4f}, "
+                f"max={precomputed_lm_hints_25Hz.float().max().item():.4f}"
+            )
+        # ── END DIAGNOSTIC ─────────────────────────────────────────────
         if attention_mask is None:
             latent_length = src_latents.shape[1]
             attention_mask = torch.ones(src_latents.shape[0], latent_length, device=src_latents.device, dtype=src_latents.dtype)
