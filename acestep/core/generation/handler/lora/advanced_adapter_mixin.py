@@ -407,7 +407,15 @@ def _apply_merged_weights_with_groups(self) -> None:
             combined = base_val.float()
             for s in active_slots.values():
                 if k in s["delta"]:
-                    g_scale = s.get("group_scales", {}).get(group, 1.0)
+                    gs = s.get("group_scales", {})
+                    if group:
+                        g_scale = gs.get(group, 1.0)
+                    else:
+                        # Unclassified keys (condition_embedder, norms, etc.)
+                        # use the average of all group scales so they respect
+                        # the user's intent when groups are zeroed out.
+                        vals = [gs.get("self_attn", 1.0), gs.get("cross_attn", 1.0), gs.get("mlp", 1.0)]
+                        g_scale = sum(vals) / len(vals)
                     l_scales = s.get("layer_scales", {})
                     if layer_idx is not None:
                         l_scale = l_scales.get(layer_idx, 1.0)
@@ -605,13 +613,13 @@ def set_lora_slot_scale(self, scale: float, slot: Optional[int] = None) -> str:
     """Set adapter scale for a slot or all slots.
 
     Args:
-        scale: Scale value (0.0–2.0)
+        scale: Scale value (0.0–4.0)
         slot: Specific slot. None = all slots.
     """
     if not self._adapter_slots:
         return "⚠️ No adapters loaded"
 
-    scale = max(0.0, min(2.0, scale))
+    scale = max(0.0, min(4.0, scale))
 
     if slot is not None:
         if slot not in self._adapter_slots:
@@ -634,9 +642,9 @@ def set_lora_group_scales(
 ) -> str:
     """Set per-module-group global scales applied to all slots."""
     scales = {
-        "self_attn": max(0.0, min(2.0, self_attn_scale)),
-        "cross_attn": max(0.0, min(2.0, cross_attn_scale)),
-        "mlp": max(0.0, min(2.0, mlp_scale)),
+        "self_attn": max(0.0, min(4.0, self_attn_scale)),
+        "cross_attn": max(0.0, min(4.0, cross_attn_scale)),
+        "mlp": max(0.0, min(4.0, mlp_scale)),
     }
     self.lora_group_scales = scales
 
@@ -660,9 +668,9 @@ def set_slot_group_scales(
         return f"❌ Slot {slot} not found. Active slots: {list(self._adapter_slots.keys())}"
 
     scales = {
-        "self_attn": max(0.0, min(2.0, self_attn_scale)),
-        "cross_attn": max(0.0, min(2.0, cross_attn_scale)),
-        "mlp": max(0.0, min(2.0, mlp_scale)),
+        "self_attn": max(0.0, min(4.0, self_attn_scale)),
+        "cross_attn": max(0.0, min(4.0, cross_attn_scale)),
+        "mlp": max(0.0, min(4.0, mlp_scale)),
     }
     self._adapter_slots[slot]["group_scales"] = scales
 
@@ -796,7 +804,12 @@ def _apply_merged_weights_temporal(self, schedule_scales: Dict[int, float]) -> N
             for sid, s in active_slots.items():
                 if k in s["delta"]:
                     slot_scale = schedule_scales.get(sid, 0.0)
-                    g_scale = s.get("group_scales", {}).get(group, 1.0)
+                    gs = s.get("group_scales", {})
+                    if group:
+                        g_scale = gs.get(group, 1.0)
+                    else:
+                        vals = [gs.get("self_attn", 1.0), gs.get("cross_attn", 1.0), gs.get("mlp", 1.0)]
+                        g_scale = sum(vals) / len(vals)
                     l_scales = s.get("layer_scales", {})
                     if layer_idx is not None:
                         l_scale = l_scales.get(layer_idx, 1.0)
