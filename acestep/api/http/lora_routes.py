@@ -25,13 +25,13 @@ class LoadLoRARequest(BaseModel):
     lora_path: str = Field(..., description="Path to LoRA adapter directory or LoKr/LyCORIS safetensors file")
     adapter_name: Optional[str] = Field(default=None, description="Optional adapter name (uses path-derived name if omitted)")
     slot: Optional[int] = Field(default=None, description="Slot number for advanced multi-adapter mode (0-3)")
-    scale: Optional[float] = Field(default=None, ge=0.0, le=2.0, description="Optional scale to apply immediately after load")
+    scale: Optional[float] = Field(default=None, ge=0.0, le=4.0, description="Optional scale to apply immediately after load")
     group_scales: Optional[Dict[str, float]] = Field(default=None, description="Optional group scales {self_attn, cross_attn, mlp} to apply immediately after load")
 
 
 class SetLoRAScaleRequest(BaseModel):
     adapter_name: Optional[str] = Field(default=None, description="Optional adapter name; defaults to active adapter")
-    scale: float = Field(..., ge=0.0, le=2.0, description="LoRA scale (0.0-2.0)")
+    scale: float = Field(..., ge=0.0, le=4.0, description="LoRA scale (0.0-4.0)")
     slot: Optional[int] = Field(default=None, description="Slot number for advanced mode")
 
 
@@ -40,16 +40,16 @@ class ToggleLoRARequest(BaseModel):
 
 
 class SetGroupScalesRequest(BaseModel):
-    self_attn: float = Field(default=1.0, ge=0.0, le=2.0, description="Self-attention group scale")
-    cross_attn: float = Field(default=1.0, ge=0.0, le=2.0, description="Cross-attention group scale")
-    mlp: float = Field(default=1.0, ge=0.0, le=2.0, description="MLP/feed-forward group scale")
+    self_attn: float = Field(default=1.0, ge=0.0, le=4.0, description="Self-attention group scale")
+    cross_attn: float = Field(default=1.0, ge=0.0, le=4.0, description="Cross-attention group scale")
+    mlp: float = Field(default=1.0, ge=0.0, le=4.0, description="MLP/feed-forward group scale")
 
 
 class SetSlotGroupScalesRequest(BaseModel):
     slot: int = Field(..., description="Slot number (0-3)")
-    self_attn: float = Field(default=1.0, ge=0.0, le=2.0, description="Self-attention group scale")
-    cross_attn: float = Field(default=1.0, ge=0.0, le=2.0, description="Cross-attention group scale")
-    mlp: float = Field(default=1.0, ge=0.0, le=2.0, description="MLP/feed-forward group scale")
+    self_attn: float = Field(default=1.0, ge=0.0, le=4.0, description="Self-attention group scale")
+    cross_attn: float = Field(default=1.0, ge=0.0, le=4.0, description="Cross-attention group scale")
+    mlp: float = Field(default=1.0, ge=0.0, le=4.0, description="MLP/feed-forward group scale")
 
 
 class SetSlotLayerScalesRequest(BaseModel):
@@ -60,7 +60,7 @@ class SetSlotLayerScalesRequest(BaseModel):
 class SetSlotLayerScaleRequest(BaseModel):
     slot: int = Field(..., description="Slot number (0-3)")
     layer: int = Field(..., ge=0, le=23, description="Layer index (0-23)")
-    scale: float = Field(..., ge=0.0, le=2.0, description="Scale value")
+    scale: float = Field(..., ge=0.0, le=4.0, description="Scale value")
 
 
 class SetTemporalScheduleRequest(BaseModel):
@@ -93,7 +93,7 @@ class RedmondToggleRequest(BaseModel):
 
 class RedmondScaleRequest(BaseModel):
     """Set Redmond Mode scale."""
-    scale: float = Field(..., ge=0.0, le=2.0, description="Redmond scale (0.0-2.0)")
+    scale: float = Field(..., ge=0.0, le=4.0, description="Redmond scale (0.0-4.0)")
 
 
 # ── Helpers ─────────────────────────────────────────────────────────────
