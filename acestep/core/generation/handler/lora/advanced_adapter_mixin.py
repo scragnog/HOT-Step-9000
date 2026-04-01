@@ -27,9 +27,10 @@ def _determine_group(module_name: str) -> str:
     """Determine which module group a named module belongs to.
 
     Key naming in the decoder's LinearTransformerBlock:
-      - .cross_attn.  → cross-attention (checked first, contains 'attn')
-      - .attn.        → self / joint attention
-      - .ff.          → feed-forward / MLP
+      - .cross_attn.     → cross-attention (checked first, contains 'attn')
+      - .attn.           → self / joint attention
+      - .ff.             → feed-forward / MLP
+      - condition_embed*  → text conditioning embedding
     """
     if "cross_attn" in module_name:
         return "cross_attn"
@@ -37,6 +38,8 @@ def _determine_group(module_name: str) -> str:
         return "self_attn"
     elif ".ff." in module_name or ".ff_" in module_name:
         return "mlp"
+    elif "condition_embed" in module_name:
+        return "cond_embed"
     return ""
 
 
@@ -411,10 +414,10 @@ def _apply_merged_weights_with_groups(self) -> None:
                     if group:
                         g_scale = gs.get(group, 1.0)
                     else:
-                        # Unclassified keys (condition_embedder, norms, etc.)
+                        # Unclassified keys (norms, final_layer, etc.)
                         # use the average of all group scales so they respect
                         # the user's intent when groups are zeroed out.
-                        vals = [gs.get("self_attn", 1.0), gs.get("cross_attn", 1.0), gs.get("mlp", 1.0)]
+                        vals = [gs.get("self_attn", 1.0), gs.get("cross_attn", 1.0), gs.get("mlp", 1.0), gs.get("cond_embed", 1.0)]
                         g_scale = sum(vals) / len(vals)
                     l_scales = s.get("layer_scales", {})
                     if layer_idx is not None:
@@ -504,7 +507,7 @@ def load_lora_slot(self, lora_path: str, slot: Optional[int] = None) -> str:
             "type": result["type"],
             "delta": result["delta"],
             "scale": 1.0,
-            "group_scales": {"self_attn": 1.0, "cross_attn": 1.0, "mlp": 1.0},
+            "group_scales": {"self_attn": 1.0, "cross_attn": 1.0, "mlp": 1.0, "cond_embed": 1.0},
             "layer_scales": {},  # empty = all layers at 1.0
         }
 
@@ -639,12 +642,14 @@ def set_lora_slot_scale(self, scale: float, slot: Optional[int] = None) -> str:
 
 def set_lora_group_scales(
     self, self_attn_scale: float, cross_attn_scale: float, mlp_scale: float,
+    cond_embed_scale: float = 1.0,
 ) -> str:
     """Set per-module-group global scales applied to all slots."""
     scales = {
         "self_attn": max(0.0, min(4.0, self_attn_scale)),
         "cross_attn": max(0.0, min(4.0, cross_attn_scale)),
         "mlp": max(0.0, min(4.0, mlp_scale)),
+        "cond_embed": max(0.0, min(4.0, cond_embed_scale)),
     }
     self.lora_group_scales = scales
 
@@ -655,13 +660,14 @@ def set_lora_group_scales(
         self._merged_dirty = True
         _apply_merged_weights_with_groups(self)
 
-    sa, ca, ml = scales["self_attn"], scales["cross_attn"], scales["mlp"]
-    return f"✅ Group scales (all slots): SA={sa:.0%} CA={ca:.0%} MLP={ml:.0%}"
+    sa, ca, ml, ce = scales["self_attn"], scales["cross_attn"], scales["mlp"], scales["cond_embed"]
+    return f"✅ Group scales (all slots): SA={sa:.0%} CA={ca:.0%} MLP={ml:.0%} CE={ce:.0%}"
 
 
 def set_slot_group_scales(
     self, slot: int, self_attn_scale: float = 1.0,
     cross_attn_scale: float = 1.0, mlp_scale: float = 1.0,
+    cond_embed_scale: float = 1.0,
 ) -> str:
     """Set per-group LoRA scales for a specific adapter slot."""
     if slot not in self._adapter_slots:
@@ -671,6 +677,7 @@ def set_slot_group_scales(
         "self_attn": max(0.0, min(4.0, self_attn_scale)),
         "cross_attn": max(0.0, min(4.0, cross_attn_scale)),
         "mlp": max(0.0, min(4.0, mlp_scale)),
+        "cond_embed": max(0.0, min(4.0, cond_embed_scale)),
     }
     self._adapter_slots[slot]["group_scales"] = scales
 
@@ -679,8 +686,8 @@ def set_slot_group_scales(
         _apply_merged_weights_with_groups(self)
 
     name = self._adapter_slots[slot]["name"]
-    sa, ca, ml = scales["self_attn"], scales["cross_attn"], scales["mlp"]
-    return f"✅ Slot {slot} ({name}) group scales: SA={sa:.0%} CA={ca:.0%} MLP={ml:.0%}"
+    sa, ca, ml, ce = scales["self_attn"], scales["cross_attn"], scales["mlp"], scales["cond_embed"]
+    return f"✅ Slot {slot} ({name}) group scales: SA={sa:.0%} CA={ca:.0%} MLP={ml:.0%} CE={ce:.0%}"
 
 
 def set_slot_layer_scales(self, slot: int, layer_scales: Dict[int, float]) -> str:
@@ -748,7 +755,7 @@ def get_advanced_lora_status(self) -> Dict[str, Any]:
             "type": s["type"],
             "scale": s["scale"],
             "delta_keys": len(s["delta"]),
-            "group_scales": s.get("group_scales", {"self_attn": 1.0, "cross_attn": 1.0, "mlp": 1.0}),
+            "group_scales": s.get("group_scales", {"self_attn": 1.0, "cross_attn": 1.0, "mlp": 1.0, "cond_embed": 1.0}),
             "layer_scales": s.get("layer_scales", {}),
         })
 
@@ -808,7 +815,7 @@ def _apply_merged_weights_temporal(self, schedule_scales: Dict[int, float]) -> N
                     if group:
                         g_scale = gs.get(group, 1.0)
                     else:
-                        vals = [gs.get("self_attn", 1.0), gs.get("cross_attn", 1.0), gs.get("mlp", 1.0)]
+                        vals = [gs.get("self_attn", 1.0), gs.get("cross_attn", 1.0), gs.get("mlp", 1.0), gs.get("cond_embed", 1.0)]
                         g_scale = sum(vals) / len(vals)
                     l_scales = s.get("layer_scales", {})
                     if layer_idx is not None:

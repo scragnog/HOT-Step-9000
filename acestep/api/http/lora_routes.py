@@ -43,6 +43,7 @@ class SetGroupScalesRequest(BaseModel):
     self_attn: float = Field(default=1.0, ge=0.0, le=4.0, description="Self-attention group scale")
     cross_attn: float = Field(default=1.0, ge=0.0, le=4.0, description="Cross-attention group scale")
     mlp: float = Field(default=1.0, ge=0.0, le=4.0, description="MLP/feed-forward group scale")
+    cond_embed: float = Field(default=1.0, ge=0.0, le=4.0, description="Conditioning embedder group scale")
 
 
 class SetSlotGroupScalesRequest(BaseModel):
@@ -50,6 +51,7 @@ class SetSlotGroupScalesRequest(BaseModel):
     self_attn: float = Field(default=1.0, ge=0.0, le=4.0, description="Self-attention group scale")
     cross_attn: float = Field(default=1.0, ge=0.0, le=4.0, description="Cross-attention group scale")
     mlp: float = Field(default=1.0, ge=0.0, le=4.0, description="MLP/feed-forward group scale")
+    cond_embed: float = Field(default=1.0, ge=0.0, le=4.0, description="Conditioning embedder group scale")
 
 
 class SetSlotLayerScalesRequest(BaseModel):
@@ -375,11 +377,12 @@ def register_lora_routes(
                 self_attn_scale=request.self_attn,
                 cross_attn_scale=request.cross_attn,
                 mlp_scale=request.mlp,
+                cond_embed_scale=request.cond_embed,
             )
             if _is_success_message(result):
                 return wrap_response({
                     "message": result,
-                    "group_scales": {"self_attn": request.self_attn, "cross_attn": request.cross_attn, "mlp": request.mlp},
+                    "group_scales": {"self_attn": request.self_attn, "cross_attn": request.cross_attn, "mlp": request.mlp, "cond_embed": request.cond_embed},
                 })
             return wrap_response(None, code=400, error=result)
         except Exception as exc:
@@ -390,17 +393,18 @@ def register_lora_routes(
         """Set per-group LoRA scales for a specific adapter slot."""
         handler = _require_initialized_handler(app)
         try:
-            logger.info(f"[Slot Group Scales] Setting scales for slot {request.slot}: self_attn={request.self_attn}, cross_attn={request.cross_attn}, mlp={request.mlp}")
+            logger.info(f"[Slot Group Scales] Setting scales for slot {request.slot}: self_attn={request.self_attn}, cross_attn={request.cross_attn}, mlp={request.mlp}, cond_embed={request.cond_embed}")
             result = handler.set_slot_group_scales(
                 slot=request.slot,
                 self_attn_scale=request.self_attn,
                 cross_attn_scale=request.cross_attn,
                 mlp_scale=request.mlp,
+                cond_embed_scale=request.cond_embed,
             )
             if _is_success_message(result):
                 return wrap_response({
                     "message": result, "slot": request.slot,
-                    "group_scales": {"self_attn": request.self_attn, "cross_attn": request.cross_attn, "mlp": request.mlp},
+                    "group_scales": {"self_attn": request.self_attn, "cross_attn": request.cross_attn, "mlp": request.mlp, "cond_embed": request.cond_embed},
                 })
             return wrap_response(None, code=400, error=result)
         except Exception as exc:

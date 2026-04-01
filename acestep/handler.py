@@ -188,7 +188,7 @@ class AceStepHandler(
         self._adapter_slots = {}      # slot_id -> {path, name, type, delta, scale, group_scales}
         self._next_slot_id = 0
         self._merged_dirty = False
-        self.lora_group_scales = {"self_attn": 1.0, "cross_attn": 1.0, "mlp": 1.0}
+        self.lora_group_scales = {"self_attn": 1.0, "cross_attn": 1.0, "mlp": 1.0, "cond_embed": 1.0}
 
         # Activation steering (TADA)
         self.steering_enabled = False

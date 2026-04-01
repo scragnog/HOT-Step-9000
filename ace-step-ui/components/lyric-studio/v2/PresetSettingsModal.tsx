@@ -12,6 +12,7 @@ interface PresetForm {
   self_attn: number;
   cross_attn: number;
   mlp: number;
+  cond_embed: number;
   matchering_reference_path: string;
 }
 
@@ -21,6 +22,7 @@ const DEFAULT_FORM: PresetForm = {
   self_attn: 1.0,
   cross_attn: 1.0,
   mlp: 1.0,
+  cond_embed: 1.0,
   matchering_reference_path: '',
 };
 
@@ -57,6 +59,7 @@ export const PresetSettingsModal: React.FC<PresetSettingsModalProps> = ({
             self_attn: res.preset.adapter_group_scales?.self_attn ?? 1.0,
             cross_attn: res.preset.adapter_group_scales?.cross_attn ?? 1.0,
             mlp: res.preset.adapter_group_scales?.mlp ?? 1.0,
+            cond_embed: res.preset.adapter_group_scales?.cond_embed ?? 1.0,
             matchering_reference_path: res.preset.matchering_reference_path || '',
           });
         } else {
@@ -86,7 +89,7 @@ export const PresetSettingsModal: React.FC<PresetSettingsModalProps> = ({
       await lireekApi.upsertPreset(lyricsSetId, {
         adapter_path: form.adapter_path || undefined,
         adapter_scale: form.adapter_scale,
-        adapter_group_scales: { self_attn: form.self_attn, cross_attn: form.cross_attn, mlp: form.mlp },
+        adapter_group_scales: { self_attn: form.self_attn, cross_attn: form.cross_attn, mlp: form.mlp, cond_embed: form.cond_embed },
         matchering_reference_path: form.matchering_reference_path || undefined,
       });
       showToast('Preset saved');
@@ -248,6 +251,15 @@ export const PresetSettingsModal: React.FC<PresetSettingsModalProps> = ({
                           formatDisplay={(v) => v.toFixed(2)}
                           helpText="Controls the adapter's stored timbre, tonal texture, and sonic character"
                           tooltip="Feed-Forward Network (MLP): vocal timbre, tonal texture, and specific sonic character."
+                        />
+                        <EditableSlider
+                          label="Cond"
+                          value={form.cond_embed}
+                          min={0} max={4} step={0.05}
+                          onChange={(v) => setForm(p => ({ ...p, cond_embed: v }))}
+                          formatDisplay={(v) => v.toFixed(2)}
+                          helpText="Controls how the adapter reshapes text/style prompt interpretation"
+                          tooltip="Conditioning Embedder: transforms your text and style tags into the model's internal representation."
                         />
                       </div>
                     )}

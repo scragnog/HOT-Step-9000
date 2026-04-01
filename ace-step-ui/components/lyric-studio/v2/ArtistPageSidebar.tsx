@@ -42,7 +42,7 @@ export const ArtistPageSidebar: React.FC<ArtistPageSidebarProps> = ({
   const [overrideExpanded, setOverrideExpanded] = useState(false);
   const [globalScaleOverrideEnabled, setGlobalScaleOverrideEnabled] = usePersistedState('ace-globalScaleOverride', false);
   const [globalOverallScale, setGlobalOverallScale] = usePersistedState('ace-globalOverallScale', 1.0);
-  const [globalGroupScales, setGlobalGroupScales] = usePersistedState<{ self_attn: number; cross_attn: number; mlp: number }>('ace-globalGroupScales', { self_attn: 1.0, cross_attn: 1.0, mlp: 1.0 });
+  const [globalGroupScales, setGlobalGroupScales] = usePersistedState<{ self_attn: number; cross_attn: number; mlp: number; cond_embed: number }>('ace-globalGroupScales', { self_attn: 1.0, cross_attn: 1.0, mlp: 1.0, cond_embed: 1.0 });
 
   const gradient = (name: string) => {
     const hash = name.split('').reduce((a, c) => ((a << 5) - a + c.charCodeAt(0)) | 0, 0);
@@ -175,6 +175,14 @@ export const ArtistPageSidebar: React.FC<ArtistPageSidebarProps> = ({
                     onChange={(v) => setGlobalGroupScales(prev => ({ ...prev, mlp: v }))}
                     formatDisplay={(v) => v.toFixed(2)}
                     helpText="Controls the adapter's stored timbre, tonal texture, and sonic character"
+                  />
+                  <EditableSlider
+                    label="Cond"
+                    value={globalGroupScales.cond_embed}
+                    min={0} max={4} step={0.05}
+                    onChange={(v) => setGlobalGroupScales(prev => ({ ...prev, cond_embed: v }))}
+                    formatDisplay={(v) => v.toFixed(2)}
+                    helpText="Controls how the adapter reshapes text/style prompt interpretation"
                   />
                 </div>
               </div>

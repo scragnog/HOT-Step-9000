@@ -75,6 +75,7 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
   const [selfAttn, setSelfAttn] = useState(1.0);
   const [crossAttn, setCrossAttn] = useState(1.0);
   const [mlp, setMlp] = useState(1.0);
+  const [condEmbed, setCondEmbed] = useState(1.0);
   const [groupsExpanded, setGroupsExpanded] = useState(false);
 
   // File browser
@@ -210,7 +211,7 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
         if (hasAdapter) {
           params.adapter_path = adapterPath.trim();
           params.adapter_scale = adapterScale;
-          params.adapter_group_scales = { self_attn: selfAttn, cross_attn: crossAttn, mlp };
+          params.adapter_group_scales = { self_attn: selfAttn, cross_attn: crossAttn, mlp, cond_embed: condEmbed };
         }
         if (hasRef) {
           params.matchering_reference_path = matcheringPath.trim();
@@ -219,7 +220,7 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
         // If we have adapter but no explicit scale fields, still send defaults
         if (hasAdapter && !params.adapter_scale) {
           params.adapter_scale = 1.0;
-          params.adapter_group_scales = { self_attn: 1.0, cross_attn: 1.0, mlp: 1.0 };
+          params.adapter_group_scales = { self_attn: 1.0, cross_attn: 1.0, mlp: 1.0, cond_embed: 1.0 };
         }
 
         await lireekApi.upsertPreset(lsId, params);
@@ -382,6 +383,13 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
                         value={mlp}
                         min={0} max={4} step={0.05}
                         onChange={setMlp}
+                        formatDisplay={(v) => v.toFixed(2)}
+                      />
+                      <EditableSlider
+                        label="Cond"
+                        value={condEmbed}
+                        min={0} max={4} step={0.05}
+                        onChange={setCondEmbed}
                         formatDisplay={(v) => v.toFixed(2)}
                       />
                     </div>

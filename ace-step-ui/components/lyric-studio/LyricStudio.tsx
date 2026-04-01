@@ -110,10 +110,11 @@ export const LyricStudio: React.FC<{ onPlaySong?: (song: Song) => void }> = ({ o
     self_attn: number;
     cross_attn: number;
     mlp: number;
+    cond_embed: number;
     matchering_reference_path: string;
   }>({
     adapter_path: '', adapter_scale: 1.0,
-    self_attn: 1.0, cross_attn: 1.0, mlp: 1.0,
+    self_attn: 1.0, cross_attn: 1.0, mlp: 1.0, cond_embed: 1.0,
     matchering_reference_path: '',
   });
 
@@ -341,10 +342,11 @@ export const LyricStudio: React.FC<{ onPlaySong?: (song: Song) => void }> = ({ o
           self_attn: res.preset.adapter_group_scales?.self_attn ?? 1.0,
           cross_attn: res.preset.adapter_group_scales?.cross_attn ?? 1.0,
           mlp: res.preset.adapter_group_scales?.mlp ?? 1.0,
+          cond_embed: res.preset.adapter_group_scales?.cond_embed ?? 1.0,
           matchering_reference_path: res.preset.matchering_reference_path || '',
         });
       } else {
-        setPresetForm({ adapter_path: '', adapter_scale: 1.0, self_attn: 1.0, cross_attn: 1.0, mlp: 1.0, matchering_reference_path: '' });
+        setPresetForm({ adapter_path: '', adapter_scale: 1.0, self_attn: 1.0, cross_attn: 1.0, mlp: 1.0, cond_embed: 1.0, matchering_reference_path: '' });
       }
     } catch (err) {
       showToast(`Failed to load preset: ${(err as Error).message}`);
@@ -359,7 +361,7 @@ export const LyricStudio: React.FC<{ onPlaySong?: (song: Song) => void }> = ({ o
       await lireekApi.upsertPreset(lyricsSetId, {
         adapter_path: presetForm.adapter_path || undefined,
         adapter_scale: presetForm.adapter_scale,
-        adapter_group_scales: { self_attn: presetForm.self_attn, cross_attn: presetForm.cross_attn, mlp: presetForm.mlp },
+        adapter_group_scales: { self_attn: presetForm.self_attn, cross_attn: presetForm.cross_attn, mlp: presetForm.mlp, cond_embed: presetForm.cond_embed },
         matchering_reference_path: presetForm.matchering_reference_path || undefined,
       });
       showToast('Preset saved');
@@ -1101,6 +1103,17 @@ export const LyricStudio: React.FC<{ onPlaySong?: (song: Song) => void }> = ({ o
                           formatDisplay={(v) => v.toFixed(2)}
                           helpText="Controls the adapter's stored timbre, tonal texture, and sonic character"
                           tooltip="Feed-Forward Network (MLP): per-frame feature transformation — the 'knowledge store' of learned audio patterns. Vocal timbre, tonal texture, and specific sonic character are thought to live primarily here."
+                        />
+                        <EditableSlider
+                          label="Cond"
+                          value={presetForm.cond_embed}
+                          min={0}
+                          max={4}
+                          step={0.05}
+                          onChange={(v) => setPresetForm(p => ({ ...p, cond_embed: v }))}
+                          formatDisplay={(v) => v.toFixed(2)}
+                          helpText="Controls how the adapter reshapes text/style prompt interpretation"
+                          tooltip="Conditioning Embedder: transforms your text and style tags into the internal representation the model uses. The adapter can shift what words/genres 'mean' to the model."
                         />
                       </div>
                     )}

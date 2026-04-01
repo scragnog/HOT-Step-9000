@@ -262,7 +262,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   // Global Scale Overrides — when enabled, these values override all per-adapter scales
   const [globalScaleOverrideEnabled, setGlobalScaleOverrideEnabled] = usePersistedState('ace-globalScaleOverride', false);
   const [globalOverallScale, setGlobalOverallScale] = usePersistedState('ace-globalOverallScale', 1.0);
-  const [globalGroupScales, setGlobalGroupScales] = usePersistedState<{ self_attn: number; cross_attn: number; mlp: number }>('ace-globalGroupScales', { self_attn: 1.0, cross_attn: 1.0, mlp: 1.0 });
+  const [globalGroupScales, setGlobalGroupScales] = usePersistedState<{ self_attn: number; cross_attn: number; mlp: number; cond_embed: number }>('ace-globalGroupScales', { self_attn: 1.0, cross_attn: 1.0, mlp: 1.0, cond_embed: 1.0 });
   const [adapterLoadingMessage, setAdapterLoadingMessage] = useState<string | null>(null);
 
   // Global trigger word settings (read from localStorage, synced with SettingsModal)

@@ -97,7 +97,7 @@ export interface AlbumPreset {
   lyrics_set_id: number;
   adapter_path?: string;
   adapter_scale?: number;
-  adapter_group_scales?: { self_attn: number; cross_attn: number; mlp: number };
+  adapter_group_scales?: { self_attn: number; cross_attn: number; mlp: number; cond_embed: number };
   matchering_reference_path?: string;
   created_at: string;
 }
@@ -232,7 +232,7 @@ export const lireekApi = {
   upsertPreset: (lyricsSetId: number, params: {
     adapter_path?: string;
     adapter_scale?: number;
-    adapter_group_scales?: { self_attn: number; cross_attn: number; mlp: number };
+    adapter_group_scales?: { self_attn: number; cross_attn: number; mlp: number; cond_embed: number };
     matchering_reference_path?: string;
   }): Promise<{ preset: AlbumPreset }> =>
     api(`/api/lireek/lyrics-sets/${lyricsSetId}/preset`, { method: 'PUT', body: params }),

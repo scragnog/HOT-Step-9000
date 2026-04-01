@@ -486,7 +486,7 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                             {/* Per-group sliders (expandable) */}
                                             {expandedSlots.has(slot.slot) && (
                                                 <div className={`space-y-1 pl-2 border-l-2 border-pink-500/20 ${globalScaleOverrideEnabled ? 'opacity-40 pointer-events-none' : ''}`}>
-                                                    {(['self_attn', 'cross_attn', 'mlp'] as const).map((group) => {
+                                                    {(['self_attn', 'cross_attn', 'mlp', 'cond_embed'] as const).map((group) => {
                                                         const groupInfo = {
                                                             self_attn: {
                                                                 label: 'Self-Attn',
@@ -502,6 +502,11 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                                                 label: 'MLP',
                                                                 helpText: 'Controls the adapter\'s stored timbre, tonal texture, and sonic character.',
                                                                 tooltip: 'Feed-Forward Network (MLP): per-frame feature transformation — the "knowledge store" of learned audio patterns. Vocal timbre, tonal texture, and specific sonic character are thought to live primarily here. Reducing MLP strips specific character while preserving rhythmic and structural patterns.',
+                                                            },
+                                                            cond_embed: {
+                                                                label: 'Cond',
+                                                                helpText: 'Controls how the adapter reshapes text/style prompt interpretation.',
+                                                                tooltip: 'Conditioning Embedder: transforms your text and style tags into the internal representation the model uses. The adapter can shift what words/genres "mean" to the model. Reducing this keeps the base model\'s original understanding of prompts.',
                                                             },
                                                         };
                                                         const info = groupInfo[group];
@@ -706,7 +711,7 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                                 formatDisplay={(v) => v.toFixed(2)}
                                             />
                                             <div className="space-y-1">
-                                                {(['self_attn', 'cross_attn', 'mlp'] as const).map((group) => {
+                                                {(['self_attn', 'cross_attn', 'mlp', 'cond_embed'] as const).map((group) => {
                                                     const groupInfo = {
                                                         self_attn: {
                                                             label: 'Self-Attn',
@@ -719,6 +724,10 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                                         mlp: {
                                                             label: 'MLP',
                                                             helpText: 'Controls the adapter\'s stored timbre, tonal texture, and sonic character.',
+                                                        },
+                                                        cond_embed: {
+                                                            label: 'Cond',
+                                                            helpText: 'Controls how the adapter reshapes text/style prompt interpretation.',
                                                         },
                                                     };
                                                     const info = groupInfo[group];
