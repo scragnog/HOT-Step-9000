@@ -560,11 +560,9 @@ def run_sweep(
         sys.exit(1)
     print("OK")
 
-    # ── Initialise Whisper ──
-    print(f"  Loading Whisper ({whisper_model})...", end=" ", flush=True)
+    # ── Initialise Whisper (lazy — loaded/unloaded around generations to avoid VRAM conflicts) ──
     scorer = WhisperScorer(model_size=whisper_model, device=whisper_device)
-    scorer._ensure_model()  # Pre-load to avoid delay on first generation
-    print("OK")
+    print(f"  Whisper scorer ready ({whisper_model}, lazy-load to avoid VRAM conflicts)")
 
     # ── Write CSV header if new ──
     if not completed:
@@ -596,6 +594,9 @@ def run_sweep(
 
         # Small delay to let the adapter apply
         time.sleep(0.5)
+
+        # Unload Whisper to free VRAM for generation
+        scorer.unload()
 
         # 2. Run generation
         print("  Generating audio...", end=" ", flush=True)
