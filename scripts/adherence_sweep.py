@@ -564,7 +564,13 @@ def run_sweep(
     # CPU avoids VRAM conflicts entirely; int8 compute is fast enough for scoring
     whisper_compute = "int8" if whisper_device == "cpu" else "float16"
     scorer = WhisperScorer(model_size=whisper_model, device=whisper_device, compute_type=whisper_compute)
-    print(f"  Whisper scorer ready ({whisper_model} on {whisper_device}, {whisper_compute})")
+    if whisper_device == "cpu":
+        # Pre-load on CPU — stays resident, no VRAM conflict
+        print(f"  Loading Whisper ({whisper_model} on CPU, {whisper_compute})...", end=" ", flush=True)
+        scorer._ensure_model()
+        print("OK")
+    else:
+        print(f"  Whisper scorer ready ({whisper_model} on {whisper_device}, lazy-load for VRAM management)")
 
     # ── Write CSV header if new ──
     if not completed:
@@ -597,8 +603,9 @@ def run_sweep(
         # Small delay to let the adapter apply
         time.sleep(0.5)
 
-        # Unload Whisper to free VRAM for generation
-        scorer.unload()
+        # Unload Whisper to free VRAM for generation (only needed on CUDA)
+        if whisper_device == "cuda":
+            scorer.unload()
 
         # 2. Run generation
         print("  Generating audio...", end=" ", flush=True)
