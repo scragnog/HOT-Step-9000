@@ -1407,6 +1407,23 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
               setAdapterSlots(status.advanced.slots);
               setLoraLoaded(true);
               setAdapterTriggerWord((status as any).trigger_word || '');
+
+              // Apply trigger words to re-loaded slots
+              const useFilename = localStorage.getItem('ace-globalTriggerUseFilename') === 'true';
+              const placement = (localStorage.getItem('ace-globalTriggerPlacement') as 'prepend' | 'append' | 'replace') || 'prepend';
+              if (useFilename) {
+                for (const slot of status.advanced.slots) {
+                  const fileName = slot.path.replace(/\\/g, '/').split('/').pop() || '';
+                  const tw = fileName.replace(/\.safetensors$/i, '');
+                  if (tw) {
+                    try {
+                      await generateApi.setSlotTriggerWord({ slot: slot.slot, trigger_word: tw, tag_position: placement }, token);
+                    } catch (err) {
+                      console.error(`[ModelSwitch] Failed to apply trigger word for slot ${slot.slot}:`, err);
+                    }
+                  }
+                }
+              }
             }
           } catch {
             // ignore status refresh failure
@@ -1546,6 +1563,24 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           setAdapterSlots(backendStatus.advanced!.slots);
           setLoraLoaded(true);
           setAdapterTriggerWord((backendStatus as any).trigger_word || '');
+
+          // Apply trigger words to synced slots (they're lost on server restart)
+          const useFilename = localStorage.getItem('ace-globalTriggerUseFilename') === 'true';
+          const placement = (localStorage.getItem('ace-globalTriggerPlacement') as 'prepend' | 'append' | 'replace') || 'prepend';
+          if (useFilename) {
+            for (const slot of backendStatus.advanced!.slots) {
+              const fileName = slot.path.replace(/\\/g, '/').split('/').pop() || '';
+              const tw = fileName.replace(/\.safetensors$/i, '');
+              if (tw) {
+                try {
+                  await generateApi.setSlotTriggerWord({ slot: slot.slot, trigger_word: tw, tag_position: placement }, token);
+                  console.log(`[AutoReload] Trigger word '${tw}' applied to slot ${slot.slot}`);
+                } catch (err) {
+                  console.error(`[AutoReload] Failed to apply trigger word for slot ${slot.slot}:`, err);
+                }
+              }
+            }
+          }
           return;
         }
       } catch {
@@ -1583,6 +1618,24 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           setAdapterSlots(status.advanced.slots);
           setLoraLoaded(true);
           setAdapterTriggerWord((status as any).trigger_word || '');
+
+          // Apply trigger words to freshly loaded slots
+          const useFilename = localStorage.getItem('ace-globalTriggerUseFilename') === 'true';
+          const placement = (localStorage.getItem('ace-globalTriggerPlacement') as 'prepend' | 'append' | 'replace') || 'prepend';
+          if (useFilename) {
+            for (const slot of status.advanced.slots) {
+              const fileName = slot.path.replace(/\\/g, '/').split('/').pop() || '';
+              const tw = fileName.replace(/\.safetensors$/i, '');
+              if (tw) {
+                try {
+                  await generateApi.setSlotTriggerWord({ slot: slot.slot, trigger_word: tw, tag_position: placement }, token);
+                  console.log(`[AutoReload] Trigger word '${tw}' applied to slot ${slot.slot}`);
+                } catch (err) {
+                  console.error(`[AutoReload] Failed to apply trigger word for slot ${slot.slot}:`, err);
+                }
+              }
+            }
+          }
         }
       } catch {
         // ignore status refresh failure
