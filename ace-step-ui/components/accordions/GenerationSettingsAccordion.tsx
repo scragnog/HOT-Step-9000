@@ -435,6 +435,7 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
                         minGuidanceScale={props.minGuidanceScale}
                         onMinGuidanceScaleChange={props.onMinGuidanceScaleChange}
                         isTurbo={props.isTurbo}
+                        isThinking={props.thinking}
                         guidanceScaleText={props.guidanceScaleText}
                         onGuidanceScaleTextChange={props.onGuidanceScaleTextChange}
                         guidanceScaleLyric={props.guidanceScaleLyric}

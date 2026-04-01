@@ -23,6 +23,7 @@ interface GuidanceSettingsAccordionProps {
     cfgIntervalEnd: number;
     onCfgIntervalEndChange: (val: number) => void;
     isTurbo?: boolean;
+    isThinking?: boolean;
 
     // Guidance Envelope Parameters
     guidanceIntervalDecay?: number;
@@ -63,6 +64,7 @@ export const GuidanceSettingsAccordion: React.FC<GuidanceSettingsAccordionProps>
     cfgIntervalEnd,
     onCfgIntervalEndChange,
     isTurbo = false,
+    isThinking = false,
     guidanceIntervalDecay,
     onGuidanceIntervalDecayChange,
     minGuidanceScale,
@@ -282,6 +284,12 @@ export const GuidanceSettingsAccordion: React.FC<GuidanceSettingsAccordionProps>
                     </div>
 
                     {/* Advanced Guidance Parameters */}
+                    {isThinking ? (
+                        <div className="flex items-start gap-2 p-2.5 bg-indigo-50 dark:bg-indigo-900/15 border border-indigo-200 dark:border-indigo-500/20 rounded-lg">
+                            <svg className="w-4 h-4 text-indigo-500 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                            <p className="text-[11px] text-indigo-700 dark:text-indigo-300">Advanced guidance is disabled during Thinking mode. Text/lyric scaling and omega/ERG overrides conflict with LM cover conditioning and are automatically reset to safe defaults.</p>
+                        </div>
+                    ) : (
                     <div className="rounded-lg border border-indigo-500/20 bg-indigo-500/5 p-3 space-y-3">
                         <div className="flex items-center justify-between">
                             <p className="text-[10px] font-semibold text-indigo-400 uppercase tracking-wider">Advanced Guidance</p>
@@ -413,6 +421,7 @@ export const GuidanceSettingsAccordion: React.FC<GuidanceSettingsAccordionProps>
                             />
                         </div>
                     </div>
+                    )}
                 </div>
             )}
         </div>

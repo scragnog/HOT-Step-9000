@@ -964,6 +964,32 @@ def generate_music(
                         f"(LM audio codes need cover conditioning)"
                     )
                     params.audio_cover_strength = thinking_cover_strength
+
+                # ── Thinking-mode: force safe advanced guidance defaults ──
+                # Independent text/lyric scaling amplifies encoder hidden states
+                # (e.g. 15.0 / 5.0 = 3x) BEFORE prepare_condition. This conflicts
+                # with cover conditioning — the DiT never saw 3x-amplified
+                # text + cover context latents during training, causing garbled
+                # output. Neutralise these for thinking mode.
+                if has_codes:
+                    overrides = []
+                    if params.guidance_scale_text > 0:
+                        overrides.append(f"guidance_scale_text {params.guidance_scale_text}→0")
+                        params.guidance_scale_text = 0.0
+                    if params.guidance_scale_lyric > 0:
+                        overrides.append(f"guidance_scale_lyric {params.guidance_scale_lyric}→0")
+                        params.guidance_scale_lyric = 0.0
+                    if params.omega_scale != 1.0:
+                        overrides.append(f"omega_scale {params.omega_scale}→1.0")
+                        params.omega_scale = 1.0
+                    if params.erg_scale != 1.0:
+                        overrides.append(f"erg_scale {params.erg_scale}→1.0")
+                        params.erg_scale = 1.0
+                    if overrides:
+                        logger.info(
+                            f"[generate_music] Thinking mode: forcing safe guidance defaults "
+                            f"({', '.join(overrides)}) — advanced scaling conflicts with cover conditioning"
+                        )
             else:
                 # For "dit" mode, keep user-provided codes or empty
                 audio_code_string_to_use = params.audio_codes
