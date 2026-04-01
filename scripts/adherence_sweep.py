@@ -627,10 +627,30 @@ def run_sweep(
         print(f"OK ({gen_time}s)")
 
         # 3. Extract results
+        # Debug: dump first result structure to help diagnose missing fields
+        if i == 0:
+            debug_path = os.path.join(output_dir, "_debug_first_response.json")
+            try:
+                with open(debug_path, "w", encoding="utf-8") as df:
+                    json.dump(gen_result, df, indent=2, default=str)
+                print(f"  [debug] Response structure saved to {debug_path}")
+            except Exception:
+                pass
+
         audio_path = extract_audio_path(gen_result)
         lrc_text = extract_lrc_text(gen_result)
         dit_score = extract_dit_score(gen_result)
         pmi_score = extract_pmi_score(gen_result)
+
+        # The API response cache doesn't include LRC or scores — but the
+        # generation pipeline saves a .lrc file alongside every audio file.
+        # Read it from disk as a fallback.
+        if not lrc_text and audio_path and os.path.exists(audio_path):
+            lrc_disk_path = os.path.splitext(audio_path)[0] + ".lrc"
+            if os.path.exists(lrc_disk_path):
+                with open(lrc_disk_path, "r", encoding="utf-8") as f:
+                    lrc_text = f.read()
+                print(f"  LRC loaded from disk: {os.path.basename(lrc_disk_path)}")
 
         # Copy audio to sweep output
         saved_audio = ""
