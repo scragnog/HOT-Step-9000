@@ -1214,8 +1214,17 @@ function AppContent() {
 
       // Merge mastering params: global defaults from MasteringConsole are the base,
       // per-job params from Cover Settings (e.g. newly uploaded reference file) override.
+      // IMPORTANT: Boolean flags like stem_matchering must use the per-job value
+      // authoritatively.  The CoverRepaintSettings toggle may never set the key,
+      // leaving it absent, so we default to false to prevent stale global values
+      // from bleeding through.
       const mergedMasteringParams = (globalMasteringParams || params.masteringParams)
-        ? { ...(globalMasteringParams || {}), ...(params.masteringParams || {}) }
+        ? {
+            ...(globalMasteringParams || {}),
+            ...(params.masteringParams || {}),
+            // Per-job stem_matchering is authoritative; fall back false, NOT global
+            stem_matchering: params.masteringParams?.stem_matchering ?? false,
+          }
         : undefined;
 
       const job = await generateApi.startGeneration({
