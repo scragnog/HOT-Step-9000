@@ -923,6 +923,19 @@ def generate_music(
             lm_generated_metadata = all_metadata_list[0] if all_metadata_list else None
             lm_generated_audio_codes_list = all_audio_codes_list
 
+            # ── DIAGNOSTIC: fingerprint LM audio codes output ──────────
+            import hashlib, re as _re
+            for _ac_idx, _ac_str in enumerate(all_audio_codes_list):
+                _ac_hash = hashlib.md5((_ac_str or "").encode()).hexdigest()[:12]
+                _ac_first5 = _re.findall(r"<\|audio_code_(\d+)\|>", _ac_str or "")[:5]
+                logger.info(
+                    f"[DIAG-A] LM codes item {_ac_idx}: "
+                    f"hash={_ac_hash}, len={len(_ac_str or '')}, "
+                    f"first5_codes={_ac_first5}, "
+                    f"temp={params.lm_temperature}, cfg={params.lm_cfg_scale}"
+                )
+            # ── END DIAGNOSTIC ─────────────────────────────────────────
+
             # Set audio_code_string_to_use based on infer_type
             if infer_type == "llm_dit":
                 # If batch mode, use list; otherwise use single string

@@ -63,6 +63,18 @@ class AudioCodesMixin:
             if quantized.dtype != self.dtype:
                 quantized = quantized.to(self.dtype)
             lm_hints_25hz = detokenizer(quantized)
+
+            # ── DIAGNOSTIC: decoded latent tensor stats ────────────────
+            logger.info(
+                f"[DIAG-B] _decode_audio_codes_to_latents: "
+                f"n_codes={len(code_ids)}, first5={code_ids[:5]}, "
+                f"shape={tuple(lm_hints_25hz.shape)}, "
+                f"mean={lm_hints_25hz.float().mean().item():.6f}, "
+                f"std={lm_hints_25hz.float().std().item():.6f}, "
+                f"L2={lm_hints_25hz.float().norm().item():.4f}"
+            )
+            # ── END DIAGNOSTIC ─────────────────────────────────────────
+
             return lm_hints_25hz
 
     def convert_src_audio_to_codes(self, audio_file) -> str:
