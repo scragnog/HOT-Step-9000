@@ -481,7 +481,7 @@ def run_sweep(
     max_configs: Optional[int] = None,
     dry_run: bool = False,
     whisper_model: str = "small",
-    whisper_device: str = "cuda",
+    whisper_device: str = "cpu",
 ):
     """Execute the full parameter sweep."""
 
@@ -561,8 +561,10 @@ def run_sweep(
     print("OK")
 
     # ── Initialise Whisper (lazy — loaded/unloaded around generations to avoid VRAM conflicts) ──
-    scorer = WhisperScorer(model_size=whisper_model, device=whisper_device)
-    print(f"  Whisper scorer ready ({whisper_model}, lazy-load to avoid VRAM conflicts)")
+    # CPU avoids VRAM conflicts entirely; int8 compute is fast enough for scoring
+    whisper_compute = "int8" if whisper_device == "cpu" else "float16"
+    scorer = WhisperScorer(model_size=whisper_model, device=whisper_device, compute_type=whisper_compute)
+    print(f"  Whisper scorer ready ({whisper_model} on {whisper_device}, {whisper_compute})")
 
     # ── Write CSV header if new ──
     if not completed:
@@ -827,7 +829,7 @@ if __name__ == "__main__":
     parser.add_argument("--max-configs", type=int, default=None, help="Max configs to test")
     parser.add_argument("--inference-steps", type=int, default=20, help="Inference steps override (default: 20)")
     parser.add_argument("--whisper-model", default="small", choices=["tiny", "small", "medium", "large-v3"], help="Whisper model size")
-    parser.add_argument("--whisper-device", default="cuda", choices=["cuda", "cpu"], help="Whisper device")
+    parser.add_argument("--whisper-device", default="cpu", choices=["cuda", "cpu"], help="Whisper device (cpu avoids VRAM conflicts)")
     parser.add_argument("--output-dir", default=None, help="Custom output directory")
     parser.add_argument("--api-url", default="http://localhost:8001", help="API base URL")
 
