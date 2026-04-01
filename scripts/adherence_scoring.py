@@ -358,15 +358,39 @@ def compute_adherence_score(
 ) -> AdherenceResult:
     """Compute weighted combined adherence score.
 
-    Weights:
+    When all metrics are available:
     - 40% Whisper transcription match
     - 35% DiT alignment score
-    - 25% LRC timing score
+    - 15% LRC timing score
+    - 10% PMI score
+
+    When DiT/PMI are unavailable (0.0), their weight redistributes
+    to Whisper so the ranking isn't distorted by the near-constant
+    LRC timing metric.
     """
     whisper_score = whisper_result.overall_similarity if whisper_result else 0.0
     lrc_score = lrc_result.score if lrc_result else 0.0
 
-    combined = 0.40 * whisper_score + 0.35 * dit_score + 0.25 * lrc_score
+    # Base weights
+    w_whisper = 0.40
+    w_dit = 0.35
+    w_lrc = 0.15
+    w_pmi = 0.10
+
+    # Redistribute weight from unavailable metrics to Whisper
+    if dit_score == 0.0:
+        w_whisper += w_dit
+        w_dit = 0.0
+    if pmi_score == 0.0:
+        w_whisper += w_pmi
+        w_pmi = 0.0
+
+    combined = (
+        w_whisper * whisper_score
+        + w_dit * dit_score
+        + w_lrc * lrc_score
+        + w_pmi * pmi_score
+    )
 
     return AdherenceResult(
         whisper=whisper_result,
