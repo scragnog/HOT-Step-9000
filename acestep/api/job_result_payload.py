@@ -109,7 +109,15 @@ def build_generation_success_response(
         if codes and str(codes).strip():
             audio_codes_list.append(str(codes))
 
-    return {
+    # Extract LRC text from first audio (saved by generate_music Phase 3)
+    lrc_text = ""
+    if audios:
+        lrc_text = audios[0].get("lrc_text", "")
+
+    # Extract quality scores from extra_outputs (computed in Phase 3b)
+    scores = result.extra_outputs.get("scores") or None
+
+    payload = {
         "first_audio_path": path_to_audio_url(first_audio) if first_audio else None,
         "second_audio_path": path_to_audio_url(second_audio) if second_audio else None,
         "audio_paths": [path_to_audio_url(path) for path in audio_paths],
@@ -134,3 +142,12 @@ def build_generation_success_response(
         "dit_model": dit_model_name,
         "audio_codes": audio_codes_list if audio_codes_list else None,
     }
+
+    # Include LRC and scores only when present (avoids polluting responses
+    # for generations that didn't request them)
+    if lrc_text:
+        payload["lrc"] = lrc_text
+    if scores:
+        payload["scores"] = scores
+
+    return payload

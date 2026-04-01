@@ -4475,8 +4475,17 @@ class LLMHandler:
                 logger.info("Loading HuggingFace model for scoring (from checkpoint)")
 
                 # Get model path from vllm config
-                model_runner = self.llm.model_runner
-                model_path = model_runner.config.model
+                # custom-vllm stores config in _cfg, nano-vllm in model_runner
+                model_runner = getattr(self.llm, "model_runner", None)
+                if model_runner is not None:
+                    model_path = model_runner.config.model
+                elif hasattr(self.llm, "_cfg"):
+                    model_path = self.llm._cfg.model
+                else:
+                    raise AttributeError(
+                        f"Cannot determine model path from LLM object "
+                        f"(type={type(self.llm).__name__}, backend={self.llm_backend})"
+                    )
 
                 # Load HuggingFace model from the same checkpoint
                 # This will load the original unfused weights
@@ -4498,7 +4507,13 @@ class LLMHandler:
                     self._hf_model_for_scoring.eval()
                     logger.info("HuggingFace model for scoring kept on CPU (offload_to_cpu=True)")
                 else:
-                    device = next(model_runner.model.parameters()).device
+                    # Resolve device from model_runner or _pipeline
+                    if model_runner is not None and hasattr(model_runner, "model"):
+                        device = next(model_runner.model.parameters()).device
+                    elif hasattr(self.llm, "_pipeline") and hasattr(self.llm._pipeline, "model"):
+                        device = next(self.llm._pipeline.model.parameters()).device
+                    else:
+                        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
                     self._hf_model_for_scoring = self._hf_model_for_scoring.to(device)
                     self._hf_model_for_scoring.eval()
                     logger.info(f"HuggingFace model for scoring ready on {device}")

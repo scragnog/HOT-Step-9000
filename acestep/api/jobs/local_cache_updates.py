@@ -74,6 +74,8 @@ def update_local_cache(
             dit_model = result.get("dit_model", "")
 
             response_audio_codes = result.get("audio_codes") or []
+            lrc_text = result.get("lrc", "")
+            scores = result.get("scores")
             if audio_paths:
                 result_data = [
                     {
@@ -93,6 +95,8 @@ def update_local_cache(
                         "stage": "succeeded",
                         **(({"audio_codes": response_audio_codes[i]}) if i < len(response_audio_codes) else {}),
                         **({"original_audio_paths": original_audio_paths} if i == 0 and original_audio_paths else {}),
+                        **({"lrc": lrc_text} if i == 0 and lrc_text else {}),
+                        **({"scores": scores} if i == 0 and scores is not None else {}),
                     }
                     for i, path in enumerate(audio_paths)
                 ]
