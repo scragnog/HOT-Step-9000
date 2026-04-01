@@ -184,7 +184,7 @@ def map_settings_to_request(settings: Dict[str, Any], thinking_override: Optiona
         "time_signature": settings.get("timeSignature", ""),
         "vocal_language": settings.get("vocalLanguage", "en"),
         "audio_duration": settings.get("duration"),
-        "inference_steps": settings.get("inferenceSteps", 60),
+        "inference_steps": settings.get("_sweep_inference_steps", settings.get("inferenceSteps", 60)),
         "guidance_scale": settings.get("guidanceScale", 15),
         "batch_size": 1,
         "use_random_seed": False,
@@ -225,37 +225,117 @@ def map_settings_to_request(settings: Dict[str, Any], thinking_override: Optiona
     return req
 
 
-def run_generation(request_body: Dict[str, Any], timeout: int = 600) -> Optional[Dict]:
-    """Submit a generation job and wait for completion.
+def submit_generation_job(request_body: Dict[str, Any]) -> Optional[str]:
+    """Submit a generation job to the async queue.
 
-    Returns the full API response dict, or None on failure.
+    Returns the task_id, or None on failure.
     """
     try:
         resp = requests.post(
-            f"{API_BASE}/v1/release_task",
+            f"{API_BASE}/release_task",
             json=request_body,
             headers=API_HEADERS,
-            timeout=timeout,
+            timeout=30,
         )
         if resp.status_code == 200:
             data = resp.json()
-            # Unwrap the response envelope
-            if isinstance(data, dict) and "data" in data:
-                return data["data"]
-            return data
+            # Response: {"code": 200, "data": {"task_id": "...", "status": "queued"}}
+            task_id = None
+            if isinstance(data, dict):
+                inner = data.get("data", data)
+                task_id = inner.get("task_id")
+            return task_id
         else:
-            print(f"  [!] Generation failed: HTTP {resp.status_code}")
+            print(f"  [!] Job submission failed: HTTP {resp.status_code}")
             try:
                 print(f"      {resp.json()}")
             except Exception:
                 pass
             return None
-    except requests.exceptions.Timeout:
-        print("  [!] Generation timed out")
-        return None
     except Exception as e:
-        print(f"  [!] Generation error: {e}")
+        print(f"  [!] Job submission error: {e}")
         return None
+
+
+def poll_job_result(task_id: str, timeout: int = 600, poll_interval: float = 3.0) -> Optional[Dict]:
+    """Poll /query_result until the job completes.
+
+    Returns the parsed result dict, or None on failure/timeout.
+    Status codes: 0=running, 1=succeeded, 2=failed.
+    """
+    deadline = time.time() + timeout
+    last_stage = ""
+
+    while time.time() < deadline:
+        try:
+            resp = requests.post(
+                f"{API_BASE}/query_result",
+                json={"task_id_list": [task_id]},
+                headers=API_HEADERS,
+                timeout=30,
+            )
+            if resp.status_code != 200:
+                time.sleep(poll_interval)
+                continue
+
+            data = resp.json()
+            # Response: {"code": 200, "data": [{"task_id": ..., "status": 0|1|2, "result": "json_string"}]}
+            data_list = data.get("data", data.get("data_list", []))
+            if isinstance(data_list, list) and data_list:
+                task_data = data_list[0]
+            else:
+                time.sleep(poll_interval)
+                continue
+
+            status = task_data.get("status", 0)
+
+            if status == 1:  # Succeeded
+                result_raw = task_data.get("result", "[]")
+                try:
+                    result_parsed = json.loads(result_raw) if isinstance(result_raw, str) else result_raw
+                except (json.JSONDecodeError, TypeError):
+                    result_parsed = result_raw
+                # result_parsed is a list of per-audio items
+                if isinstance(result_parsed, list) and result_parsed:
+                    return result_parsed[0]  # First audio item
+                elif isinstance(result_parsed, dict):
+                    return result_parsed
+                return None
+
+            elif status == 2:  # Failed
+                print("FAILED (generation error)")
+                return None
+
+            else:  # Still running
+                # Show progress if available
+                progress_text = task_data.get("progress_text", "")
+                if progress_text and progress_text != last_stage:
+                    # Extract percentage from tqdm format
+                    import re
+                    pct_match = re.search(r'(\d+)%', progress_text)
+                    if pct_match:
+                        print(f"\r  Generating audio... {pct_match.group(1)}%", end="", flush=True)
+                    last_stage = progress_text
+                time.sleep(poll_interval)
+
+        except Exception as e:
+            print(f"\n  [!] Poll error: {e}")
+            time.sleep(poll_interval)
+
+    print("TIMEOUT")
+    return None
+
+
+def run_generation(request_body: Dict[str, Any], timeout: int = 600) -> Optional[Dict]:
+    """Submit a generation job and wait for completion.
+
+    Returns the parsed result dict for the first audio, or None on failure.
+    """
+    task_id = submit_generation_job(request_body)
+    if not task_id:
+        return None
+
+    return poll_job_result(task_id, timeout=timeout)
 
 
 def check_api_health() -> bool:
@@ -271,41 +351,66 @@ def check_api_health() -> bool:
 
 
 def extract_audio_path(result: Dict) -> Optional[str]:
-    """Extract the audio file path from the generation response."""
-    audios = result.get("audios", [])
-    if audios and isinstance(audios[0], dict):
-        url = audios[0].get("url", "")
-        # URL format: /api/audio/filename.flac → need to resolve to filesystem path
-        # Check if there's a direct path
-        path = audios[0].get("path", "")
-        if path and os.path.exists(path):
-            return path
-        # Try resolving from URL
-        if url:
-            # The API serves from temp_audio_dir
-            basename = url.split("/")[-1] if "/" in url else url
-            candidates = [
-                os.path.join(PROJECT_ROOT, ".cache", "acestep", "tmp", "api_audio", basename),
-            ]
-            for c in candidates:
-                if os.path.exists(c):
-                    return c
+    """Extract the audio file path from the generation response.
+
+    The query_result format returns per-audio items with a 'file' field
+    which is a /v1/audio?path=... URL. We extract the path param and
+    resolve it to the filesystem.
+    """
+    # Direct file field from query_result format
+    file_url = result.get("file", "")
+    if file_url:
+        # Format: /v1/audio?path=<encoded_path> or direct filesystem path
+        if "path=" in file_url:
+            from urllib.parse import unquote, urlparse, parse_qs
+            parsed = urlparse(file_url)
+            qs = parse_qs(parsed.query)
+            path_val = qs.get("path", [""])[0]
+            if path_val:
+                decoded = unquote(path_val)
+                if os.path.exists(decoded):
+                    return decoded
+        elif os.path.exists(file_url):
+            return file_url
+        else:
+            # Try as a relative path under api_audio
+            basename = file_url.split("/")[-1] if "/" in file_url else file_url
+            candidate = os.path.join(PROJECT_ROOT, ".cache", "acestep", "tmp", "api_audio", basename)
+            if os.path.exists(candidate):
+                return candidate
+
+    # Fallback: audio_paths from flat dict format
+    audio_paths = result.get("audio_paths", [])
+    if audio_paths:
+        first = audio_paths[0]
+        if isinstance(first, str):
+            # Could be /v1/audio?path=... or direct path
+            if "path=" in first:
+                from urllib.parse import unquote, urlparse, parse_qs
+                parsed = urlparse(first)
+                qs = parse_qs(parsed.query)
+                path_val = qs.get("path", [""])[0]
+                if path_val and os.path.exists(unquote(path_val)):
+                    return unquote(path_val)
+            elif os.path.exists(first):
+                return first
     return None
 
 
 def extract_lrc_text(result: Dict) -> str:
     """Extract LRC text from the generation response."""
-    audios = result.get("audios", [])
-    if audios and isinstance(audios[0], dict):
-        lrc = audios[0].get("lrc", "")
-        if lrc:
-            return lrc
+    # query_result format: top-level 'lrc' key on first item
+    lrc = result.get("lrc", "")
+    if lrc:
+        return lrc
     return ""
 
 
 def extract_dit_score(result: Dict) -> float:
     """Extract DiT alignment score from the generation response."""
     scores = result.get("scores", {})
+    if not scores:
+        return 0.0
     dit_align = scores.get("dit_alignment", {})
     return float(dit_align.get("dit_score", 0.0))
 
@@ -313,6 +418,8 @@ def extract_dit_score(result: Dict) -> float:
 def extract_pmi_score(result: Dict) -> float:
     """Extract PMI score from the generation response."""
     scores = result.get("scores", {})
+    if not scores:
+        return 0.0
     pmi = scores.get("pmi", {})
     return float(pmi.get("global", 0.0))
 
@@ -402,10 +509,11 @@ def run_sweep(
 
     print(f"  Settings:    {settings_path}")
     print(f"  Adapter:     {settings.get('loraPath', 'N/A')}")
+    inf_steps = settings.get("_sweep_inference_steps", settings.get("inferenceSteps", 60))
     print(f"  Baseline:    scale={base_scale} SA={base_sa} CA={base_ca} MLP={base_mlp}")
     print(f"  Seed:        {settings.get('seed', 'random')}")
     print(f"  Duration:    {settings.get('duration', '?')}s")
-    print(f"  Inf Steps:   {settings.get('inferenceSteps', '?')}")
+    print(f"  Inf Steps:   {inf_steps}")
     print(f"  Whisper:     {whisper_model} on {whisper_device}")
     print(f"  Lyric lines: {len(extract_lyric_lines(input_lyrics))}")
     print()
@@ -696,6 +804,7 @@ if __name__ == "__main__":
     parser.add_argument("--config", required=True, help="Path to settingstouse.json")
     parser.add_argument("--dry-run", action="store_true", help="Print config matrix without running")
     parser.add_argument("--max-configs", type=int, default=None, help="Max configs to test")
+    parser.add_argument("--inference-steps", type=int, default=20, help="Inference steps override (default: 20)")
     parser.add_argument("--whisper-model", default="small", choices=["tiny", "small", "medium", "large-v3"], help="Whisper model size")
     parser.add_argument("--whisper-device", default="cuda", choices=["cuda", "cpu"], help="Whisper device")
     parser.add_argument("--output-dir", default=None, help="Custom output directory")
@@ -705,11 +814,25 @@ if __name__ == "__main__":
 
     API_BASE = args.api_url
 
-    run_sweep(
-        settings_path=args.config,
-        output_dir=args.output_dir,
-        max_configs=args.max_configs,
-        dry_run=args.dry_run,
-        whisper_model=args.whisper_model,
-        whisper_device=args.whisper_device,
-    )
+    # Load settings and inject inference steps override
+    import json as _json
+    with open(args.config, "r", encoding="utf-8") as _f:
+        _settings_check = _json.load(_f)
+    _settings_check["_sweep_inference_steps"] = args.inference_steps
+    # Write back to a temp copy so the sweep uses the override
+    import tempfile
+    _tmp_config = tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False, encoding="utf-8")
+    _json.dump(_settings_check, _tmp_config)
+    _tmp_config.close()
+
+    try:
+        run_sweep(
+            settings_path=_tmp_config.name,
+            output_dir=args.output_dir,
+            max_configs=args.max_configs,
+            dry_run=args.dry_run,
+            whisper_model=args.whisper_model,
+            whisper_device=args.whisper_device,
+        )
+    finally:
+        os.unlink(_tmp_config.name)
