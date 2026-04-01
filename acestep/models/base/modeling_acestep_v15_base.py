@@ -1678,6 +1678,20 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         src_latents = torch.where(is_covers.unsqueeze(-1).unsqueeze(-1) > 0, lm_hints_25Hz, src_latents)
         # Concatenate source latents with chunk masks as context
         context_latents = torch.cat([src_latents, chunk_masks.to(dtype)], dim=-1)
+
+        # ── DIAGNOSTIC: conditioning tensor fingerprint ────────────
+        _ctx_mean = context_latents.float().mean().item()
+        _ctx_std = context_latents.float().std().item()
+        _src_mean = src_latents.float().mean().item()
+        print(
+            f"[DIAG-C] prepare_condition (BASE): is_covers={is_covers.tolist()}, "
+            f"has_precomputed_hints={precomputed_lm_hints_25Hz is not None}, "
+            f"context_latents shape={tuple(context_latents.shape)}, "
+            f"ctx_mean={_ctx_mean:.6f}, ctx_std={_ctx_std:.6f}, "
+            f"src_mean={_src_mean:.6f}"
+        )
+        # ── END DIAGNOSTIC ─────────────────────────────────────────
+
         return encoder_hidden_states, encoder_attention_mask, context_latents
 
     def forward(
