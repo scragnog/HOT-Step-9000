@@ -131,6 +131,16 @@ def apply_generate_audio_monkeypatch(model) -> bool:
         f"(from {module_name}) with local patched version"
     )
 
+    # Also monkeypatch prepare_condition — the cached checkpoint model
+    # does NOT have precomputed_lm_hints_25Hz support, so audio codes
+    # from LM thinking mode would be silently ignored without this.
+    patched_prepare_condition = BaseModel.prepare_condition
+    model.prepare_condition = types.MethodType(patched_prepare_condition, model)
+    logger.info(
+        f"[monkeypatch] Replaced prepare_condition on {class_name} "
+        f"(added precomputed_lm_hints_25Hz / audio code conditioning support)"
+    )
+
     # Also patch decoder layers for PAG identity mask support.
     # The checkpoint's layer code doesn't have pag_identity_mask handling,
     # so without this, the PAG identity mask would be silently ignored
