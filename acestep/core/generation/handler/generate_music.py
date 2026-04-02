@@ -76,7 +76,7 @@ class GenerateMusicMixin:
         logger.info(
             "[generate_music] VRAM pre-flight: {:.2f} GB free, ~{:.2f} GB needed "
             "(batch={}, duration={:.0f}s, mode={}).",
-            free_gb, needed_gb, actual_batch_size, duration_s, dit_key,
+            free_gb, needed_gb, actual_batch_size, duration_s, dit_type,
         )
 
         if free_gb >= needed_gb:
