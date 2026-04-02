@@ -15,6 +15,7 @@ from acestep.core.generation.spectral_smoothing import apply_spectral_smoothing
 from acestep.gpu_config import (
     DIT_INFERENCE_VRAM_PER_BATCH,
     VRAM_SAFETY_MARGIN_GB,
+    get_dit_type,
     get_effective_free_vram_gb,
 )
 
@@ -60,9 +61,13 @@ class GenerateMusicMixin:
             return None
 
         duration_s = audio_duration or 60.0
-        # CFG doubles forward-pass memory: two DiT evaluations per step.
-        dit_key = "base" if guidance_scale > 1.0 else "turbo"
-        per_batch_gb = DIT_INFERENCE_VRAM_PER_BATCH.get(dit_key, 0.6)
+        # Determine per-batch VRAM from the loaded model variant (XL-aware).
+        config_path = (getattr(self, "last_init_params", None) or {}).get("config_path", "")
+        dit_type = get_dit_type(config_path)
+        # If the model type isn't in the table, fall back to guidance_scale heuristic
+        if dit_type not in DIT_INFERENCE_VRAM_PER_BATCH:
+            dit_type = "base" if guidance_scale > 1.0 else "turbo"
+        per_batch_gb = DIT_INFERENCE_VRAM_PER_BATCH.get(dit_type, 0.6)
         # Longer audio = more latent frames (5 Hz rate) = more memory.
         duration_factor = max(1.0, duration_s / 60.0)
         needed_gb = per_batch_gb * actual_batch_size * duration_factor + VRAM_SAFETY_MARGIN_GB

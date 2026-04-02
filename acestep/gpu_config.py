@@ -114,6 +114,8 @@ def is_rocm_available() -> bool:
 MODEL_VRAM = {
     "dit_turbo": 4.7,  # DiT turbo model weights (bf16)
     "dit_base": 4.7,  # DiT base model weights (bf16)
+    "dit_xl_turbo": 9.0,  # DiT XL turbo (4B params, bf16)
+    "dit_xl_base": 9.0,  # DiT XL base (4B params, bf16)
     "vae": 0.33,  # VAE (AutoencoderOobleck) weights (fp16)
     "text_encoder": 1.2,  # Qwen3-Embedding-0.6B text encoder (bf16)
     "silence_latent": 0.01,  # Silence latent tensor
@@ -137,10 +139,46 @@ LM_VRAM = {
 DIT_INFERENCE_VRAM_PER_BATCH = {
     "turbo": 0.3,  # GB per batch item (no CFG)
     "base": 0.6,  # GB per batch item (with CFG, 2x forward)
+    # XL (4B) models need ~1.7x more activation memory than 2B
+    "xl_turbo": 0.5,  # GB per batch item (no CFG, 4B activations)
+    "xl_base": 1.0,  # GB per batch item (with CFG, 4B activations)
 }
 
 # Safety margin to keep free for OS/driver/fragmentation (GB)
 VRAM_SAFETY_MARGIN_GB = 0.5
+
+
+def is_xl_model(model_name: str) -> bool:
+    """Return True if *model_name* refers to an XL (4B DiT) variant.
+
+    Uses substring matching on '-xl-' with word boundaries (the upstream
+    convention: 'acestep-v15-xl-turbo', 'acestep-v15-xl-base', …).
+    """
+    return "-xl-" in (model_name or "").lower()
+
+
+def get_dit_type(model_name: str) -> str:
+    """Map a checkpoint directory name to its DiT VRAM type key.
+
+    Examples
+    --------
+    >>> get_dit_type("acestep-v15-turbo")
+    'turbo'
+    >>> get_dit_type("acestep-v15-xl-turbo")
+    'xl_turbo'
+    >>> get_dit_type("acestep-v15-base")
+    'base'
+    >>> get_dit_type("acestep-v15-xl-base")
+    'xl_base'
+    """
+    name = (model_name or "").lower()
+    if "-xl-" in name:
+        if "base" in name or "sft" in name:
+            return "xl_base"  # XL base/sft use CFG
+        return "xl_turbo"  # XL turbo
+    if "base" in name or "sft" in name:
+        return "base"  # 2B base/sft use CFG
+    return "turbo"  # 2B turbo (default)
 
 
 @dataclass
