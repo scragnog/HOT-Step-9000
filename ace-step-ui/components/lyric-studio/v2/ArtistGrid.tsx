@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Music, Plus, RefreshCw, Trash2, ImageOff, MoreVertical, Link2 } from 'lucide-react';
+import { Music, Plus, RefreshCw, Trash2, ImageOff, MoreVertical, Link2, Search, PenLine, ChevronDown } from 'lucide-react';
 import { Artist } from '../../../services/lyricStudioApi';
 
 interface ArtistGridProps {
@@ -7,29 +7,35 @@ interface ArtistGridProps {
   loading: boolean;
   onSelectArtist: (artist: Artist) => void;
   onAddNew: () => void;
+  onAddManual: () => void;
   onDelete: (artist: Artist) => void;
   onRefreshImage: (artist: Artist) => void;
   onSetImage?: (artist: Artist, url: string) => void;
 }
 
 export const ArtistGrid: React.FC<ArtistGridProps> = ({
-  artists, loading, onSelectArtist, onAddNew, onDelete, onRefreshImage, onSetImage,
+  artists, loading, onSelectArtist, onAddNew, onAddManual, onDelete, onRefreshImage, onSetImage,
 }) => {
   const [menuOpenId, setMenuOpenId] = useState<number | null>(null);
   const [imageErrors, setImageErrors] = useState<Set<number>>(new Set());
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
   const gridRef = useRef<HTMLDivElement>(null);
+  const addBtnRef = useRef<HTMLDivElement>(null);
 
-  // Close context menu on click outside
+  // Close context menus on click outside
   useEffect(() => {
-    if (menuOpenId === null) return;
+    if (menuOpenId === null && !addMenuOpen) return;
     const handler = (e: MouseEvent) => {
       if (gridRef.current && !gridRef.current.contains(e.target as Node)) {
         setMenuOpenId(null);
       }
+      if (addBtnRef.current && !addBtnRef.current.contains(e.target as Node)) {
+        setAddMenuOpen(false);
+      }
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [menuOpenId]);
+  }, [menuOpenId, addMenuOpen]);
 
   const gradient = (name: string) => {
     const hash = name.split('').reduce((a, c) => ((a << 5) - a + c.charCodeAt(0)) | 0, 0);
@@ -55,13 +61,34 @@ export const ArtistGrid: React.FC<ArtistGridProps> = ({
           <Music className="w-7 h-7 text-pink-400" />
           Lyric Studio
         </h1>
-        <button
-          onClick={onAddNew}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-sm font-semibold transition-all hover:scale-105 shadow-lg shadow-pink-600/20"
-        >
-          <Plus className="w-4 h-4" />
-          Fetch Lyrics
-        </button>
+        <div className="relative" ref={addBtnRef}>
+          <button
+            onClick={() => setAddMenuOpen(!addMenuOpen)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-sm font-semibold transition-all hover:scale-105 shadow-lg shadow-pink-600/20"
+          >
+            <Plus className="w-4 h-4" />
+            Add Artist
+            <ChevronDown className="w-3.5 h-3.5 opacity-70" />
+          </button>
+          {addMenuOpen && (
+            <div className="absolute right-0 top-full mt-1 z-30 min-w-[180px] rounded-xl bg-zinc-900 border border-white/10 shadow-2xl py-1 animate-in fade-in slide-in-from-top-1">
+              <button
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors"
+                onClick={() => { setAddMenuOpen(false); onAddNew(); }}
+              >
+                <Search className="w-3.5 h-3.5" />
+                Fetch from Genius
+              </button>
+              <button
+                className="w-full flex items-center gap-2 px-3 py-2 text-sm text-zinc-300 hover:bg-white/5 hover:text-white transition-colors"
+                onClick={() => { setAddMenuOpen(false); onAddManual(); }}
+              >
+                <PenLine className="w-3.5 h-3.5" />
+                Add Manually
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {artists.length === 0 ? (
@@ -71,15 +98,24 @@ export const ArtistGrid: React.FC<ArtistGridProps> = ({
           </div>
           <h2 className="text-lg font-semibold text-zinc-400 mb-2">No artists yet</h2>
           <p className="text-sm text-zinc-500 max-w-sm mb-6">
-            Start by fetching lyrics from Genius to build your artist library.
+            Start by fetching lyrics from Genius or adding an artist manually.
           </p>
-          <button
-            onClick={onAddNew}
-            className="flex items-center gap-2 px-5 py-3 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-sm font-semibold transition-all"
-          >
-            <Plus className="w-4 h-4" />
-            Fetch Your First Album
-          </button>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onAddNew}
+              className="flex items-center gap-2 px-5 py-3 rounded-xl bg-pink-600 hover:bg-pink-500 text-white text-sm font-semibold transition-all"
+            >
+              <Search className="w-4 h-4" />
+              Fetch from Genius
+            </button>
+            <button
+              onClick={onAddManual}
+              className="flex items-center gap-2 px-5 py-3 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-zinc-300 hover:text-white text-sm font-semibold transition-all"
+            >
+              <PenLine className="w-4 h-4" />
+              Add Manually
+            </button>
+          </div>
         </div>
       ) : (
         <div ref={gridRef} className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
@@ -174,10 +210,10 @@ export const ArtistGrid: React.FC<ArtistGridProps> = ({
             </div>
           ))}
 
-          {/* Add new card */}
+          {/* Add new card — dropdown */}
           <div
-            className="aspect-[3/4] rounded-2xl border-2 border-dashed border-white/10 hover:border-pink-500/30 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 hover:bg-white/[0.02] group"
-            onClick={onAddNew}
+            className="relative aspect-[3/4] rounded-2xl border-2 border-dashed border-white/10 hover:border-pink-500/30 flex flex-col items-center justify-center cursor-pointer transition-all duration-300 hover:bg-white/[0.02] group"
+            onClick={() => setAddMenuOpen(!addMenuOpen)}
           >
             <div className="w-12 h-12 rounded-full bg-white/5 group-hover:bg-pink-500/10 flex items-center justify-center mb-3 transition-colors">
               <Plus className="w-6 h-6 text-zinc-500 group-hover:text-pink-400 transition-colors" />

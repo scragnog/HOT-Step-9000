@@ -6,6 +6,10 @@ import { ArtistPageSidebar } from './ArtistPageSidebar';
 import { AlbumGrid } from './AlbumGrid';
 import { AlbumHeader } from './AlbumHeader';
 import { FetchLyricsModal } from './FetchLyricsModal';
+import { AddArtistModal } from './AddArtistModal';
+import { AddAlbumModal } from './AddAlbumModal';
+import { AddSongModal } from './AddSongModal';
+import { CuratedProfileModal } from './CuratedProfileModal';
 import { PresetSettingsModal } from './PresetSettingsModal';
 import { ContentTabs, TabId } from './ContentTabs';
 import { SourceLyricsTab } from './SourceLyricsTab';
@@ -101,6 +105,11 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
   const [presetModalOpen, setPresetModalOpen] = useState(false);
   const [queueOpen, setQueueOpen] = useState(false);
   const [promptEditorOpen, setPromptEditorOpen] = useState(false);
+  // Manual add modals
+  const [addArtistModalOpen, setAddArtistModalOpen] = useState(false);
+  const [addAlbumModalOpen, setAddAlbumModalOpen] = useState(false);
+  const [addSongModalOpen, setAddSongModalOpen] = useState(false);
+  const [curatedModalOpen, setCuratedModalOpen] = useState(false);
 
   // ── Fetch lyrics progress ──
   const [fetchingLyrics, setFetchingLyrics] = useState(false);
@@ -517,6 +526,53 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
     setFetchModalOpen(true);
   }, []);
 
+  // ── Manual add handlers ──
+  const handleAddArtistManual = useCallback(async (name: string, imageUrl?: string) => {
+    try {
+      const res = await lireekApi.createArtist({ name, image_url: imageUrl });
+      showToast(`Added ${res.artist.name}`);
+      await loadArtists();
+      handleSelectArtist(res.artist);
+    } catch (err: any) {
+      showToast(`Failed to add artist: ${err.message}`);
+    }
+  }, [loadArtists, handleSelectArtist, showToast]);
+
+  const handleAddAlbumManual = useCallback(async (albumName: string | undefined, imageUrl?: string) => {
+    if (!nav.selectedArtist) return;
+    try {
+      const res = await lireekApi.createLyricsSet({
+        artist_id: nav.selectedArtist.id,
+        album: albumName,
+        image_url: imageUrl,
+      });
+      showToast(`Created ${albumName || 'lyrics collection'}`);
+      await loadAlbums(nav.selectedArtist.id);
+      handleSelectAlbum(res.lyrics_set);
+    } catch (err: any) {
+      showToast(`Failed to create album: ${err.message}`);
+    }
+  }, [nav.selectedArtist, loadAlbums, handleSelectAlbum, showToast]);
+
+  const handleAddSong = useCallback(async (title: string, lyrics: string) => {
+    if (!nav.selectedAlbum) return;
+    try {
+      const updated = await lireekApi.addSongToSet(nav.selectedAlbum.id, { title, lyrics });
+      showToast(`Added "${title}"`);
+      setNav(prev => ({ ...prev, selectedAlbum: updated }));
+    } catch (err: any) {
+      showToast(`Failed to add song: ${err.message}`);
+    }
+  }, [nav.selectedAlbum, showToast]);
+
+  const handleCuratedComplete = useCallback(async (lyricsSet: any, profile: any) => {
+    // Refresh albums and navigate to the new curated set
+    if (nav.selectedArtist) {
+      await loadAlbums(nav.selectedArtist.id);
+    }
+    handleSelectAlbum(lyricsSet);
+  }, [nav.selectedArtist, loadAlbums, handleSelectAlbum]);
+
   // ── Keyboard shortcuts ──
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -588,6 +644,7 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
                 loading={artistsLoading}
                 onSelectArtist={handleSelectArtist}
                 onAddNew={openFetchNew}
+                onAddManual={() => setAddArtistModalOpen(true)}
                 onDelete={handleDeleteArtist}
                 onRefreshImage={handleRefreshImage}
                 onSetImage={handleSetImage}
@@ -637,9 +694,11 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
                 artistName={nav.selectedArtist.name}
                 onSelectAlbum={handleSelectAlbum}
                 onAddAlbum={openFetchForArtist}
+                onAddManual={() => setAddAlbumModalOpen(true)}
                 onDeleteAlbum={handleDeleteAlbum}
                 onRefreshImage={handleRefreshAlbumImage}
                 onSetImage={handleSetAlbumImage}
+                onCuratedProfile={() => setCuratedModalOpen(true)}
               />
             </div>
           </div>
@@ -724,6 +783,7 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
                     album={nav.selectedAlbum}
                     onDeleteSong={handleDeleteSong}
                     onEditSong={handleEditSong}
+                    onAddSong={() => setAddSongModalOpen(true)}
                   />
                 )}
                 {activeTab === 'profiles' && (
@@ -834,6 +894,43 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
         open={promptEditorOpen}
         onClose={() => setPromptEditorOpen(false)}
       />
+
+      {/* Manual add modals */}
+      <AddArtistModal
+        isOpen={addArtistModalOpen}
+        onClose={() => setAddArtistModalOpen(false)}
+        onSubmit={handleAddArtistManual}
+      />
+
+      {nav.selectedArtist && (
+        <AddAlbumModal
+          isOpen={addAlbumModalOpen}
+          onClose={() => setAddAlbumModalOpen(false)}
+          onSubmit={handleAddAlbumManual}
+          artistName={nav.selectedArtist.name}
+        />
+      )}
+
+      {nav.selectedAlbum && (
+        <AddSongModal
+          isOpen={addSongModalOpen}
+          onClose={() => setAddSongModalOpen(false)}
+          onSubmit={handleAddSong}
+          albumName={nav.selectedAlbum.album || 'Lyrics Collection'}
+        />
+      )}
+
+      {nav.selectedArtist && (
+        <CuratedProfileModal
+          isOpen={curatedModalOpen}
+          onClose={() => setCuratedModalOpen(false)}
+          artistId={nav.selectedArtist.id}
+          artistName={nav.selectedArtist.name}
+          albums={albums}
+          showToast={showToast}
+          onComplete={handleCuratedComplete}
+        />
+      )}
 
       {/* Audio generation progress bar */}
       <AudioJobProgress

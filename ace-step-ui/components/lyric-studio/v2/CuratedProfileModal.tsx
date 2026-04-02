@@ -98,7 +98,7 @@ export const CuratedProfileModal: React.FC<CuratedProfileModalProps> = ({
     });
   }, [fullAlbums]);
 
-  const totalSelected = Object.values(selections).reduce((sum, set) => sum + set.size, 0);
+  const totalSelected = (Object.values(selections) as Set<number>[]).reduce((sum, set) => sum + set.size, 0);
 
   const handleBuild = useCallback(async () => {
     if (totalSelected === 0) return;
@@ -107,10 +107,10 @@ export const CuratedProfileModal: React.FC<CuratedProfileModalProps> = ({
     setStreamText('');
 
     const selectionList = Object.entries(selections)
-      .filter(([_, set]) => set.size > 0)
+      .filter(([_, set]) => (set as Set<number>).size > 0)
       .map(([albumId, set]) => ({
         lyrics_set_id: Number(albumId),
-        song_indices: Array.from(set).sort((a, b) => a - b),
+        song_indices: Array.from(set as Set<number>).sort((a, b) => a - b),
       }));
 
     const { profiling } = loadSelections();
@@ -283,7 +283,7 @@ export const CuratedProfileModal: React.FC<CuratedProfileModalProps> = ({
             {totalSelected > 0 ? (
               <><strong className="text-white">{totalSelected}</strong> songs selected across{' '}
                 <strong className="text-white">
-                  {Object.values(selections).filter(s => s.size > 0).length}
+                  {(Object.values(selections) as Set<number>[]).filter(s => s.size > 0).length}
                 </strong> albums</>
             ) : (
               'Select songs to build a curated profile'

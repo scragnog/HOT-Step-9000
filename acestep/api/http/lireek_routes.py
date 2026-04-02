@@ -876,7 +876,7 @@ def register_lireek_routes(app: FastAPI) -> None:
         """Create a curated lyrics set from songs across albums, then build a profile."""
         from acestep.api.lireek.lireek_db import (
             get_lyrics_set as _get_ls, save_lyrics_set, save_profile,
-            _connect, _row_to_dict,
+            _connect,
         )
         from acestep.api.lireek.schemas import SongLyrics
         from acestep.api.lireek.profiler_service import build_profile

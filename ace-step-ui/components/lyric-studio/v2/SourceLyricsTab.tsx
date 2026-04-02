@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ChevronDown, ChevronRight, Pencil, Trash2, Save, X, FileText } from 'lucide-react';
+import { ChevronDown, ChevronRight, Pencil, Trash2, Save, X, FileText, Plus } from 'lucide-react';
 import { LyricsSet, SongLyric } from '../../../services/lyricStudioApi';
 
 function parseSongs(songs: SongLyric[] | string): SongLyric[] {
@@ -13,9 +13,10 @@ interface SourceLyricsTabProps {
   album: LyricsSet;
   onDeleteSong: (index: number) => void;
   onEditSong?: (index: number, lyrics: string) => void;
+  onAddSong?: () => void;
 }
 
-export const SourceLyricsTab: React.FC<SourceLyricsTabProps> = ({ album, onDeleteSong, onEditSong }) => {
+export const SourceLyricsTab: React.FC<SourceLyricsTabProps> = ({ album, onDeleteSong, onEditSong, onAddSong }) => {
   const songs = parseSongs(album.songs);
   const [expandedIdx, setExpandedIdx] = useState<number | null>(null);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
@@ -28,15 +29,36 @@ export const SourceLyricsTab: React.FC<SourceLyricsTabProps> = ({ album, onDelet
           <FileText className="w-7 h-7 text-zinc-600" />
         </div>
         <h3 className="text-base font-semibold text-zinc-400 mb-2">No source lyrics</h3>
-        <p className="text-sm text-zinc-500 max-w-xs">
-          This album has no fetched lyrics. Try fetching again from Genius.
+        <p className="text-sm text-zinc-500 max-w-xs mb-4">
+          Add songs manually or fetch lyrics from Genius.
         </p>
+        {onAddSong && (
+          <button
+            onClick={onAddSong}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-600 hover:bg-amber-500 text-white text-sm font-semibold transition-all"
+          >
+            <Plus className="w-4 h-4" />
+            Add Song Manually
+          </button>
+        )}
       </div>
     );
   }
 
   return (
     <div className="p-4 space-y-1">
+      {/* Add Song button */}
+      {onAddSong && (
+        <div className="flex justify-end mb-2">
+          <button
+            onClick={onAddSong}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-amber-400 hover:bg-amber-500/10 transition-colors font-medium"
+          >
+            <Plus className="w-3 h-3" />
+            Add Song
+          </button>
+        </div>
+      )}
       {songs.map((song, idx) => {
         const isExpanded = expandedIdx === idx;
         const isEditing = editingIdx === idx;
