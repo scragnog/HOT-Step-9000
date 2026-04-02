@@ -48,7 +48,10 @@ const Section: React.FC<SectionProps> = ({
 }) => {
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className="flex flex-col min-h-0" style={{ flex: open ? '1 1 0%' : '0 0 auto' }}>
+    <div
+      className="flex flex-col overflow-hidden"
+      style={{ flex: open ? '1 1 0%' : '0 0 auto', minHeight: open ? 0 : 'auto' }}
+    >
       {/* Header */}
       <button
         onClick={() => setOpen(!open)}
@@ -68,9 +71,9 @@ const Section: React.FC<SectionProps> = ({
           </span>
         )}
       </button>
-      {/* Content */}
+      {/* Content — min-h-0 is critical for flex child scroll containment */}
       {open && (
-        <div className="flex-1 overflow-y-auto scrollbar-hide">
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
           {children}
         </div>
       )}
