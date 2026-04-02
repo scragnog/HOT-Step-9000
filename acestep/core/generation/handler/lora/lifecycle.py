@@ -426,6 +426,16 @@ def add_lora(self, lora_path: str, adapter_name: str | None = None) -> str:
             "Please re-initialize the service with quantization disabled, then try loading the LoRA adapter again."
         )
 
+    # Block adapter loading on XL (4B) models — 2B adapters are incompatible
+    from acestep.gpu_config import is_xl_model
+    config_path = (getattr(self, "last_init_params", None) or {}).get("config_path", "")
+    if is_xl_model(config_path):
+        return (
+            "❌ LoRA/LoKR adapters are not compatible with XL (4B) models. "
+            "Adapters trained on the 2B architecture have different dimensions. "
+            f"Current model: {config_path}"
+        )
+
     if not lora_path or not lora_path.strip():
         return "❌ Please provide a LoRA path."
 
