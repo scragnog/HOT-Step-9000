@@ -97,6 +97,12 @@ export const RecentSongsList: React.FC<RecentSongsListProps> = ({ onPlaySong, sh
       } catch { /* non-fatal */ }
     }
 
+    // Ensure artistName + source are always set for Lireek songs (older DB records may lack artistName)
+    const gp = (song as any).generationParams || {};
+    gp.source = gp.source || 'lyric-studio';
+    gp.artistName = gp.artistName || rs.artist_name;
+    (song as any).generationParams = gp;
+
     onPlaySong(song);
   }, [onPlaySong, token]);
 
