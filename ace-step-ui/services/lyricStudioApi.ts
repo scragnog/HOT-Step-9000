@@ -314,7 +314,31 @@ export const lireekApi = {
     api(`/api/lireek/artists/${artistId}/curated-profile`, {
       method: 'POST', body: params, timeoutMs: 300_000,
     }),
+
+  /** Recent songs across all artists (Lireek-only) */
+  getRecentSongs: (limit = 30): Promise<{ songs: RecentSong[] }> =>
+    api(`/api/lireek/recent-songs?limit=${limit}`),
 };
+
+// ── Recent Song type ──────────────────────────────────────────────────────
+
+export interface RecentSong {
+  ag_id: number;
+  hotstep_job_id: string;
+  ag_created_at: string;
+  generation_id: number;
+  song_title: string;
+  subject?: string;
+  caption?: string;
+  lyrics?: string;
+  duration?: number;
+  lyrics_set_id: number;
+  album?: string;
+  album_image?: string;
+  artist_id: number;
+  artist_name: string;
+  artist_image?: string;
+}
 
 // ── SSE Streaming ─────────────────────────────────────────────────────────
 

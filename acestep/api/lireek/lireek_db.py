@@ -848,6 +848,48 @@ def delete_audio_generation(ag_id: int) -> bool:
         conn.close()
 
 
+def get_recent_audio_generations(limit: int = 30) -> list[dict[str, Any]]:
+    """Return recent audio generations across ALL artists with full context.
+
+    Joins: audio_generations → generations → profiles → lyrics_sets → artists
+    to provide everything the UI needs: job ID, song title, artist name,
+    album name, cover images, etc.
+    """
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            """
+            SELECT
+                ag.id              AS ag_id,
+                ag.hotstep_job_id,
+                ag.created_at      AS ag_created_at,
+                g.id               AS generation_id,
+                g.title            AS song_title,
+                g.subject,
+                g.caption,
+                g.lyrics,
+                g.duration,
+                ls.id              AS lyrics_set_id,
+                ls.album,
+                ls.image_url       AS album_image,
+                a.id               AS artist_id,
+                a.name             AS artist_name,
+                a.image_url        AS artist_image
+            FROM audio_generations ag
+            JOIN generations g   ON g.id  = ag.generation_id
+            JOIN profiles   p   ON p.id  = g.profile_id
+            JOIN lyrics_sets ls ON ls.id = p.lyrics_set_id
+            JOIN artists    a   ON a.id  = ls.artist_id
+            ORDER BY ag.created_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+        return [_row_to_dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
 # ── Settings ──────────────────────────────────────────────────────────────────
 
 def get_setting(key: str, default: str = "") -> str:
