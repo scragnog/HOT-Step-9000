@@ -14,6 +14,10 @@ export const getModelDisplayName = (modelId: string): string => {
     'acestep-v15-merge-sft-turbo-0.3': 'ST.3',
     'acestep-v15-merge-base-turbo-0.5': 'BT.5',
     'acestep-v15-merge-base-sft-0.5': 'BS.5',
+    // XL (4B DiT) models
+    'acestep-v15-xl-base': 'XL-B',
+    'acestep-v15-xl-sft': 'XL-S',
+    'acestep-v15-xl-turbo': 'XL-T',
   };
   return mapping[modelId] || modelId;
 };
@@ -35,4 +39,9 @@ export const isBaseModel = (modelId: string): boolean => {
 /** Check if a task type requires a base model */
 export const isBaseOnlyTask = (task: string): boolean => {
   return ['extract', 'lego', 'complete'].includes(task);
+};
+
+/** Check if model is an XL (4B DiT) variant — needs ≥16GB VRAM, no adapter support */
+export const isXlModel = (modelId: string): boolean => {
+  return modelId.includes('-xl-');
 };

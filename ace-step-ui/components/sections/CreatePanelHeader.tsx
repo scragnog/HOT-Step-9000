@@ -203,6 +203,22 @@ export const CreatePanelHeader: React.FC<CreatePanelHeaderProps> = ({
                     </button>
                 </div>
             )}
+
+            {/* XL (4B) model warnings */}
+            {selectedModel.includes('-xl-') && (
+                <>
+                    <div className="mt-2 px-3 py-2 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-700/50">
+                        <p className="text-xs text-orange-700 dark:text-orange-300 font-medium">
+                            ⚠️ <span className="font-bold">XL Model (4B params)</span> — Requires ≥16 GB VRAM. xl_turbo: ~12 GB, xl_base/sft: ~16 GB.
+                        </p>
+                    </div>
+                    <div className="mt-1 px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700/50">
+                        <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
+                            🔒 LoRA / LoKR adapters are incompatible with XL models (different architecture dimensions)
+                        </p>
+                    </div>
+                </>
+            )}
         </>
     );
 };

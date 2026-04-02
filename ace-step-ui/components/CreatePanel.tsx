@@ -7,7 +7,7 @@ import { useI18n } from '../context/I18nContext';
 import { generateApi } from '../services/api';
 import { MAIN_STYLES, SUB_STYLES, ALL_STYLES } from '../data/genres';
 import { KEY_SIGNATURES, TIME_SIGNATURES, VOCAL_LANGUAGE_KEYS } from '../utils/constants';
-import { getModelDisplayName, isTurboModel, isBaseModel, isBaseOnlyTask } from '../utils/modelUtils';
+import { getModelDisplayName, isTurboModel, isBaseModel, isBaseOnlyTask, isXlModel } from '../utils/modelUtils';
 import { getAudioLabel, formatTime, computeEffectiveBpm, computeEffectiveKeyScale } from '../utils/audioUtils';
 import { EditableSlider } from './EditableSlider';
 import GenerationSettingsAccordion from './accordions/GenerationSettingsAccordion';
@@ -319,6 +319,9 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       { id: 'acestep-v15-turbo-shift1', name: 'acestep-v15-turbo-shift1' },
       { id: 'acestep-v15-turbo-shift3', name: 'acestep-v15-turbo-shift3' },
       { id: 'acestep-v15-turbo-continuous', name: 'acestep-v15-turbo-continuous' },
+      { id: 'acestep-v15-xl-base', name: 'acestep-v15-xl-base' },
+      { id: 'acestep-v15-xl-sft', name: 'acestep-v15-xl-sft' },
+      { id: 'acestep-v15-xl-turbo', name: 'acestep-v15-xl-turbo' },
     ];
   }, [fetchedModels]);
 
