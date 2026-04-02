@@ -408,6 +408,28 @@ def update_song_lyrics(lyrics_set_id: int, song_index: int, new_lyrics: str) -> 
         conn.close()
 
 
+def add_song_to_set(lyrics_set_id: int, title: str, lyrics: str) -> Optional[dict[str, Any]]:
+    """Append a song to a lyrics set's JSON songs array."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT songs, album FROM lyrics_sets WHERE id = ?", (lyrics_set_id,)
+        ).fetchone()
+        if not row:
+            return None
+
+        songs = json.loads(row["songs"])
+        songs.append({"title": title, "album": row["album"], "lyrics": lyrics})
+        conn.execute(
+            "UPDATE lyrics_sets SET songs = ?, max_songs = ? WHERE id = ?",
+            (json.dumps(songs, ensure_ascii=False), len(songs), lyrics_set_id),
+        )
+        conn.commit()
+        return get_lyrics_set(lyrics_set_id)
+    finally:
+        conn.close()
+
+
 # ── Profiles ──────────────────────────────────────────────────────────────────
 
 def save_profile(

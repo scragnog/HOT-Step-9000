@@ -60,6 +60,39 @@ class SlopScanRequest(BaseModel):
     text: str
 
 
+class CreateArtistRequest(BaseModel):
+    name: str = Field(..., min_length=1)
+    image_url: Optional[str] = None
+
+
+class ManualSong(BaseModel):
+    title: str
+    lyrics: str
+
+
+class CreateLyricsSetRequest(BaseModel):
+    artist_id: int
+    album: Optional[str] = None
+    image_url: Optional[str] = None
+    songs: list[ManualSong] = []
+
+
+class AddSongRequest(BaseModel):
+    title: str = Field(..., min_length=1)
+    lyrics: str = Field(..., min_length=1)
+
+
+class SongSelection(BaseModel):
+    lyrics_set_id: int
+    song_indices: list[int]
+
+
+class CuratedProfileRequest(BaseModel):
+    selections: list[SongSelection]
+    provider: str = "gemini"
+    model: Optional[str] = None
+
+
 # ── Route registration ───────────────────────────────────────────────────────
 
 def register_lireek_routes(app: FastAPI) -> None:
@@ -71,6 +104,16 @@ def register_lireek_routes(app: FastAPI) -> None:
     async def list_artists():
         from acestep.api.lireek.lireek_db import list_artists
         return {"artists": list_artists()}
+
+    @app.post("/api/lireek/artists/create")
+    async def create_artist(req: CreateArtistRequest):
+        """Create a new artist manually (without Genius)."""
+        from acestep.api.lireek.lireek_db import get_or_create_artist, update_artist_image
+        artist = get_or_create_artist(req.name.strip())
+        if req.image_url and req.image_url.strip():
+            update_artist_image(artist["id"], req.image_url.strip())
+            artist["image_url"] = req.image_url.strip()
+        return {"artist": artist}
 
     @app.delete("/api/lireek/artists/{artist_id}")
     async def delete_artist(artist_id: int):
@@ -169,6 +212,31 @@ def register_lireek_routes(app: FastAPI) -> None:
         return {"image_url": image_url}
 
     # ── Lyrics Sets ───────────────────────────────────────────────────────
+
+    @app.post("/api/lireek/lyrics-sets/create")
+    async def create_lyrics_set_manual(req: CreateLyricsSetRequest):
+        """Create a lyrics set (album) manually with optional songs."""
+        from acestep.api.lireek.lireek_db import save_lyrics_set, update_lyrics_set_image
+        songs_data = [{"title": s.title, "album": req.album, "lyrics": s.lyrics} for s in req.songs]
+        ls = save_lyrics_set(
+            artist_id=req.artist_id,
+            album=req.album,
+            max_songs=len(songs_data),
+            songs=songs_data,
+        )
+        if req.image_url and req.image_url.strip():
+            update_lyrics_set_image(ls["id"], req.image_url.strip())
+            ls["image_url"] = req.image_url.strip()
+        return {"lyrics_set": ls}
+
+    @app.post("/api/lireek/lyrics-sets/{lyrics_set_id}/add-song")
+    async def add_song_to_set(lyrics_set_id: int, req: AddSongRequest):
+        """Add a song to an existing lyrics set."""
+        from acestep.api.lireek.lireek_db import add_song_to_set
+        result = add_song_to_set(lyrics_set_id, req.title.strip(), req.lyrics)
+        if not result:
+            raise HTTPException(status_code=404, detail="Lyrics set not found")
+        return result
 
     @app.get("/api/lireek/lyrics-sets")
     async def list_lyrics_sets(artist_id: Optional[int] = None, include_full: bool = False):
@@ -800,6 +868,154 @@ def register_lireek_routes(app: FastAPI) -> None:
         from acestep.api.lireek.slop_detector import AISlopDetector
         detector = AISlopDetector()
         return detector.scan_text(req.text)
+
+    # ── Curated Cross-Album Profiling ────────────────────────────────────
+
+    @app.post("/api/lireek/artists/{artist_id}/curated-profile")
+    async def build_curated_profile(artist_id: int, req: CuratedProfileRequest):
+        """Create a curated lyrics set from songs across albums, then build a profile."""
+        from acestep.api.lireek.lireek_db import (
+            get_lyrics_set as _get_ls, save_lyrics_set, save_profile,
+            _connect, _row_to_dict,
+        )
+        from acestep.api.lireek.schemas import SongLyrics
+        from acestep.api.lireek.profiler_service import build_profile
+        from acestep.api.lireek.generation_service import make_llm_caller
+
+        # Assemble songs from selections
+        curated_songs_data: list[dict] = []
+        curated_song_objects: list[SongLyrics] = []
+        for sel in req.selections:
+            ls = _get_ls(sel.lyrics_set_id)
+            if not ls:
+                continue
+            songs_raw = ls.get("songs", [])
+            if isinstance(songs_raw, str):
+                songs_raw = json.loads(songs_raw)
+            for idx in sel.song_indices:
+                if 0 <= idx < len(songs_raw):
+                    song = songs_raw[idx]
+                    curated_songs_data.append(song)
+                    curated_song_objects.append(SongLyrics(**song))
+
+        if not curated_song_objects:
+            raise HTTPException(status_code=400, detail="No valid songs selected")
+
+        # Create a curated lyrics_set
+        curated_ls = save_lyrics_set(
+            artist_id=artist_id,
+            album="[Curated Selection]",
+            max_songs=len(curated_songs_data),
+            songs=curated_songs_data,
+        )
+
+        # Get artist name
+        conn = _connect()
+        try:
+            row = conn.execute("SELECT name FROM artists WHERE id = ?", (artist_id,)).fetchone()
+            artist_name = row["name"] if row else "Unknown"
+        finally:
+            conn.close()
+
+        # Build profile
+        try:
+            llm_caller = make_llm_caller(req.provider, req.model)
+            profile = build_profile(
+                artist=artist_name,
+                album="[Curated Selection]",
+                songs=curated_song_objects,
+                llm_call=llm_caller,
+            )
+        except Exception as e:
+            logger.error("Curated profile build failed: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail=str(e))
+
+        saved = save_profile(
+            lyrics_set_id=curated_ls["id"],
+            provider=req.provider,
+            model=req.model or "",
+            profile_data=profile.model_dump(),
+        )
+
+        return {"lyrics_set": curated_ls, "profile": saved}
+
+    @app.post("/api/lireek/artists/{artist_id}/curated-profile-stream")
+    async def build_curated_profile_stream(artist_id: int, req: CuratedProfileRequest):
+        """Create a curated lyrics set and build profile with SSE streaming."""
+        from acestep.api.lireek.lireek_db import (
+            get_lyrics_set as _get_ls, save_lyrics_set, save_profile,
+            _connect,
+        )
+        from acestep.api.lireek.schemas import SongLyrics
+        from acestep.api.lireek.profiler_service import build_profile
+        from acestep.api.lireek.generation_service import make_streaming_llm_caller
+
+        # Assemble songs
+        curated_songs_data: list[dict] = []
+        curated_song_objects: list[SongLyrics] = []
+        for sel in req.selections:
+            ls = _get_ls(sel.lyrics_set_id)
+            if not ls:
+                continue
+            songs_raw = ls.get("songs", [])
+            if isinstance(songs_raw, str):
+                songs_raw = json.loads(songs_raw)
+            for idx in sel.song_indices:
+                if 0 <= idx < len(songs_raw):
+                    song = songs_raw[idx]
+                    curated_songs_data.append(song)
+                    curated_song_objects.append(SongLyrics(**song))
+
+        if not curated_song_objects:
+            raise HTTPException(status_code=400, detail="No valid songs selected")
+
+        curated_ls = save_lyrics_set(
+            artist_id=artist_id,
+            album="[Curated Selection]",
+            max_songs=len(curated_songs_data),
+            songs=curated_songs_data,
+        )
+
+        conn = _connect()
+        try:
+            row = conn.execute("SELECT name FROM artists WHERE id = ?", (artist_id,)).fetchone()
+            artist_name = row["name"] if row else "Unknown"
+        finally:
+            conn.close()
+
+        q: queue.Queue = queue.Queue()
+
+        def on_chunk(text: str):
+            q.put(json.dumps({"type": "chunk", "text": text}) + "\n")
+
+        def on_phase(phase: str):
+            q.put(json.dumps({"type": "phase", "text": phase}) + "\n")
+
+        def run():
+            try:
+                caller = make_streaming_llm_caller(req.provider, req.model, on_chunk=on_chunk)
+                profile = build_profile(
+                    artist=artist_name,
+                    album="[Curated Selection]",
+                    songs=curated_song_objects,
+                    llm_call=caller,
+                    on_phase=on_phase,
+                )
+                saved = save_profile(
+                    lyrics_set_id=curated_ls["id"],
+                    provider=req.provider,
+                    model=req.model or "",
+                    profile_data=profile.model_dump(),
+                )
+                q.put(json.dumps({"type": "result", "data": {"lyrics_set": curated_ls, "profile": saved}}) + "\n")
+            except Exception as exc:
+                logger.exception("Streaming curated profile build failed")
+                q.put(json.dumps({"type": "error", "message": str(exc)}) + "\n")
+            finally:
+                q.put(None)
+
+        threading.Thread(target=run, daemon=True).start()
+        return StreamingResponse(_sse_stream(q), media_type="text/event-stream")
 
     # ── Bulk Operations ───────────────────────────────────────────────────
 

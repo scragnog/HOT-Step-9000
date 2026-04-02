@@ -286,6 +286,34 @@ export const lireekApi = {
 
   resetPrompt: (name: string): Promise<{ name: string; status: string }> =>
     api(`/api/lireek/prompts/${name}`, { method: 'DELETE' }),
+
+  // ── Manual CRUD ───────────────────────────────────────────────────────
+  createArtist: (params: { name: string; image_url?: string }): Promise<{ artist: Artist }> =>
+    api('/api/lireek/artists/create', { method: 'POST', body: params }),
+
+  createLyricsSet: (params: {
+    artist_id: number;
+    album?: string;
+    image_url?: string;
+    songs?: { title: string; lyrics: string }[];
+  }): Promise<{ lyrics_set: LyricsSet }> =>
+    api('/api/lireek/lyrics-sets/create', { method: 'POST', body: params }),
+
+  addSongToSet: (lyricsSetId: number, params: {
+    title: string;
+    lyrics: string;
+  }): Promise<LyricsSet> =>
+    api(`/api/lireek/lyrics-sets/${lyricsSetId}/add-song`, { method: 'POST', body: params }),
+
+  // ── Curated Profiling ─────────────────────────────────────────────────
+  buildCuratedProfile: (artistId: number, params: {
+    selections: { lyrics_set_id: number; song_indices: number[] }[];
+    provider: string;
+    model?: string;
+  }): Promise<{ lyrics_set: LyricsSet; profile: Profile }> =>
+    api(`/api/lireek/artists/${artistId}/curated-profile`, {
+      method: 'POST', body: params, timeoutMs: 300_000,
+    }),
 };
 
 // ── SSE Streaming ─────────────────────────────────────────────────────────
@@ -366,4 +394,15 @@ export const streamRefine = (
 
 export const skipThinking = (): Promise<void> =>
   api('/api/lireek/skip-thinking', { method: 'POST' });
+
+export const streamBuildCuratedProfile = (
+  artistId: number,
+  req: {
+    selections: { lyrics_set_id: number; song_indices: number[] }[];
+    provider: string;
+    model?: string;
+  },
+  callbacks: StreamCallbacks,
+): Promise<void> =>
+  consumeSSE(`/api/lireek/artists/${artistId}/curated-profile-stream`, req, callbacks);
 
