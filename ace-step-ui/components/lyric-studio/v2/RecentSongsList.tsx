@@ -10,14 +10,16 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Play, Loader2, Music } from 'lucide-react';
+import { Play, Loader2, Music, Download, Trash2 } from 'lucide-react';
 import { lireekApi, RecentSong } from '../../../services/lyricStudioApi';
 import { songsApi } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 import { Song } from '../../../types';
+import { DownloadModal, DownloadFormat, DownloadVersion } from '../../DownloadModal';
 
 interface RecentSongsListProps {
   onPlaySong: (song: Song) => void;
+  showToast: (msg: string, type?: 'success' | 'error') => void;
   refreshKey?: number;
 }
 
@@ -35,11 +37,15 @@ async function _loadRecentSongs(): Promise<RecentSong[]> {
 
 // ── Component ────────────────────────────────────────────────────────────────
 
-export const RecentSongsList: React.FC<RecentSongsListProps> = ({ onPlaySong, refreshKey = 0 }) => {
+export const RecentSongsList: React.FC<RecentSongsListProps> = ({ onPlaySong, showToast, refreshKey = 0 }) => {
   const { token } = useAuth();
   const [songs, setSongs] = useState<RecentSong[]>(_cachedSongs);
   const [loading, setLoading] = useState(_cachedSongs.length === 0);
   const mountedRef = useRef(true);
+
+  // Download modal state
+  const [downloadSong, setDownloadSong] = useState<{ rs: RecentSong; dbSong: any } | null>(null);
+  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -66,7 +72,6 @@ export const RecentSongsList: React.FC<RecentSongsListProps> = ({ onPlaySong, re
 
   const handlePlay = useCallback(async (rs: RecentSong) => {
     const audioUrl = rs.audio_url || '';
-    // Build base song
     const song: Song = {
       id: rs.hotstep_job_id,
       title: rs.song_title || 'Untitled',
@@ -89,11 +94,92 @@ export const RecentSongsList: React.FC<RecentSongsListProps> = ({ onPlaySong, re
           if (db.generationParams) (song as any).generationParams = db.generationParams;
           if (db.duration) song.duration = String(db.duration);
         }
-      } catch { /* non-fatal — play with basic info */ }
+      } catch { /* non-fatal */ }
     }
 
     onPlaySong(song);
   }, [onPlaySong, token]);
+
+  // ── Delete handler ──────────────────────────────────────────────────────
+  const handleDelete = useCallback(async (e: React.MouseEvent, rs: RecentSong) => {
+    e.stopPropagation();
+    if (!token || !rs.audio_url) return;
+
+    try {
+      // Find and delete from songs DB
+      const { songs: dbSongs } = await songsApi.getSongsByUrls([rs.audio_url], token);
+      const db: any = dbSongs[0];
+      if (db?.id) {
+        await songsApi.deleteSong(db.id, token);
+      }
+      // Remove from local list
+      setSongs(prev => {
+        const updated = prev.filter(s => s.ag_id !== rs.ag_id);
+        _cachedSongs = updated;
+        return updated;
+      });
+      showToast('Song deleted');
+    } catch (err) {
+      showToast('Failed to delete song', 'error');
+    }
+  }, [token, showToast]);
+
+  // ── Download handler ────────────────────────────────────────────────────
+  const handleDownloadClick = useCallback(async (e: React.MouseEvent, rs: RecentSong) => {
+    e.stopPropagation();
+    if (!token || !rs.audio_url) return;
+
+    // Fetch full DB record for originalAudioUrl
+    let dbSong: any = null;
+    try {
+      const { songs: dbSongs } = await songsApi.getSongsByUrls([rs.audio_url], token);
+      dbSong = dbSongs[0] || null;
+    } catch { /* non-fatal */ }
+
+    setDownloadSong({ rs, dbSong });
+    setDownloadModalOpen(true);
+  }, [token]);
+
+  const handleDownload = useCallback((format: DownloadFormat, version: DownloadVersion) => {
+    if (!downloadSong) return;
+    const { rs, dbSong } = downloadSong;
+    const audioUrl = rs.audio_url || '';
+    const artistPrefix = rs.artist_name ? `${rs.artist_name} - ` : '';
+    const displayTitle = `${artistPrefix}${rs.song_title || 'Untitled'}`;
+
+    const downloadSingleURL = (url: string, suffix: string) => {
+      const targetUrl = new URL('/api/songs/download', window.location.origin);
+      targetUrl.searchParams.set('audioUrl', url);
+      targetUrl.searchParams.set('title', `${displayTitle}${suffix}`);
+      targetUrl.searchParams.set('format', format);
+      if (dbSong?.id) targetUrl.searchParams.set('songId', dbSong.id);
+      if (format === 'mp3') {
+        const br = localStorage.getItem('mp3_export_bitrate');
+        if (br) targetUrl.searchParams.set('mp3Bitrate', br);
+      }
+      if (format === 'opus') {
+        const br = localStorage.getItem('opus_export_bitrate');
+        if (br) targetUrl.searchParams.set('opusBitrate', br);
+      }
+      const link = document.createElement('a');
+      link.href = targetUrl.toString();
+      const ext = format === 'opus' ? 'ogg' : format;
+      link.download = `${displayTitle}${suffix}.${ext}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+
+    if (version === 'mastered' || version === 'both') {
+      downloadSingleURL(audioUrl, '');
+    }
+    if (version === 'original' || version === 'both') {
+      const origUrl = dbSong?.generationParams?.originalAudioUrl || dbSong?.originalAudioUrl;
+      if (origUrl) {
+        setTimeout(() => downloadSingleURL(origUrl, ' (Unmastered)'), version === 'both' ? 500 : 0);
+      }
+    }
+  }, [downloadSong]);
 
   if (loading && songs.length === 0) {
     return (
@@ -112,50 +198,81 @@ export const RecentSongsList: React.FC<RecentSongsListProps> = ({ onPlaySong, re
     );
   }
 
+  const hasOriginal = downloadSong?.dbSong?.generationParams?.originalAudioUrl ||
+    downloadSong?.dbSong?.originalAudioUrl;
+
   return (
-    <div className="grid grid-cols-2 grid-rows-4 gap-1 px-2 py-1.5 h-full">
-      {songs.slice(0, 8).map((rs) => {
-        const dur = rs.duration || 0;
-        const mins = Math.floor(dur / 60);
-        const secs = String(Math.floor(dur % 60)).padStart(2, '0');
-        const coverUrl = rs.cover_url || rs.album_image || rs.artist_image || '';
-        return (
-          <button
-            key={rs.ag_id}
-            onClick={() => handlePlay(rs)}
-            className="flex items-center gap-2.5 rounded-lg hover:bg-white/[0.06] transition-colors text-left group px-2 overflow-hidden"
-          >
-            {/* Cover art */}
-            <div className="w-14 h-14 rounded-md flex-shrink-0 overflow-hidden bg-zinc-800 relative">
-              {coverUrl ? (
-                <img src={coverUrl} alt="" className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <Music className="w-5 h-5 text-zinc-600" />
+    <>
+      <div className="grid grid-cols-2 grid-rows-4 gap-1 px-2 py-1.5 h-full">
+        {songs.slice(0, 8).map((rs) => {
+          const dur = rs.duration || 0;
+          const mins = Math.floor(dur / 60);
+          const secs = String(Math.floor(dur % 60)).padStart(2, '0');
+          const coverUrl = rs.cover_url || rs.album_image || rs.artist_image || '';
+          return (
+            <div
+              key={rs.ag_id}
+              className="flex items-center gap-2.5 rounded-lg hover:bg-white/[0.06] transition-colors text-left group px-2 overflow-hidden relative cursor-pointer"
+              onClick={() => handlePlay(rs)}
+            >
+              {/* Cover art */}
+              <div className="w-14 h-14 rounded-md flex-shrink-0 overflow-hidden bg-zinc-800 relative">
+                {coverUrl ? (
+                  <img src={coverUrl} alt="" className="w-full h-full object-cover" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <Music className="w-5 h-5 text-zinc-600" />
+                  </div>
+                )}
+                {/* Play overlay */}
+                <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <Play className="w-4 h-4 text-white ml-0.5" />
                 </div>
-              )}
-              {/* Play overlay */}
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <Play className="w-4 h-4 text-white ml-0.5" />
+              </div>
+              {/* Info */}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-zinc-200 truncate leading-snug">
+                  {rs.song_title || 'Untitled'}
+                </p>
+                <p className="text-[10px] text-zinc-500 truncate leading-snug">
+                  {rs.artist_name}
+                </p>
+                {dur > 0 && (
+                  <p className="text-[10px] text-zinc-600 font-mono mt-0.5">
+                    {mins}:{secs}
+                  </p>
+                )}
+              </div>
+              {/* Action buttons — visible on hover */}
+              <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <button
+                  onClick={(e) => handleDownloadClick(e, rs)}
+                  className="p-1.5 rounded-md bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
+                  title="Download"
+                >
+                  <Download className="w-3 h-3" />
+                </button>
+                <button
+                  onClick={(e) => handleDelete(e, rs)}
+                  className="p-1.5 rounded-md bg-zinc-800/80 hover:bg-red-900/60 text-zinc-400 hover:text-red-400 transition-colors"
+                  title="Delete"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
               </div>
             </div>
-            {/* Info */}
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-zinc-200 truncate leading-snug">
-                {rs.song_title || 'Untitled'}
-              </p>
-              <p className="text-[10px] text-zinc-500 truncate leading-snug">
-                {rs.artist_name}
-              </p>
-              {dur > 0 && (
-                <p className="text-[10px] text-zinc-600 font-mono mt-0.5">
-                  {mins}:{secs}
-                </p>
-              )}
-            </div>
-          </button>
-        );
-      })}
-    </div>
+          );
+        })}
+      </div>
+
+      {/* Download Modal */}
+      <DownloadModal
+        isOpen={downloadModalOpen}
+        onClose={() => { setDownloadModalOpen(false); setDownloadSong(null); }}
+        onDownload={handleDownload}
+        songTitle={downloadSong ? `${downloadSong.rs.artist_name ? downloadSong.rs.artist_name + ' - ' : ''}${downloadSong.rs.song_title || 'Untitled'}` : undefined}
+        hasOriginal={!!hasOriginal}
+      />
+    </>
   );
 };

@@ -129,6 +129,7 @@ export const RightSidebarPanel: React.FC<RightSidebarPanelProps> = ({
       >
         <RecentSongsList
           onPlaySong={onPlaySong}
+          showToast={showToast}
           refreshKey={recentRefreshKey}
         />
       </Section>
