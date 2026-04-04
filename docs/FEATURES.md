@@ -1187,3 +1187,107 @@ Visual overhaul of the song list with a cover art visualizer backdrop, refined t
 - **Refined badge:** Tracks in the Lyrics Library that have been through the refinement pipeline display a ✨ Refined amber badge
 - **Drawer reorder:** Track Setup drawer reorganized to a more logical flow: Lyrics Library at top, then Title, Lyrics, Style, Audio, and Track Details
 
+---
+
+## Lyric Studio
+
+A complete integrated songwriting environment — from raw lyrics to fully produced audio. The core workflow is designed around your own creative writing: organise your lyrics, build a stylistic profile, generate new original songs that match your voice, and produce them as audio with one click.
+
+> **Full documentation:** [lyric-studio-documentation.md](./lyric-studio-documentation.md)
+
+### What's included
+
+| Component | Files | Description |
+|-----------|-------|-------------|
+| **Backend Services** | `acestep/api/lireek/` | FastAPI routes, SQLite DB, profiler, generator, slop detector, Genius fetcher, export service |
+| **UI (V2)** | `ace-step-ui/components/lyric-studio/v2/` | Main interface, tab views (Source Lyrics, Profiles, Written Songs, Recordings), modals |
+| **Bulk Operations** | `QueuePanel.tsx`, `PromptEditor.tsx` | Batch profiling, generation, preset assignment, system prompt customisation |
+| **Audio Queue** | `stores/audioGenQueueStore.ts` | Persistent generation queue with artist-batched execution |
+| **API Client** | `services/lyricStudioApi.ts` | Typed client for all Lyric Studio endpoints |
+
+### Core Workflow
+
+1. **Create an Artist** — your name, your project, your persona
+2. **Add Your Lyrics** — manual entry with `[Verse]`, `[Chorus]`, `[Bridge]` section headers for best results
+3. **Build a Profile** — AI analyses your writing across multiple dimensions (streamed in real-time):
+   - **Rule-based:** Section counts, rhyme schemes, rhyme quality, meter stats, vocabulary stats, repetition patterns
+   - **LLM-assisted (4 passes):** Themes & subjects, tone & structure, imagery & narrative, per-song subjects
+4. **Generate Lyrics** — the AI writes new songs that match your voice, then:
+   - Enforces structural rules (mandatory chorus, correct line counts)
+   - Runs through the **AI-Slop Detector** (see below)
+   - Plans metadata (title, subject, BPM, key, duration, caption)
+5. **Edit** — every field is inline-editable (title, subject, lyrics, BPM, key, duration, caption)
+6. **Generate Audio** — one-click send to HOT-Step's audio engine with preset adapter & matchering config
+7. **Listen & Download** — playback in the global player, download in WAV/MP3/FLAC/OGG with artist-prefixed naming
+
+### AI-Slop Detector
+
+A 6-layer defence system against generic AI output:
+
+| Layer | Check |
+|-------|-------|
+| 1. **Blacklist** | Curated list of known AI clichés and overused phrases |
+| 2. **Structure** | Excessive em-dashes, parenthetical asides, theatrical stage directions |
+| 3. **Repetition** | Repeated sentence starters, identical phrasing between sections |
+| 4. **Statistical** | Vocabulary diversity, line length consistency, syllable distribution |
+| 5. **Cliché Density** | Ratio of flagged phrases to total content |
+| 6. **Coherence** | Thematic consistency with the source profile |
+
+### Curated Profiles
+
+Cherry-pick specific songs from across multiple albums to create a focused stylistic fingerprint. Select/deselect individual songs or use per-album Select All, then build a profile from only the selected corpus.
+
+### Album Presets
+
+Per-album configuration for audio generation:
+
+- **Adapter (LoRA/LoKR)** — path, overall scale (0–4), group scales (self-attn, cross-attn, MLP, cond-embed). Type auto-detected.
+- **Matchering Reference** — reference audio file for EQ/loudness matching during mastering
+- Both browsable via the integrated file browser
+
+### Bulk Operations
+
+Three batch modes accessible from the sidebar:
+
+- **Build Profiles** — queue unprofiled albums for sequential analysis
+- **Generate Lyrics** — queue profiles with configurable count per profile (1–20)
+- **Assign Presets** — bulk-apply adapter and matchering paths across albums with smart selection helpers (Select Missing, Select Incomplete)
+
+### Audio Generation Queue
+
+- **Persistent** — survives page reloads and HMR via localStorage
+- **Artist-batched** — reorders pending jobs to minimise adapter switches
+- **Deferred adapter loading** — adapters load only when an item actually starts running
+- **Progress tracking** — real-time status (loading adapter → generating → succeeded/failed)
+- **Automatic linking** — audio results linked back to lyrics for the Recordings tab
+
+### System Prompts
+
+Full control over every system prompt in the pipeline via the Prompt Editor:
+
+| Prompt | Purpose |
+|--------|---------|
+| Generation | How the AI writes new lyrics |
+| Refinement | How the AI revises existing generations |
+| Metadata Planning | Title, subject, BPM, key, duration, caption planning |
+| Profile: Themes & Subjects | First profiling pass |
+| Profile: Tone & Structure | Second profiling pass |
+| Profile: Imagery & Summary | Third profiling pass |
+| Profile: Song Subjects | Fourth profiling pass — per-song subjects |
+
+Each prompt is customisable with a reset-to-default option. Customised prompts are marked with a `custom` badge.
+
+### Export
+
+Generated lyrics are automatically exported as structured files:
+
+```
+{export_dir}/{Artist}/Based on {Album}/
+    {title}_{id}.json     — ACE-Step compatible
+    {title}_{id}.txt      — human-readable with metadata
+```
+
+### Reference Lyrics (Genius)
+
+For study and comparison purposes, lyrics can be fetched from Genius. Annotations and formatting artifacts are automatically cleaned. This is a supplementary tool — the primary workflow is built around your own material.
+

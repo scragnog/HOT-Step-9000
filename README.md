@@ -52,8 +52,9 @@ HOT-Step 9000 sits on top of the original ACE-Step backend but introduces a mass
 - **UI & QoL:** Persistent settings, debug panel with GPU/RAM/CPU monitoring, waveform visualizer, track list pagination, job cancellation, queue management, bulk operations, and a simple one-click shutdown.
 - **AI Cover Art:** Optional AI-generated album artwork using SDXL Turbo. When enabled in Settings, each generated song receives a unique 512×512 cover image based on its title, style, and lyrics — generated locally on your GPU after audio completes.
 - **Redmond Mode:** One-click DPO quality refinement using the [AceStep_Refine_Redmond](https://huggingface.co/artificialguybr/AceStep_Refine_Redmond) adapter by [artificialguybr](https://huggingface.co/artificialguybr). Merges a trained quality adapter directly into the DiT decoder below the adapter slot system — improving musicality, arrangement, and vocal quality across all generations. Auto-downloads on first use (~132 MB), toggleable at runtime with adjustable scale.
+- **Lyric Studio:** A complete integrated songwriting environment. Feed it your own lyrics, build an AI-powered stylistic profile of your writing, and generate new original songs that match your creative voice — then produce them as audio with one click. Features include multi-pass profiling (rhyme, structure, meter, vocabulary, themes), a 6-layer AI-slop detector, curated cross-album profiles, bulk operations, album presets with adapter & matchering config, and a persistent audio generation queue. → *[Full documentation](./docs/lyric-studio-documentation.md)*
 
-*For a detailed, technical breakdown of every new feature, see [FEATURES.md](./FEATURES.md).*
+*For a detailed, technical breakdown of every new feature, see [FEATURES.md](./docs/FEATURES.md).*
 
 ---
 
