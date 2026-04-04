@@ -276,3 +276,18 @@ docs/.vitepress/dist/
 docs/.vitepress/cache/
 docs/en/awesome.md
 package-lock.json
+
+# Sweep / experiment output
+sweep_results/
+
+# Generated output (covers, audio)
+output/
+
+# Patch files (development-only)
+*.patch
+*.diff
+
+# Temp/scratch scripts
+settingstouse.json
+test_roundtrip.py
+tmp_*.py
