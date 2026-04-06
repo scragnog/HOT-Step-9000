@@ -852,7 +852,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ song, onClose, onOpe
                                     if (gp.shift != null) {
                                         coreItems.push({
                                             label: t('metaShift'),
-                                            value: String(gp.shift),
+                                            value: gp.shift < 0 ? 'Auto (Dynamic)' : String(gp.shift),
                                             icon: <Radio size={12} />,
                                             gradient: getGradient('settings')
                                         });

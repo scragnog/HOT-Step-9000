@@ -221,19 +221,53 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
                     </div>
 
                     {/* Shift */}
-                    <EditableSlider
-                        label={t('shift')}
-                        value={props.shift}
-                        min={1}
-                        max={5}
-                        step={0.1}
-                        onChange={props.onShiftChange}
-                        formatDisplay={(val) => val.toFixed(1)}
-                        helpText={props.isTurbo ? undefined : 'Controls how the model distributes denoising effort. Higher = more focus on structure, less on fine detail.'}
-                        title={'Timestep schedule warping factor. Turbo models are trained with shift=3.0; base/SFT models default to 1.0.'}
-                        disabled={props.isTurbo}
-                        disabledReason={props.isTurbo ? 'Locked to 3.0 — turbo models are trained with this value' : undefined}
-                    />
+                    <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                            <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400" title={'Timestep schedule warping factor. Turbo models are trained with shift=3.0; base/SFT models default to 1.0.'}>
+                                {t('shift')}
+                            </span>
+                            {!props.isTurbo && (
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        if (props.shift < 0) {
+                                            // Switch from auto to manual — restore a sensible default
+                                            props.onShiftChange(3.0);
+                                        } else {
+                                            // Switch to auto mode
+                                            props.onShiftChange(-1);
+                                        }
+                                    }}
+                                    className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all ${
+                                        props.shift < 0
+                                            ? 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white shadow-sm'
+                                            : 'bg-zinc-100 dark:bg-black/20 text-zinc-500 dark:text-zinc-400 hover:text-emerald-500 dark:hover:text-emerald-400'
+                                    }`}
+                                    title="Auto mode: dynamically adjusts shift based on song duration and step count"
+                                >
+                                    Auto
+                                </button>
+                            )}
+                        </div>
+                        {props.shift < 0 ? (
+                            <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
+                                <span className="text-[10px] text-emerald-400">🎯 Dynamic shift — auto-adjusts based on duration and step count</span>
+                            </div>
+                        ) : (
+                            <EditableSlider
+                                label=""
+                                value={props.shift}
+                                min={1}
+                                max={5}
+                                step={0.1}
+                                onChange={props.onShiftChange}
+                                formatDisplay={(val) => val.toFixed(1)}
+                                helpText={props.isTurbo ? undefined : 'Controls how the model distributes denoising effort. Higher = more focus on structure, less on fine detail.'}
+                                disabled={props.isTurbo}
+                                disabledReason={props.isTurbo ? 'Locked to 3.0 — turbo models are trained with this value' : undefined}
+                            />
+                        )}
+                    </div>
 
                     {/* Inference Settings (nested accordion) */}
                     <div>
