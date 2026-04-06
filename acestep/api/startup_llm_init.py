@@ -58,7 +58,11 @@ def initialize_llm_at_startup(
                 print(f"[API Server] No recommended model for this GPU tier, using smallest: {lm_model_path}")
 
         is_supported, warning_msg = is_lm_model_supported(lm_model_path, gpu_config)
-        if not is_supported:
+        if not is_supported and lm_backend == "llama-cpp":
+            # llama-cpp uses GGUF quantized models — VRAM usage is much lower
+            # than safetensors, so skip the tier-based size guard
+            print(f"[API Server] llama-cpp backend: bypassing VRAM check for {lm_model_path} (GGUF uses less VRAM)")
+        elif not is_supported:
             print(f"[API Server] Warning: {warning_msg}")
             recommended_lm = get_recommended_lm_model(gpu_config)
             if recommended_lm:
@@ -68,17 +72,22 @@ def initialize_llm_at_startup(
                 print(f"[API Server] No GPU-validated LM model available, attempting {lm_model_path} anyway (may cause OOM)")
 
         lm_backend = os.getenv("ACESTEP_LM_BACKEND", "vllm").strip().lower()
-        if lm_backend not in {"vllm", "pt", "mlx", "custom-vllm"}:
+        if lm_backend not in {"vllm", "pt", "mlx", "custom-vllm", "llama-cpp"}:
             lm_backend = "vllm"
         lm_device = os.getenv("ACESTEP_LM_DEVICE", device)
         lm_offload_env = os.getenv("ACESTEP_LM_OFFLOAD_TO_CPU")
         lm_offload = env_bool("ACESTEP_LM_OFFLOAD_TO_CPU", False) if lm_offload_env is not None else offload_to_cpu
 
         lm_model_name = get_model_name(lm_model_path)
-        try:
-            ensure_model_downloaded(lm_model_name, checkpoint_dir)
-        except Exception as exc:
-            print(f"[API Server] Warning: Failed to download LLM model: {exc}")
+        if lm_backend == "llama-cpp":
+            # Skip safetensors download — GGUF file is downloaded on-demand
+            # during _load_llamacpp_model() via ensure_gguf_model()
+            print(f"[API Server] llama-cpp backend: skipping safetensors download for {lm_model_name}")
+        else:
+            try:
+                ensure_model_downloaded(lm_model_name, checkpoint_dir)
+            except Exception as exc:
+                print(f"[API Server] Warning: Failed to download LLM model: {exc}")
 
         llm_status, llm_ok = llm_handler.initialize(
             checkpoint_dir=checkpoint_dir,
