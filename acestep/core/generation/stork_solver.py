@@ -20,7 +20,10 @@ State dict keys used:
 """
 
 import torch
+import logging
 from typing import Any, Callable, Dict, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 Tensor = torch.Tensor
 State = Dict[str, Any]
@@ -205,6 +208,7 @@ def stork2_step(
     # Safety: fall back to Euler if sub-stepping produced NaN/Inf
     if not torch.isfinite(xt_next).all():
         xt_next = _euler_fallback(xt, vt, dt_val)
+        logger.warning(f"[STORK2] NaN/Inf at step {step_idx}, t={t_curr:.4f}→{t_prev:.4f}, order={deriv_order} → Euler fallback")
 
     # Update state
     state["step_index"] = step_idx + 1
@@ -369,6 +373,7 @@ def stork4_step(
     # Safety: fall back to Euler if sub-stepping produced NaN/Inf
     if not torch.isfinite(xt_next).all():
         xt_next = _euler_fallback(xt, vt, dt_val)
+        logger.warning(f"[STORK4] NaN/Inf at step {step_idx}, t={t_curr:.4f}→{t_prev:.4f}, order={deriv_order} → Euler fallback")
 
     # Update state
     state["step_index"] = step_idx + 1
