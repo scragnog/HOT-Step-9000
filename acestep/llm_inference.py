@@ -937,12 +937,41 @@ class LLMHandler:
 
             full_lm_model_path = os.path.join(checkpoint_dir, lm_model_path)
             if not os.path.exists(full_lm_model_path):
-                return f"❌ 5Hz LM model not found at {full_lm_model_path}", False
+                if backend == "llama-cpp":
+                    # For llama-cpp, the directory will be created by GGUF download
+                    os.makedirs(full_lm_model_path, exist_ok=True)
+                    logger.info(f"Created model directory for GGUF download: {full_lm_model_path}")
+                else:
+                    return f"❌ 5Hz LM model not found at {full_lm_model_path}", False
 
             # Proactive CUDA cleanup before LM load to reduce fragmentation on mode/model switch
             if device == "cuda" and torch.cuda.is_available():
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
+
+            # Load tokenizer — needed for constrained decoding with all backends
+            # For llama-cpp, the GGUF has its own tokenizer but we need the HF one for
+            # the constrained decoding processor. Download tokenizer files if missing.
+            tokenizer_config = os.path.join(full_lm_model_path, "tokenizer_config.json")
+            if not os.path.exists(tokenizer_config) and backend == "llama-cpp":
+                logger.info("HF tokenizer files not found, downloading for constrained decoding...")
+                try:
+                    from acestep.model_downloader import SUBMODEL_REGISTRY
+                    repo_id = SUBMODEL_REGISTRY.get(lm_model_path)
+                    if repo_id:
+                        from huggingface_hub import snapshot_download
+                        snapshot_download(
+                            repo_id,
+                            local_dir=full_lm_model_path,
+                            allow_patterns=["tokenizer*", "special_tokens*", "*.json"],
+                            ignore_patterns=["*.safetensors", "*.bin", "*.gguf", "*.pt"],
+                            local_dir_use_symlinks=False,
+                        )
+                        logger.info("HF tokenizer files downloaded successfully")
+                    else:
+                        logger.warning(f"Model {lm_model_path} not in SUBMODEL_REGISTRY, cannot download tokenizer")
+                except Exception as tok_err:
+                    logger.warning(f"Failed to download HF tokenizer: {tok_err}")
 
             logger.info("loading 5Hz LM tokenizer... it may take 80~90s")
             start_time = time.time()
