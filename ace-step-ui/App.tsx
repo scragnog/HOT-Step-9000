@@ -1232,8 +1232,8 @@ function AppContent() {
         // Normalize duration: treat 0 or negative as undefined
         duration: params.duration && params.duration > 0 ? params.duration : undefined,
         ...(mergedMasteringParams ? { masteringParams: mergedMasteringParams } : {}),
-        // AI Cover Art: read user's setting from localStorage
-        generateCoverArt: localStorage.getItem('generate_cover_art') === 'true',
+        // AI Cover Art: override from Advanced Summoning Modes takes precedence, else use global setting
+        generateCoverArt: params.generateCoverArt ?? (localStorage.getItem('generate_cover_art') === 'true'),
       }, token);
 
       const tempId = `job_${job.jobId}`;

@@ -179,6 +179,7 @@ export interface GenerationParams {
 
   // AI Cover Art
   coverArtSubject?: string;
+  generateCoverArt?: boolean;
 }
 
 export interface PlayerState {

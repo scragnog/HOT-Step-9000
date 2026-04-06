@@ -4,8 +4,8 @@ import { useI18n } from '../context/I18nContext';
 import { usePersistedState } from '../hooks/usePersistedState';
 
 interface GenerateFooterProps {
-  /** Called with optional step/thinking/mastering overrides. Undefined = use current panel values. */
-  onGenerate: (overrides?: { inferenceSteps?: number; thinking?: boolean; autoMaster?: boolean }) => void;
+  /** Called with optional step/thinking/mastering/coverArt overrides. Undefined = use current panel values. */
+  onGenerate: (overrides?: { inferenceSteps?: number; thinking?: boolean; autoMaster?: boolean; generateCoverArt?: boolean }) => void;
   isGenerating: boolean;
   isAuthenticated: boolean;
   activeJobCount: number;
@@ -39,6 +39,7 @@ export const GenerateFooter: React.FC<GenerateFooterProps> = ({
   const [elapsedSecs, setElapsedSecs] = useState(0);
   const [showPresets, setShowPresets] = usePersistedState('ace-showPresets', false);
   const [advancedMastering, setAdvancedMastering] = usePersistedState('ace-advancedMastering', false);
+  const [advancedCoverArt, setAdvancedCoverArt] = usePersistedState('ace-advancedCoverArt', true);
 
   // Read configurable step counts from localStorage (set in SettingsModal)
   const quickSteps = (() => {
@@ -108,6 +109,7 @@ export const GenerateFooter: React.FC<GenerateFooterProps> = ({
                       inferenceSteps: preset.steps,
                       thinking: preset.thinking,
                       autoMaster: advancedMastering,
+                      generateCoverArt: advancedCoverArt,
                     })}
                     disabled={!isAuthenticated || isGenerating}
                     className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-semibold transition-all
@@ -135,6 +137,21 @@ export const GenerateFooter: React.FC<GenerateFooterProps> = ({
                   className={`w-10 h-5 rounded-full flex items-center transition-colors duration-200 px-0.5 border border-zinc-200 dark:border-white/5 cursor-pointer ${advancedMastering ? 'bg-pink-600' : 'bg-zinc-300 dark:bg-black/40'}`}
                 >
                   <div className={`w-4 h-4 rounded-full bg-white transform transition-transform duration-200 shadow-sm ${advancedMastering ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
+              </div>
+
+              {/* AI Cover Art toggle — only applies to advanced preset buttons */}
+              <div className="flex items-center justify-between py-1 border-t border-zinc-200 dark:border-white/5 pt-2">
+                <div>
+                  <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">AI Cover Art</span>
+                  <p className="text-[10px] text-zinc-400 dark:text-zinc-500">Generate cover art for preset generations</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setAdvancedCoverArt(!advancedCoverArt)}
+                  className={`w-10 h-5 rounded-full flex items-center transition-colors duration-200 px-0.5 border border-zinc-200 dark:border-white/5 cursor-pointer ${advancedCoverArt ? 'bg-pink-600' : 'bg-zinc-300 dark:bg-black/40'}`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white transform transition-transform duration-200 shadow-sm ${advancedCoverArt ? 'translate-x-5' : 'translate-x-0'}`} />
                 </button>
               </div>
 

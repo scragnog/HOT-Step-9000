@@ -2202,7 +2202,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     return keyScale;
   })();
 
-  const handleGenerate = (overrides?: { inferenceSteps?: number; thinking?: boolean; autoMaster?: boolean }) => {
+  const handleGenerate = (overrides?: { inferenceSteps?: number; thinking?: boolean; autoMaster?: boolean; generateCoverArt?: boolean }) => {
     const styleWithGender = (() => {
       if (!vocalGender) return style;
       const genderHint = vocalGender === 'male' ? t('maleVocals') : t('femaleVocals');
@@ -2348,13 +2348,14 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           isFormatCaption,
           loraLoaded,
           coverArtSubject: coverArtSubject || undefined,
+          generateCoverArt: overrides?.generateCoverArt,
         });
       }
     }
   };
 
   // Override-aware generate handler for GenerateFooter presets
-  const handleGenerateWithOverrides = useCallback((overrides?: { inferenceSteps?: number; thinking?: boolean; autoMaster?: boolean }) => {
+  const handleGenerateWithOverrides = useCallback((overrides?: { inferenceSteps?: number; thinking?: boolean; autoMaster?: boolean; generateCoverArt?: boolean }) => {
     handleGenerate(overrides);
   }, [handleGenerate]);
 
