@@ -148,6 +148,8 @@ class GenerateMusicMixin:
         beat_stability: float = 0.0,
         frequency_damping: float = 0.0,
         temporal_smoothing: float = 0.0,
+        # STORK solver parameters
+        stork_substeps: int = 50,
         # Advanced Guidance Parameters
         guidance_scale_text: float = 0.0,
         guidance_scale_lyric: float = 0.0,
@@ -353,6 +355,7 @@ class GenerateMusicMixin:
                 beat_stability=beat_stability,
                 frequency_damping=frequency_damping,
                 temporal_smoothing=temporal_smoothing,
+                stork_substeps=stork_substeps,
             )
             outputs = service_run["outputs"]
             infer_steps_for_progress = service_run["infer_steps_for_progress"]

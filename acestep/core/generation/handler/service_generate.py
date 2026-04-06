@@ -65,6 +65,8 @@ class ServiceGenerateMixin:
         beat_stability: float = 0.0,
         frequency_damping: float = 0.0,
         temporal_smoothing: float = 0.0,
+        # STORK solver parameters
+        stork_substeps: int = 50,
     ) -> Dict[str, Any]:
         """Generate music latents and metadata from text/audio conditioning inputs.
 
@@ -168,6 +170,7 @@ class ServiceGenerateMixin:
             beat_stability=beat_stability,
             frequency_damping=frequency_damping,
             temporal_smoothing=temporal_smoothing,
+            stork_substeps=stork_substeps,
         )
         try:
             if getattr(self, "steering_enabled", False):

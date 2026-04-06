@@ -92,6 +92,8 @@ class ServiceGenerateExecuteMixin:
         beat_stability: float = 0.0,
         frequency_damping: float = 0.0,
         temporal_smoothing: float = 0.0,
+        # STORK solver parameters
+        stork_substeps: int = 50,
     ) -> Dict[str, Any]:
         """Build kwargs passed to model generation backends."""
         kwargs = {
@@ -137,6 +139,8 @@ class ServiceGenerateExecuteMixin:
             "beat_stability": beat_stability,
             "frequency_damping": frequency_damping,
             "temporal_smoothing": temporal_smoothing,
+            # STORK solver parameters
+            "stork_substeps": stork_substeps,
         }
         if timesteps is not None:
             kwargs["timesteps"] = torch.tensor(timesteps, dtype=torch.float32, device=self.device)

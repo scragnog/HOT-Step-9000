@@ -93,6 +93,9 @@ class GenerateMusicRequest(BaseModel):
     frequency_damping: float = Field(default=0.0, description="Exponential decay on high-frequency bins (0=off)")
     temporal_smoothing: float = Field(default=0.0, description="Temporal kernel on velocity delta (0=off)")
 
+    # ── STORK solver parameters ───────────────────────────────────
+    stork_substeps: int = Field(default=50, description="Number of RKG/ROCK sub-steps per STORK solver step (10-200). Only used with stork2/stork4 solvers.")
+
     # ── Anti-Autotune ─────────────────────────────────────────────
     anti_autotune: float = Field(default=0.0, description="Spectral smoothing to reduce robotic/autotuned vocal artifacts (0=off, 1=full)")
 

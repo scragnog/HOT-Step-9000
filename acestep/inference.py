@@ -130,6 +130,9 @@ class GenerationParams:
     frequency_damping: float = 0.0  # Exponential decay on high-frequency bins (0=off)
     temporal_smoothing: float = 0.0 # Tiny temporal kernel on the velocity delta (0=off)
 
+    # STORK solver parameters (only used when infer_method="stork2" or "stork4")
+    stork_substeps: int = 50        # Number of RKG/ROCK sub-steps per STORK solver step (10-200)
+
     # Advanced Guidance Parameters
     guidance_scale_text: float = 0.0    # Independent text prompt guidance (0 = use main guidance_scale)
     guidance_scale_lyric: float = 0.0   # Independent lyric guidance (0 = use main guidance_scale)

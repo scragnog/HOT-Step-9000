@@ -2089,7 +2089,12 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
                 pag_start_val=pag_start, pag_end_val=pag_end,
             )
 
-        solver_state = {}
+        solver_state = {
+            "beat_stability": kwargs.get("beat_stability", 0.0),
+            "frequency_damping": kwargs.get("frequency_damping", 0.0),
+            "temporal_smoothing": kwargs.get("temporal_smoothing", 0.0),
+            "stork_substeps": kwargs.get("stork_substeps", 50),
+        }
         _switched_to_non_cover = False
         step_metadata = {"idx": 0, "total": infer_steps}
         with torch.no_grad():
