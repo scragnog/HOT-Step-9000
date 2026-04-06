@@ -51,6 +51,11 @@ def _compute_derivatives(
 ) -> Tuple[Optional[Tensor], Optional[Tensor], int]:
     """Compute velocity derivatives from history using finite differences.
 
+    Includes safety clamping: model outputs carry bfloat16 quantization noise
+    (~0.8% relative error).  At small step sizes the finite-difference
+    amplification can exceed the signal, so we fall back to lower order when
+    the derivative contribution would be unreliable.
+
     Returns (dv, d2v, derivative_order_used).
     """
     history = state.get("velocity_history", [])
@@ -59,18 +64,39 @@ def _compute_derivatives(
 
     # 1st order: forward difference
     v_prev, h_prev = history[-1]
+    # Ensure v_prev is in the requested dtype (should be float32 already)
+    v_prev = v_prev.to(dtype=dtype)
     h1 = torch.tensor(h_prev, device=device, dtype=dtype)
     dv = (v_prev - vt) / h1
+
+    # Safety: clamp 1st derivative if noise-dominated
+    # Model outputs have ~0.008 relative noise (bf16); if |dv|*h > |vt|*threshold
+    # the derivative is amplifying noise more than signal.
+    vt_rms = vt.norm() / max(vt.numel() ** 0.5, 1.0)
+    dv_rms = dv.norm() / max(dv.numel() ** 0.5, 1.0)
+    # The Taylor correction is dv * diff where diff ~ h.  If dv * h >> vt,
+    # the correction dwarfs the signal.  Use a generous threshold.
+    if vt_rms > 0 and dv_rms * abs(h_prev) > 5.0 * vt_rms:
+        # Derivative is noise-dominated, fall back to order 0
+        return None, None, 0
 
     if len(history) < 2:
         return dv, None, 1
 
     # 2nd order: three-point formula
     v_prev2, h_prev2 = history[-2]
+    v_prev2 = v_prev2.to(dtype=dtype)
     h2 = torch.tensor(h_prev2, device=device, dtype=dtype)
     d2v = 2.0 / (h1 * h2 * (h1 + h2)) * (
         v_prev2 * h1 - v_prev * (h1 + h2) + vt * h2
     )
+
+    # Safety: clamp 2nd derivative similarly
+    d2v_rms = d2v.norm() / max(d2v.numel() ** 0.5, 1.0)
+    if vt_rms > 0 and d2v_rms * h_prev ** 2 > 5.0 * vt_rms:
+        # 2nd derivative unreliable, fall back to 1st order only
+        return dv, None, 1
+
     return dv, d2v, 2
 
 
