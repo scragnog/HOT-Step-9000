@@ -2,6 +2,7 @@ import { Router, Response } from 'express';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { spawn } from 'child_process';
 import { authMiddleware, AuthenticatedRequest } from '../middleware/auth.js';
 
 const router = Router();
@@ -307,8 +308,8 @@ router.get('/gguf-status/:model', async (req: any, res: Response) => {
 
 // POST /api/models/convert-gguf - Convert model to GGUF with streaming progress (SSE)
 // No auth — called during loading screen
-import { spawn } from 'child_process';
 router.post('/convert-gguf', async (req: any, res: Response) => {
+    console.log('[GGUF Convert] Request received:', JSON.stringify(req.body));
     const { model, quant, convertAll } = req.body;
     if (!model || !quant) {
         res.status(400).json({ error: 'model and quant required' });
@@ -350,10 +351,12 @@ router.post('/convert-gguf', async (req: any, res: Response) => {
 
     sendEvent(`Starting conversion: ${convertAll ? 'all models' : model} → ${quant}`);
 
+    console.log('[GGUF Convert] Spawning:', pythonExe, args.join(' '));
     const proc = spawn(pythonExe, args, {
         cwd: PROJECT_ROOT,
         env: { ...process.env, PYTHONUNBUFFERED: '1', ACESTEP_PROJECT_ROOT: PROJECT_ROOT },
     });
+    console.log('[GGUF Convert] Process spawned, PID:', proc.pid);
 
     proc.stdout.on('data', (chunk: Buffer) => {
         const lines = chunk.toString('utf-8').split('\n');
