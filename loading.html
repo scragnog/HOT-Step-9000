@@ -397,6 +397,13 @@
                     <option value="llama-cpp">llama-cpp (GGUF — lower VRAM)</option>
                 </select>
             </div>
+            <div class="model-row" id="ggufQuantRow" style="display:none">
+                <label>GGUF Quantization</label>
+                <select id="ggufQuantSelect">
+                    <option value="auto">Auto (best for model)</option>
+                </select>
+                <div style="font-size:.62rem;color:#666;margin-top:.2rem">Lower quant = less VRAM, slight quality loss. Q8_0 is lossless; Q5_K_M is a good balance.</div>
+            </div>
             <div class="model-row" id="gpuLayersRow" style="display:none">
                 <label>GPU Layers <span id="gpuLayersValue" style="color:#8ae;font-weight:600">-1 (all)</span></label>
                 <input type="range" id="gpuLayersSlider" min="-1" max="64" value="-1" style="width:100%;accent-color:#8ae">
@@ -498,6 +505,7 @@
         if (typeof CURRENT_NO_INIT === 'undefined') var CURRENT_NO_INIT = 'false';
         if (typeof CURRENT_QUANTIZATION === 'undefined') var CURRENT_QUANTIZATION = 'auto';
         if (typeof CURRENT_LM_GPU_LAYERS === 'undefined') var CURRENT_LM_GPU_LAYERS = '-1';
+        if (typeof CURRENT_GGUF_QUANT === 'undefined') var CURRENT_GGUF_QUANT = 'auto';
 
         document.getElementById('frontend-port').textContent = `(port ${VITE_PORT})`;
 
@@ -543,10 +551,44 @@
         gpuLayersValue.textContent = CURRENT_LM_GPU_LAYERS === '-1' ? '-1 (all)' : CURRENT_LM_GPU_LAYERS;
         gpuLayersRow.style.display = CURRENT_LM_BACKEND === 'llama-cpp' ? '' : 'none';
 
-        // Toggle GPU layers visibility when backend changes
-        lmBackendSelect.addEventListener('change', () => {
-            gpuLayersRow.style.display = lmBackendSelect.value === 'llama-cpp' ? '' : 'none';
-        });
+        // GGUF Quantization dropdown
+        const ggufQuantSelect = document.getElementById('ggufQuantSelect');
+        const ggufQuantRow = document.getElementById('ggufQuantRow');
+        // Available quants per LM model (matches GGUF_REGISTRY in model_downloader.py)
+        const GGUF_QUANTS = {
+            'acestep-5Hz-lm-0.6B': ['Q8_0', 'BF16'],
+            'acestep-5Hz-lm-1.7B': ['Q8_0', 'BF16'],
+            'acestep-5Hz-lm-4B': ['Q5_K_M', 'Q6_K', 'Q8_0', 'BF16'],
+        };
+        const GGUF_LABELS = {
+            'Q5_K_M': 'Q5_K_M — best VRAM/quality balance (~3 GB)',
+            'Q6_K': 'Q6_K — high quality (~3.5 GB)',
+            'Q8_0': 'Q8_0 — near-lossless',
+            'BF16': 'BF16 — full precision (largest)',
+        };
+        function updateGGUFOptions() {
+            const lm = lmModelSelect.value;
+            const quants = GGUF_QUANTS[lm] || ['Q8_0'];
+            ggufQuantSelect.innerHTML = '<option value="auto">Auto (best for model)</option>';
+            quants.forEach(q => {
+                const opt = document.createElement('option');
+                opt.value = q;
+                opt.textContent = GGUF_LABELS[q] || q;
+                if (q === CURRENT_GGUF_QUANT) opt.selected = true;
+                ggufQuantSelect.appendChild(opt);
+            });
+        }
+        function updateLlamaCppVisibility() {
+            const isLlamaCpp = lmBackendSelect.value === 'llama-cpp';
+            gpuLayersRow.style.display = isLlamaCpp ? '' : 'none';
+            ggufQuantRow.style.display = isLlamaCpp ? '' : 'none';
+        }
+        updateGGUFOptions();
+        updateLlamaCppVisibility();
+
+        // Toggle visibility when backend or LM model changes
+        lmBackendSelect.addEventListener('change', updateLlamaCppVisibility);
+        lmModelSelect.addEventListener('change', () => { updateGGUFOptions(); });
         gpuLayersSlider.addEventListener('input', () => {
             gpuLayersValue.textContent = gpuLayersSlider.value === '-1' ? '-1 (all)' : gpuLayersSlider.value;
         });
@@ -595,6 +637,7 @@
                             ACESTEP_NO_INIT: noInitToggle.checked ? 'true' : 'false',
                             ACESTEP_QUANTIZATION: quantizationSelect.value,
                             ACESTEP_LM_GPU_LAYERS: gpuLayersSlider.value,
+                            ACESTEP_GGUF_QUANT: ggufQuantSelect.value,
                         }),
                     });
                     if (resp.ok) return true;

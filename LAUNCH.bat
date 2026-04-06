@@ -39,6 +39,7 @@ set "CURRENT_LM_BACKEND=vllm"
 set "CURRENT_NO_INIT=false"
 set "CURRENT_QUANTIZATION=auto"
 set "CURRENT_LM_GPU_LAYERS=-1"
+set "CURRENT_GGUF_QUANT=auto"
 if exist ".env" (
     for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_CONFIG_PATH=" ".env"') do set "CURRENT_MODEL=%%b"
     for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_LM_MODEL_PATH=" ".env"') do set "CURRENT_LM_MODEL=%%b"
@@ -46,6 +47,7 @@ if exist ".env" (
     for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_NO_INIT=" ".env"') do set "CURRENT_NO_INIT=%%b"
     for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_QUANTIZATION=" ".env"') do set "CURRENT_QUANTIZATION=%%b"
     for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_LM_GPU_LAYERS=" ".env"') do set "CURRENT_LM_GPU_LAYERS=%%b"
+    for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_GGUF_QUANT=" ".env"') do set "CURRENT_GGUF_QUANT=%%b"
 )
 
 REM Read Redmond Mode settings from .env
@@ -104,6 +106,7 @@ echo var REDMOND_AVAILABLE = '%REDMOND_AVAILABLE%';
 echo var CURRENT_NO_INIT = '%CURRENT_NO_INIT%';
 echo var CURRENT_QUANTIZATION = '%CURRENT_QUANTIZATION%';
 echo var CURRENT_LM_GPU_LAYERS = '%CURRENT_LM_GPU_LAYERS%';
+echo var CURRENT_GGUF_QUANT = '%CURRENT_GGUF_QUANT%';
 ) > "%~dp0loading-config.js"
 
 if "%IS_RESTART%"=="0" (

@@ -708,7 +708,9 @@ class LLMHandler:
                 logger.info(f"No GGUF file found for {lm_model_name}, attempting auto-download...")
                 try:
                     from acestep.model_downloader import ensure_gguf_model
-                    success, msg = ensure_gguf_model(lm_model_name)
+                    gguf_quant_env = os.environ.get("ACESTEP_GGUF_QUANT", "auto").strip()
+                    quant_pref = None if gguf_quant_env in ("auto", "") else gguf_quant_env
+                    success, msg = ensure_gguf_model(lm_model_name, quant=quant_pref)
                     if success:
                         gguf_path = self._find_gguf_file(model_path)
                     else:

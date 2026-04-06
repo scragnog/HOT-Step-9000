@@ -347,16 +347,22 @@ MAIN_MODEL_COMPONENTS = [
 DEFAULT_LM_MODEL = "acestep-5Hz-lm-1.7B"
 
 # GGUF quantized LM models (for llama-cpp-python backend)
-# Maps LM model name -> (repo_id, filename, file_size_bytes)
+# Maps LM model name -> quant -> (repo_id, filename, approx_file_size_bytes)
+# Ordered: smallest VRAM first within each model
 GGUF_REGISTRY: Dict[str, Dict[str, Tuple[str, str, int]]] = {
     "acestep-5Hz-lm-0.6B": {
         "Q8_0": ("Serveurperso/ACE-Step-1.5-GGUF", "acestep-5Hz-lm-0.6B-Q8_0.gguf", 710_000_000),
+        "BF16": ("Serveurperso/ACE-Step-1.5-GGUF", "acestep-5Hz-lm-0.6B-BF16.gguf", 1_340_000_000),
     },
     "acestep-5Hz-lm-1.7B": {
         "Q8_0": ("Serveurperso/ACE-Step-1.5-GGUF", "acestep-5Hz-lm-1.7B-Q8_0.gguf", 1_980_000_000),
+        "BF16": ("Serveurperso/ACE-Step-1.5-GGUF", "acestep-5Hz-lm-1.7B-BF16.gguf", 3_740_000_000),
     },
     "acestep-5Hz-lm-4B": {
         "Q5_K_M": ("Serveurperso/ACE-Step-1.5-GGUF", "acestep-5Hz-lm-4B-Q5_K_M.gguf", 3_030_000_000),
+        "Q6_K": ("Serveurperso/ACE-Step-1.5-GGUF", "acestep-5Hz-lm-4B-Q6_K.gguf", 3_500_000_000),
+        "Q8_0": ("Serveurperso/ACE-Step-1.5-GGUF", "acestep-5Hz-lm-4B-Q8_0.gguf", 4_530_000_000),
+        "BF16": ("Serveurperso/ACE-Step-1.5-GGUF", "acestep-5Hz-lm-4B-BF16.gguf", 8_540_000_000),
     },
 }
 
