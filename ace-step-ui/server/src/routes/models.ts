@@ -127,8 +127,8 @@ router.post('/lm/backend', authMiddleware, async (req: AuthenticatedRequest, res
 // No auth required — only called during startup before app is fully loaded
 router.post('/update-env', async (req: any, res: Response) => {
     try {
-        const { ACESTEP_CONFIG_PATH, ACESTEP_LM_MODEL_PATH, ACESTEP_LM_BACKEND, ACESTEP_REDMOND_MODE, ACESTEP_REDMOND_SCALE, ACESTEP_NO_INIT } = req.body;
-        if (!ACESTEP_CONFIG_PATH && !ACESTEP_LM_MODEL_PATH && !ACESTEP_LM_BACKEND && ACESTEP_REDMOND_MODE === undefined && !ACESTEP_REDMOND_SCALE && ACESTEP_NO_INIT === undefined) {
+        const { ACESTEP_CONFIG_PATH, ACESTEP_LM_MODEL_PATH, ACESTEP_LM_BACKEND, ACESTEP_REDMOND_MODE, ACESTEP_REDMOND_SCALE, ACESTEP_NO_INIT, ACESTEP_QUANTIZATION } = req.body;
+        if (!ACESTEP_CONFIG_PATH && !ACESTEP_LM_MODEL_PATH && !ACESTEP_LM_BACKEND && ACESTEP_REDMOND_MODE === undefined && !ACESTEP_REDMOND_SCALE && ACESTEP_NO_INIT === undefined && ACESTEP_QUANTIZATION === undefined) {
             res.status(400).json({ error: 'At least one setting required' });
             return;
         }
@@ -199,8 +199,20 @@ router.post('/update-env', async (req: any, res: Response) => {
             }
         }
 
+        // Quantization setting
+        if (ACESTEP_QUANTIZATION !== undefined) {
+            if (/^ACESTEP_QUANTIZATION=.*/m.test(envContent)) {
+                envContent = envContent.replace(
+                    /^ACESTEP_QUANTIZATION=.*/m,
+                    `ACESTEP_QUANTIZATION=${ACESTEP_QUANTIZATION}`
+                );
+            } else {
+                envContent = envContent.trimEnd() + `\nACESTEP_QUANTIZATION=${ACESTEP_QUANTIZATION}\n`;
+            }
+        }
+
         fs.writeFileSync(envPath, envContent, 'utf-8');
-        console.log(`[Models] .env updated: CONFIG_PATH=${ACESTEP_CONFIG_PATH || '(unchanged)'}, LM_MODEL_PATH=${ACESTEP_LM_MODEL_PATH || '(unchanged)'}, LM_BACKEND=${ACESTEP_LM_BACKEND || '(unchanged)'}, REDMOND_MODE=${ACESTEP_REDMOND_MODE ?? '(unchanged)'}, NO_INIT=${ACESTEP_NO_INIT ?? '(unchanged)'}`);
+        console.log(`[Models] .env updated: CONFIG_PATH=${ACESTEP_CONFIG_PATH || '(unchanged)'}, LM_MODEL_PATH=${ACESTEP_LM_MODEL_PATH || '(unchanged)'}, LM_BACKEND=${ACESTEP_LM_BACKEND || '(unchanged)'}, REDMOND_MODE=${ACESTEP_REDMOND_MODE ?? '(unchanged)'}, NO_INIT=${ACESTEP_NO_INIT ?? '(unchanged)'}, QUANTIZATION=${ACESTEP_QUANTIZATION ?? '(unchanged)'}`);
         res.json({ success: true });
     } catch (error: any) {
         console.error('[Models] Failed to update .env:', error);
@@ -228,7 +240,14 @@ router.get('/env-config', async (_req: any, res: Response) => {
         // Check if Redmond adapter is available on disk
         const redmondAdapterPath = path.join(PROJECT_ROOT, 'checkpoints', 'redmond-refine', 'standard', 'adapter_config.json');
         const redmondAvailable = fs.existsSync(redmondAdapterPath);
-        res.json({ lmBackend, redmondMode, redmondScale, redmondAvailable });
+        // Read quantization setting
+        let quantization = 'auto';
+        if (fs.existsSync(envPath)) {
+            const qContent = fs.readFileSync(envPath, 'utf-8');
+            const matchQuant = qContent.match(/^ACESTEP_QUANTIZATION=(.*)$/m);
+            if (matchQuant) quantization = matchQuant[1].trim().toLowerCase();
+        }
+        res.json({ lmBackend, redmondMode, redmondScale, redmondAvailable, quantization });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }

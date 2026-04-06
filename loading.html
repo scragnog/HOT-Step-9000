@@ -396,6 +396,16 @@
                     <option value="pt">PyTorch (native)</option>
                 </select>
             </div>
+            <div class="model-row">
+                <label>DiT Quantization</label>
+                <select id="quantizationSelect">
+                    <option value="auto">Auto (tier-based)</option>
+                    <option value="int8_weight_only">INT8 — ~50% VRAM reduction, no quality loss</option>
+                    <option value="int4_weight_only">INT4 — ~75% VRAM reduction, experimental</option>
+                    <option value="none">None — full precision (most VRAM)</option>
+                </select>
+                <div style="font-size:.62rem;color:#666;margin-top:.2rem">Reduces DiT model weight memory via torchao. INT8 is safe; INT4 saves more VRAM but may affect audio quality.</div>
+            </div>
             <div class="toggle-row" id="redmondRow" style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid rgba(255,255,255,.06)">
                 <div class="toggle-info">
                     <div class="toggle-label">🔴 Redmond Mode</div>
@@ -480,6 +490,7 @@
         if (typeof CURRENT_REDMOND_SCALE === 'undefined') var CURRENT_REDMOND_SCALE = '0.7';
         if (typeof REDMOND_AVAILABLE === 'undefined') var REDMOND_AVAILABLE = 'false';
         if (typeof CURRENT_NO_INIT === 'undefined') var CURRENT_NO_INIT = 'false';
+        if (typeof CURRENT_QUANTIZATION === 'undefined') var CURRENT_QUANTIZATION = 'auto';
 
         document.getElementById('frontend-port').textContent = `(port ${VITE_PORT})`;
 
@@ -512,6 +523,10 @@
         // Set LM Backend dropdown to saved value
         const lmBackendSelect = document.getElementById('lmBackendSelect');
         lmBackendSelect.value = CURRENT_LM_BACKEND;
+
+        // Set Quantization dropdown to saved value
+        const quantizationSelect = document.getElementById('quantizationSelect');
+        quantizationSelect.value = CURRENT_QUANTIZATION;
 
         // Set Redmond Mode toggle from saved config
         const redmondToggle = document.getElementById('redmondToggle');
@@ -555,6 +570,7 @@
                             ACESTEP_LM_BACKEND: lmBackend,
                             ACESTEP_REDMOND_MODE: redmondToggle.checked ? 'true' : 'false',
                             ACESTEP_NO_INIT: noInitToggle.checked ? 'true' : 'false',
+                            ACESTEP_QUANTIZATION: quantizationSelect.value,
                         }),
                     });
                     if (resp.ok) return true;

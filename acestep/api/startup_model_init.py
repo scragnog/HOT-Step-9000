@@ -96,6 +96,28 @@ def initialize_models_at_startup(
     except Exception as exc:
         print(f"[API Server] Warning: Failed to download VAE model: {exc}")
 
+    # Read quantization preference from env: "auto", "int8_weight_only",
+    # "int4_weight_only", or "none".  "auto" (or unset) uses the GPU tier
+    # default; "none" explicitly disables quantization.
+    quant_env = os.getenv("ACESTEP_QUANTIZATION", "auto").strip().lower()
+    if quant_env in ("none", "off", "false", ""):
+        quantization = None
+    elif quant_env == "auto":
+        # Mirror the Gradio pipeline: tier-based default
+        quantization = "int8_weight_only" if gpu_config.quantization_default else None
+    elif quant_env in ("int8_weight_only", "int4_weight_only"):
+        quantization = quant_env
+    else:
+        print(f"[API Server] Warning: Unknown ACESTEP_QUANTIZATION='{quant_env}', defaulting to auto")
+        quantization = "int8_weight_only" if gpu_config.quantization_default else None
+
+    # torchao quantization requires torch.compile
+    if quantization is not None:
+        compile_model = True
+
+    if quantization:
+        print(f"[API Server] DiT quantization: {quantization}")
+
     print(f"[API Server] Loading primary DiT model: {config_path}")
     status_msg, ok = handler.initialize_service(
         project_root=project_root,
@@ -105,6 +127,7 @@ def initialize_models_at_startup(
         compile_model=compile_model,
         offload_to_cpu=offload_to_cpu,
         offload_dit_to_cpu=offload_dit_to_cpu,
+        quantization=quantization,
     )
     if not ok:
         app.state._init_error = status_msg
