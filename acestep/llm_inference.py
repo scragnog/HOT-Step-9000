@@ -1930,7 +1930,7 @@ class LLMHandler:
 
             # Append to tracking sequences
             generated_token_ids = torch.cat(
-                [generated_token_ids, next_token.unsqueeze(0).unsqueeze(0)], dim=1
+                [generated_token_ids, next_token.unsqueeze(0)], dim=1
             )
             generated_tokens_list.append(next_token_id)
 
