@@ -111,11 +111,14 @@ def dpm_pp_3m_step(
     """DPM++ 3M (3rd order multistep). 1 NFE per step.
 
     Uses the two most-recent velocity predictions for a 3rd-order
-    Adams-Bashforth correction with non-uniform step ratio handling.
-    Falls back to 2nd-order (AB2) on step 2 and Euler on step 1.
+    Adams-Bashforth correction.  Falls back to AB2 on step 2 and
+    Euler on step 1.
 
-    For uniform steps this reduces to the classical AB3 coefficients:
+    Coefficients (uniform-step AB3):
         v_eff = (23/12)*v_n - (16/12)*v_{n-1} + (5/12)*v_{n-2}
+
+    This mirrors how DPM++ 2M uses fixed AB2 coefficients (3/2, -1/2)
+    which work well even with non-uniform timestep schedules.
     """
     dt = t_curr - t_prev
     bsz = xt.shape[0]
@@ -123,31 +126,10 @@ def dpm_pp_3m_step(
 
     prev_vt = state.get("prev_vt")
     prev_prev_vt = state.get("prev_prev_vt")
-    prev_dt = state.get("prev_dt")
-    prev_prev_dt = state.get("prev_prev_dt")
 
-    eps = 1e-10  # guard against division by zero
-
-    if (prev_vt is not None and prev_prev_vt is not None
-            and prev_dt is not None and prev_prev_dt is not None
-            and abs(dt) > eps):
-        # Third-order: full AB3 with non-uniform step ratios
-        r0 = prev_dt / dt          # ratio of last step to current
-        r1 = prev_prev_dt / dt     # ratio of step-before-last to current
-
-        # Finite differences (k-diffusion style) — guard denominators
-        d1_0 = (vt - prev_vt) / max(abs(r0), eps) * (1.0 if r0 >= 0 else -1.0)
-        d1_1 = (prev_vt - prev_prev_vt) / max(abs(r1), eps) * (1.0 if r1 >= 0 else -1.0)
-        denom = r0 + r1
-        if abs(denom) > eps:
-            d1 = d1_0 + (d1_0 - d1_1) * r0 / denom   # extrapolated 1st deriv
-            d2 = (d1_0 - d1_1) / denom                 # 2nd difference
-        else:
-            d1 = d1_0
-            d2 = 0.0
-
-        # AB3 velocity correction: v + 1/2·d1 + 1/3·d2
-        vt_corrected = vt + 0.5 * d1 + (1.0 / 3.0) * d2
+    if prev_vt is not None and prev_prev_vt is not None:
+        # Third-order: Adams-Bashforth 3
+        vt_corrected = (23.0 / 12.0) * vt - (16.0 / 12.0) * prev_vt + (5.0 / 12.0) * prev_prev_vt
     elif prev_vt is not None:
         # Second-order: AB2 (same as DPM++ 2M)
         vt_corrected = 1.5 * vt - 0.5 * prev_vt
@@ -157,9 +139,7 @@ def dpm_pp_3m_step(
 
     # Update state: shift history
     state["prev_prev_vt"] = state.get("prev_vt")
-    state["prev_prev_dt"] = state.get("prev_dt")
     state["prev_vt"] = vt.clone()
-    state["prev_dt"] = dt
 
     xt_next = xt - vt_corrected * dt_tensor
     return xt_next, state
