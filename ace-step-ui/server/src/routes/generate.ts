@@ -185,6 +185,9 @@ interface GenerateBody {
   frequencyDamping?: number;
   temporalSmoothing?: number;
 
+  // STORK solver parameters
+  storkSubsteps?: number;
+
   // Advanced Guidance Parameters
   guidanceIntervalDecay?: number;
   minGuidanceScale?: number;
@@ -375,6 +378,8 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
         beat_stability: params.beatStability ?? 0.0,
         frequency_damping: params.frequencyDamping ?? 0.0,
         temporal_smoothing: params.temporalSmoothing ?? 0.0,
+        // STORK solver parameters
+        stork_substeps: params.storkSubsteps ?? 50,
         // Advanced Guidance Parameters
         guidance_scale_text: params.guidanceScaleText ?? 0.0,
         guidance_scale_lyric: params.guidanceScaleLyric ?? 0.0,

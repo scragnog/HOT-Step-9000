@@ -316,7 +316,7 @@ export interface GenerationParams {
   seed?: number;
   thinking?: boolean;
   audioFormat?: 'mp3' | 'flac';
-  inferMethod?: 'ode' | 'euler' | 'heun' | 'dpm2m' | 'dpm3m' | 'rk4' | 'jkass_quality' | 'jkass_fast';
+  inferMethod?: 'ode' | 'euler' | 'heun' | 'dpm2m' | 'dpm3m' | 'rk4' | 'jkass_quality' | 'jkass_fast' | 'stork2' | 'stork4';
   scheduler?: 'linear' | 'ddim_uniform' | 'sgm_uniform' | 'bong_tangent' | 'linear_quadratic';
   shift?: number;
 
@@ -379,6 +379,9 @@ export interface GenerationParams {
   beatStability?: number;
   frequencyDamping?: number;
   temporalSmoothing?: number;
+
+  // STORK solver parameters
+  storkSubsteps?: number;
 
   // Advanced Guidance Parameters
   guidanceScaleText?: number;

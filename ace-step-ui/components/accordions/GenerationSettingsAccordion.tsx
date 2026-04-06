@@ -30,8 +30,8 @@ interface GenerationSettingsAccordionProps {
     // Inference
     inferenceSteps: number;
     onInferenceStepsChange: (val: number) => void;
-    inferMethod: 'ode' | 'euler' | 'heun' | 'dpm2m' | 'dpm3m' | 'rk4' | 'jkass_quality' | 'jkass_fast';
-    onInferMethodChange: (val: 'ode' | 'euler' | 'heun' | 'dpm2m' | 'dpm3m' | 'rk4' | 'jkass_quality' | 'jkass_fast') => void;
+    inferMethod: 'ode' | 'euler' | 'heun' | 'dpm2m' | 'dpm3m' | 'rk4' | 'jkass_quality' | 'jkass_fast' | 'stork2' | 'stork4';
+    onInferMethodChange: (val: 'ode' | 'euler' | 'heun' | 'dpm2m' | 'dpm3m' | 'rk4' | 'jkass_quality' | 'jkass_fast' | 'stork2' | 'stork4') => void;
     scheduler: string;
     onSchedulerChange: (val: string) => void;
     // Audio Format
@@ -122,6 +122,10 @@ interface GenerationSettingsAccordionProps {
     onFrequencyDampingChange?: (val: number) => void;
     temporalSmoothing?: number;
     onTemporalSmoothingChange?: (val: number) => void;
+
+    // STORK solver parameters
+    storkSubsteps?: number;
+    onStorkSubstepsChange?: (val: number) => void;
 
     // Advanced Guidance Parameters
     guidanceScaleText?: number;
@@ -318,9 +322,11 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
                                             <option value="rk4" title={t('solverRk4Desc')}>{t('solverRk4')}</option>
                                             <option value="jkass_quality" title="JKASS Quality: Heun with derivative averaging (2 NFE)">JKASS Quality</option>
                                             <option value="jkass_fast" title="JKASS Fast: Euler with momentum, frequency damping, and temporal smoothing (1 NFE)">JKASS Fast</option>
+                                            <option value="stork2" title="STORK 2: 2nd-order stabilized Runge-Kutta-Gegenbauer with Taylor velocity (1 NFE)">STORK 2</option>
+                                            <option value="stork4" title="STORK 4: 4th-order ROCK4 with precomputed Chebyshev coefficients (1 NFE)">STORK 4</option>
                                         </select>
                                         <p className="text-[10px] leading-tight text-zinc-500 dark:text-zinc-500">
-                                            {({ ode: t('solverEulerDesc'), euler: t('solverEulerDesc'), heun: t('solverHeunDesc'), dpm2m: t('solverDpm2mDesc'), dpm3m: t('solverDpm3mDesc'), rk4: t('solverRk4Desc'), jkass_quality: 'Heun with derivative averaging — smooth, high-accuracy results (2× cost)', jkass_fast: 'Euler with beat stability, frequency damping & temporal smoothing' } as Record<string, string>)[props.inferMethod] || ''}
+                                            {({ ode: t('solverEulerDesc'), euler: t('solverEulerDesc'), heun: t('solverHeunDesc'), dpm2m: t('solverDpm2mDesc'), dpm3m: t('solverDpm3mDesc'), rk4: t('solverRk4Desc'), jkass_quality: 'Heun with derivative averaging — smooth, high-accuracy results (2× cost)', jkass_fast: 'Euler with beat stability, frequency damping & temporal smoothing', stork2: 'Stabilized 2nd-order ODE solver for stiff flow matching (1 NFE)', stork4: 'Stabilized 4th-order ODE solver with ROCK4 sub-stepping (1 NFE)' } as Record<string, string>)[props.inferMethod] || ''}
                                         </p>
                                     </div>
                                 </div>
@@ -367,6 +373,32 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
                                             onChange={(v) => props.onTemporalSmoothingChange?.(v)}
                                             formatDisplay={(v) => v.toFixed(2)}
                                             helpText="Smoothing kernel across time axis — reduces temporal jitter"
+                                        />
+                                    </div>
+                                )}
+
+                                {/* STORK Sub-Steps Control */}
+                                {(props.inferMethod === 'stork2' || props.inferMethod === 'stork4') && (
+                                    <div className="rounded-lg border border-cyan-500/20 bg-cyan-500/5 p-3 space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <p className="text-[10px] font-semibold text-cyan-400 uppercase tracking-wider">STORK Controls</p>
+                                            <button
+                                                type="button"
+                                                onClick={() => props.onStorkSubstepsChange?.(50)}
+                                                className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-cyan-400 hover:text-cyan-300 hover:bg-cyan-500/20 transition-colors"
+                                                title="Reset STORK sub-steps to paper default (50)"
+                                            >
+                                                <RotateCcw className="w-3 h-3" />
+                                                Reset
+                                            </button>
+                                        </div>
+                                        <EditableSlider
+                                            label="Sub-Steps"
+                                            value={props.storkSubsteps ?? 50}
+                                            min={10} max={200} step={5}
+                                            onChange={(v) => props.onStorkSubstepsChange?.(v)}
+                                            formatDisplay={(v) => String(v)}
+                                            helpText="Internal RKG/ROCK sub-iterations per step — more = stabler but diminishing returns (default: 50)"
                                         />
                                     </div>
                                 )}

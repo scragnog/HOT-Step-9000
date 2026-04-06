@@ -135,7 +135,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [thinking, setThinking] = usePersistedState('ace-thinking', false); // Default false for GPU compatibility
   const [audioFormat, setAudioFormat] = usePersistedState<'mp3' | 'flac' | 'wav' | 'opus'>('ace-audioFormat', 'mp3');
   const [inferenceSteps, setInferenceSteps] = usePersistedState('ace-inferenceSteps', 12);
-  const [inferMethod, setInferMethod] = usePersistedState<'ode' | 'euler' | 'heun' | 'dpm2m' | 'dpm3m' | 'rk4' | 'jkass_quality' | 'jkass_fast'>('ace-inferMethod', 'ode');
+  const [inferMethod, setInferMethod] = usePersistedState<'ode' | 'euler' | 'heun' | 'dpm2m' | 'dpm3m' | 'rk4' | 'jkass_quality' | 'jkass_fast' | 'stork2' | 'stork4'>('ace-inferMethod', 'ode');
   const [scheduler, setScheduler] = usePersistedState<string>('ace-scheduler', 'linear');
   const [lmBackend, setLmBackend] = useState<'pt' | 'vllm' | 'custom-vllm'>('pt');
   const [lmModel, setLmModel] = usePersistedState('ace-lmModel', 'acestep-5Hz-lm-0.6B');
@@ -202,6 +202,9 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [beatStability, setBeatStability] = usePersistedState('ace-beatStability', 0.25);
   const [frequencyDamping, setFrequencyDamping] = usePersistedState('ace-frequencyDamping', 0.4);
   const [temporalSmoothing, setTemporalSmoothing] = usePersistedState('ace-temporalSmoothing', 0.13);
+
+  // STORK solver parameters
+  const [storkSubsteps, setStorkSubsteps] = usePersistedState('ace-storkSubsteps', 50);
 
   // Advanced Guidance Parameters
   const [guidanceScaleText, setGuidanceScaleText] = usePersistedState('ace-guidanceScaleText', 0.0);
@@ -2316,6 +2319,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           beatStability: inferMethod === 'jkass_fast' ? beatStability : undefined,
           frequencyDamping: inferMethod === 'jkass_fast' ? frequencyDamping : undefined,
           temporalSmoothing: inferMethod === 'jkass_fast' ? temporalSmoothing : undefined,
+          storkSubsteps: (inferMethod === 'stork2' || inferMethod === 'stork4') ? storkSubsteps : undefined,
           guidanceScaleText: guidanceScaleText > 0 ? guidanceScaleText : undefined,
           guidanceScaleLyric: guidanceScaleLyric > 0 ? guidanceScaleLyric : undefined,
           apgMomentum: guidanceMode === 'apg' && apgMomentum > 0 ? apgMomentum : undefined,
@@ -3170,6 +3174,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                 onFrequencyDampingChange={setFrequencyDamping}
                 temporalSmoothing={temporalSmoothing}
                 onTemporalSmoothingChange={setTemporalSmoothing}
+                storkSubsteps={storkSubsteps}
+                onStorkSubstepsChange={setStorkSubsteps}
                 guidanceScaleText={guidanceScaleText}
                 onGuidanceScaleTextChange={setGuidanceScaleText}
                 guidanceScaleLyric={guidanceScaleLyric}
