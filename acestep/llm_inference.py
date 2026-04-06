@@ -1833,7 +1833,11 @@ class LLMHandler:
         # Tokenize prompt using llama-cpp tokenizer
         cond_tokens = llm.tokenize(formatted_prompt.encode("utf-8"), add_bos=True)
 
-        # Setup CFG if needed
+        # CFG with llama-cpp is prohibitively slow (requires KV cache save/load per token).
+        # Force disable it — the quality impact is minimal with thinking mode.
+        if cfg_scale > 1.0:
+            logger.info(f"[llama-cpp] CFG disabled (cfg_scale {cfg_scale} -> 1.0) — KV state swapping too expensive")
+            cfg_scale = 1.0
         use_cfg = cfg_scale > 1.0
         uncond_tokens = None
         if use_cfg:
