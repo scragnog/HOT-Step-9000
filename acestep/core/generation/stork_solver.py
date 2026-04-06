@@ -118,7 +118,7 @@ def stork2_step(
         xt_next = xt - vt * dt_t
 
         state["step_index"] = 1
-        state.setdefault("velocity_history", []).append((vt.clone(), dt_val))
+        state.setdefault("velocity_history", []).append((vt.float().clone(), dt_val))
         return xt_next, state
 
     # --- Main STORK2 step ---
@@ -172,7 +172,7 @@ def stork2_step(
     # Update state
     state["step_index"] = step_idx + 1
     history = state.setdefault("velocity_history", [])
-    history.append((vt.clone(), dt_val))
+    history.append((vt_f.clone(), dt_val))
     # Keep only last 3 for memory
     if len(history) > 3:
         state["velocity_history"] = history[-3:]
@@ -239,7 +239,7 @@ def stork4_step(
         xt_next = xt - vt * dt_t
 
         state["step_index"] = 1
-        state.setdefault("velocity_history", []).append((vt.clone(), dt_val))
+        state.setdefault("velocity_history", []).append((vt.float().clone(), dt_val))
         return xt_next, state
 
     # --- Main STORK4 step ---
@@ -332,7 +332,7 @@ def stork4_step(
     # Update state
     state["step_index"] = step_idx + 1
     history = state.setdefault("velocity_history", [])
-    history.append((vt.clone(), dt_val))
+    history.append((vt_f.clone(), dt_val))
     if len(history) > 3:
         state["velocity_history"] = history[-3:]
 
