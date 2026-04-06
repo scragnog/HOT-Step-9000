@@ -69,6 +69,14 @@ dependencies = [
     "openai>=1.0",
 ]
 
+[project.optional-dependencies]
+# llama-cpp-python requires pre-built CUDA wheels matched to your GPU architecture.
+# Install via: uv pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
+# Or for Blackwell/sm100: download from https://github.com/dougeeai/llama-cpp-python-wheels/releases
+llama-cpp = [
+    "llama-cpp-python>=0.3.0",
+]
+
 [[tool.uv.index]]
 name = "pypi"
 url = "https://pypi.org/simple"

@@ -69,3 +69,9 @@ httpx>=0.27
 nltk>=3.8
 google-generativeai>=0.8
 openai>=1.0
+
+# llama-cpp-python (optional — for GGUF LM backend, lower VRAM usage)
+# Requires architecture-specific CUDA wheel. Uncomment and adjust for your GPU:
+# Blackwell (RTX 50xx): download from https://github.com/dougeeai/llama-cpp-python-wheels/releases
+# Ampere/Ada (RTX 30xx/40xx): uv pip install llama-cpp-python --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
+# llama-cpp-python>=0.3.0
