@@ -4763,8 +4763,8 @@ class LLMHandler:
             yield
             return
 
-        # If using nanovllm or MLX, do not offload (managed differently)
-        if self.llm_backend in ("vllm", "mlx"):
+        # If using nanovllm, MLX, or llama-cpp, do not offload (managed differently)
+        if self.llm_backend in ("vllm", "mlx", "llama-cpp"):
             yield
             return
 
