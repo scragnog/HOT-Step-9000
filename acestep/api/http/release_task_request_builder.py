@@ -101,7 +101,7 @@ def build_generate_music_request(
         frequency_damping=parser.float("frequency_damping", 0.0),
         temporal_smoothing=parser.float("temporal_smoothing", 0.0),
         # STORK solver parameters
-        stork_substeps=parser.int("stork_substeps", 50),
+        stork_substeps=parser.int("stork_substeps", 10),
         # Anti-Autotune
         anti_autotune=parser.float("anti_autotune", 0.0),
         # Advanced Guidance Parameters

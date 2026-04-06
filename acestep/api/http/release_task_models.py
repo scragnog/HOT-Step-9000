@@ -94,7 +94,7 @@ class GenerateMusicRequest(BaseModel):
     temporal_smoothing: float = Field(default=0.0, description="Temporal kernel on velocity delta (0=off)")
 
     # ── STORK solver parameters ───────────────────────────────────
-    stork_substeps: int = Field(default=50, description="Number of RKG/ROCK sub-steps per STORK solver step (10-148). STORK4 is clamped to 148 max (precomputed coefficient limit).")
+    stork_substeps: int = Field(default=10, description="Number of RKG/ROCK sub-steps per STORK solver step (10-148). STORK4 is clamped to 148 max (precomputed coefficient limit).")
 
     # ── Anti-Autotune ─────────────────────────────────────────────
     anti_autotune: float = Field(default=0.0, description="Spectral smoothing to reduce robotic/autotuned vocal artifacts (0=off, 1=full)")

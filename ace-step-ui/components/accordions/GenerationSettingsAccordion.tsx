@@ -394,11 +394,11 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
                                         </div>
                                         <EditableSlider
                                             label="Sub-Steps"
-                                            value={props.storkSubsteps ?? 50}
-                                            min={10} max={148} step={2}
+                                            value={props.storkSubsteps ?? 10}
+                                            min={2} max={50} step={1}
                                             onChange={(v) => props.onStorkSubstepsChange?.(v)}
                                             formatDisplay={(v) => String(v)}
-                                            helpText="Internal RKG/ROCK sub-iterations per step — more = stabler but diminishing returns (default: 50, max 148 for STORK 4)"
+                                            helpText="Chebyshev sub-iterations per step. Auto-adapts downward if unstable. Higher = more stability work but may not help (default: 10)"
                                         />
                                     </div>
                                 )}

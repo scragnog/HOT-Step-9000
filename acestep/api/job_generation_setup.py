@@ -183,7 +183,7 @@ def build_generation_setup(
         frequency_damping=getattr(req, "frequency_damping", 0.0),
         temporal_smoothing=getattr(req, "temporal_smoothing", 0.0),
         # STORK solver parameters
-        stork_substeps=getattr(req, "stork_substeps", 50),
+        stork_substeps=getattr(req, "stork_substeps", 10),
         # Anti-Autotune
         anti_autotune=getattr(req, "anti_autotune", 0.0),
         # Advanced Guidance Parameters

@@ -42,7 +42,7 @@ class GenerateMusicExecuteMixin:
         frequency_damping: float = 0.0,
         temporal_smoothing: float = 0.0,
         # STORK solver parameters
-        stork_substeps: int = 50,
+        stork_substeps: int = 10,
     ) -> Dict[str, Any]:
         """Invoke ``service_generate`` with real-time step progress from the DiT loop."""
         infer_steps_for_progress = len(timesteps) if timesteps else inference_steps

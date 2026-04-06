@@ -204,7 +204,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [temporalSmoothing, setTemporalSmoothing] = usePersistedState('ace-temporalSmoothing', 0.13);
 
   // STORK solver parameters
-  const [storkSubsteps, setStorkSubsteps] = usePersistedState('ace-storkSubsteps', 50);
+  const [storkSubsteps, setStorkSubsteps] = usePersistedState('ace-storkSubsteps', 10);
 
   // Advanced Guidance Parameters
   const [guidanceScaleText, setGuidanceScaleText] = usePersistedState('ace-guidanceScaleText', 0.0);

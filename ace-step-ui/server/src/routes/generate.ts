@@ -379,7 +379,7 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
         frequency_damping: params.frequencyDamping ?? 0.0,
         temporal_smoothing: params.temporalSmoothing ?? 0.0,
         // STORK solver parameters
-        stork_substeps: params.storkSubsteps ?? 50,
+        stork_substeps: params.storkSubsteps ?? 10,
         // Advanced Guidance Parameters
         guidance_scale_text: params.guidanceScaleText ?? 0.0,
         guidance_scale_lyric: params.guidanceScaleLyric ?? 0.0,

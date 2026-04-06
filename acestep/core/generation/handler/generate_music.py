@@ -149,7 +149,7 @@ class GenerateMusicMixin:
         frequency_damping: float = 0.0,
         temporal_smoothing: float = 0.0,
         # STORK solver parameters
-        stork_substeps: int = 50,
+        stork_substeps: int = 10,
         # Advanced Guidance Parameters
         guidance_scale_text: float = 0.0,
         guidance_scale_lyric: float = 0.0,
