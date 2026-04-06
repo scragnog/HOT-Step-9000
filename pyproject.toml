@@ -69,7 +69,7 @@ dependencies = [
     "openai>=1.0",
     # GGUF conversion tools
     "sentencepiece>=0.2.0",
-    "gguf>=0.18.0",
+    "gguf @ git+https://github.com/ggml-org/llama.cpp#subdirectory=gguf-py",
 ]
 
 [project.optional-dependencies]

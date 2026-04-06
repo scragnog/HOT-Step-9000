@@ -78,4 +78,5 @@ openai>=1.0
 
 # GGUF conversion tools (for converting safetensors to GGUF format)
 sentencepiece>=0.2.0
-gguf>=0.18.0
+# gguf must be installed from llama.cpp source to stay in sync with bundled converter
+gguf @ git+https://github.com/ggml-org/llama.cpp#subdirectory=gguf-py
