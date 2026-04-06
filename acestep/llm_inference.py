@@ -703,9 +703,24 @@ class LLMHandler:
         try:
             gguf_path = self._find_gguf_file(model_path)
             if gguf_path is None:
+                # Attempt auto-download
+                lm_model_name = os.path.basename(model_path)
+                logger.info(f"No GGUF file found for {lm_model_name}, attempting auto-download...")
+                try:
+                    from acestep.model_downloader import ensure_gguf_model
+                    success, msg = ensure_gguf_model(lm_model_name)
+                    if success:
+                        gguf_path = self._find_gguf_file(model_path)
+                    else:
+                        logger.warning(f"GGUF auto-download failed: {msg}")
+                except Exception as dl_err:
+                    logger.warning(f"GGUF auto-download error: {dl_err}")
+
+            if gguf_path is None:
                 return False, (
                     f"❌ No GGUF file found in {model_path}\n"
-                    "Download GGUF models from: https://huggingface.co/Serveurperso/ACE-Step-1.5-GGUF"
+                    "Download GGUF models with: python -m acestep.model_downloader --gguf\n"
+                    "Or from: https://huggingface.co/Serveurperso/ACE-Step-1.5-GGUF"
                 )
 
             logger.info(f"Loading GGUF model: {gguf_path} (n_gpu_layers={n_gpu_layers})")

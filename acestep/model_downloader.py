@@ -346,6 +346,20 @@ MAIN_MODEL_COMPONENTS = [
 # Default LM model (included in main model)
 DEFAULT_LM_MODEL = "acestep-5Hz-lm-1.7B"
 
+# GGUF quantized LM models (for llama-cpp-python backend)
+# Maps LM model name -> (repo_id, filename, file_size_bytes)
+GGUF_REGISTRY: Dict[str, Dict[str, Tuple[str, str, int]]] = {
+    "acestep-5Hz-lm-0.6B": {
+        "Q8_0": ("Serveurperso/ACE-Step-1.5-GGUF", "acestep-5Hz-lm-0.6B-Q8_0.gguf", 710_000_000),
+    },
+    "acestep-5Hz-lm-1.7B": {
+        "Q8_0": ("Serveurperso/ACE-Step-1.5-GGUF", "acestep-5Hz-lm-1.7B-Q8_0.gguf", 1_980_000_000),
+    },
+    "acestep-5Hz-lm-4B": {
+        "Q5_K_M": ("Serveurperso/ACE-Step-1.5-GGUF", "acestep-5Hz-lm-4B-Q5_K_M.gguf", 3_030_000_000),
+    },
+}
+
 
 def get_project_root() -> Path:
     """Get the project root directory.
@@ -715,6 +729,94 @@ def ensure_dit_model(
     return False, f"Unknown DiT model: {model_name}"
 
 
+def download_gguf_model(
+    lm_model_name: str,
+    quant: Optional[str] = None,
+    checkpoints_dir: Optional[Path] = None,
+    force: bool = False,
+) -> Tuple[bool, str]:
+    """Download a GGUF quantized LM model file.
+
+    Places the GGUF file inside the corresponding LM model directory
+    so that ``_find_gguf_file()`` in ``llm_inference.py`` discovers it.
+
+    Args:
+        lm_model_name: LM model name (e.g. "acestep-5Hz-lm-4B")
+        quant: Quantization type (e.g. "Q5_K_M", "Q8_0"). None = best available.
+        checkpoints_dir: Custom checkpoints directory
+        force: Force re-download even if file exists
+
+    Returns:
+        (success, message)
+    """
+    if lm_model_name not in GGUF_REGISTRY:
+        available = ", ".join(GGUF_REGISTRY.keys())
+        return False, f"No GGUF models available for '{lm_model_name}'. Available: {available}"
+
+    quant_options = GGUF_REGISTRY[lm_model_name]
+    if quant is None:
+        # Pick best available
+        quant = next(iter(quant_options))
+    elif quant not in quant_options:
+        available_quants = ", ".join(quant_options.keys())
+        return False, f"Quant '{quant}' not available for {lm_model_name}. Available: {available_quants}"
+
+    repo_id, filename, approx_size = quant_options[quant]
+
+    if checkpoints_dir is None:
+        checkpoints_dir = get_checkpoints_dir()
+    elif isinstance(checkpoints_dir, str):
+        checkpoints_dir = Path(checkpoints_dir)
+
+    # Place GGUF file inside the LM model directory
+    model_dir = checkpoints_dir / lm_model_name
+    model_dir.mkdir(parents=True, exist_ok=True)
+    dest_path = model_dir / filename
+
+    if not force and dest_path.exists() and dest_path.stat().st_size > 0:
+        return True, f"GGUF model already exists: {dest_path}"
+
+    size_gb = approx_size / (1024 ** 3)
+    print(f"Downloading GGUF model: {filename} (~{size_gb:.1f} GB)")
+    print(f"  Source: {repo_id}")
+    print(f"  Destination: {dest_path}")
+
+    try:
+        from huggingface_hub import hf_hub_download
+        downloaded_path = hf_hub_download(
+            repo_id=repo_id,
+            filename=filename,
+            local_dir=str(model_dir),
+            local_dir_use_symlinks=False,
+        )
+        logger.info(f"[GGUF Download] Downloaded: {downloaded_path}")
+        return True, f"✅ GGUF model downloaded: {dest_path}"
+    except Exception as e:
+        return False, f"❌ Failed to download GGUF model: {e}"
+
+
+def ensure_gguf_model(
+    lm_model_name: str,
+    quant: Optional[str] = None,
+    checkpoints_dir: Optional[Path] = None,
+) -> Tuple[bool, str]:
+    """Ensure a GGUF model is available, downloading if necessary."""
+    if checkpoints_dir is None:
+        checkpoints_dir = get_checkpoints_dir()
+    elif isinstance(checkpoints_dir, str):
+        checkpoints_dir = Path(checkpoints_dir)
+
+    # Check if any GGUF file already exists in the model dir
+    model_dir = checkpoints_dir / lm_model_name
+    if model_dir.exists():
+        import glob
+        existing = glob.glob(str(model_dir / "*.gguf"))
+        if existing:
+            return True, f"GGUF model available: {existing[0]}"
+
+    return download_gguf_model(lm_model_name, quant, checkpoints_dir)
+
+
 def print_model_list():
     """Print formatted list of available models."""
     print("\nAvailable Models for Download:")
@@ -798,7 +900,21 @@ Alternative using huggingface-cli:
         action="store_true",
         help="Skip downloading the main model (only download specified sub-model)"
     )
-    
+    parser.add_argument(
+        "--gguf",
+        type=str,
+        nargs="?",
+        const="acestep-5Hz-lm-4B",
+        metavar="LM_MODEL",
+        help="Download GGUF model for llama-cpp backend (default: acestep-5Hz-lm-4B)",
+    )
+    parser.add_argument(
+        "--gguf-quant",
+        type=str,
+        default=None,
+        help="GGUF quantization type (e.g. Q5_K_M, Q8_0). Default: best available.",
+    )
+
     args = parser.parse_args()
     
     # Handle --list
@@ -806,6 +922,13 @@ Alternative using huggingface-cli:
         print_model_list()
         return 0
     
+    # Handle --gguf
+    if args.gguf:
+        checkpoints_dir = get_checkpoints_dir(args.dir) if args.dir else get_checkpoints_dir()
+        success, msg = download_gguf_model(args.gguf, args.gguf_quant, checkpoints_dir, args.force)
+        print(msg)
+        return 0 if success else 1
+
     # Get checkpoints directory
     checkpoints_dir = get_checkpoints_dir(args.dir) if args.dir else get_checkpoints_dir()
     print(f"Checkpoints directory: {checkpoints_dir}")
