@@ -277,4 +277,120 @@ router.get('/env-config', async (_req: any, res: Response) => {
     }
 });
 
+// GET /api/models/gguf-status/:model - Return GGUF conversion status for a model
+// No auth — called during loading screen
+router.get('/gguf-status/:model', async (req: any, res: Response) => {
+    try {
+        const modelName = req.params.model;
+        const modelDir = path.join(PROJECT_ROOT, 'checkpoints', modelName);
+        const allQuants = ['Q4_K_M', 'Q5_K_M', 'Q6_K', 'Q8_0', 'BF16'];
+
+        // Check safetensors
+        let safetensorsPresent = false;
+        if (fs.existsSync(modelDir)) {
+            const files = fs.readdirSync(modelDir);
+            safetensorsPresent = files.some(f => f.endsWith('.safetensors'));
+        }
+
+        // Check which GGUFs exist
+        const availableGguf: Record<string, boolean> = {};
+        for (const quant of allQuants) {
+            const ggufPath = path.join(modelDir, `${modelName}-${quant}.gguf`);
+            availableGguf[quant] = fs.existsSync(ggufPath);
+        }
+
+        res.json({ safetensorsPresent, availableGguf, modelDir });
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// POST /api/models/convert-gguf - Convert model to GGUF with streaming progress (SSE)
+// No auth — called during loading screen
+import { spawn } from 'child_process';
+router.post('/convert-gguf', async (req: any, res: Response) => {
+    const { model, quant, convertAll } = req.body;
+    if (!model || !quant) {
+        res.status(400).json({ error: 'model and quant required' });
+        return;
+    }
+
+    // Set SSE headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const sendEvent = (data: string, event?: string) => {
+        if (event) res.write(`event: ${event}\n`);
+        res.write(`data: ${data}\n\n`);
+    };
+
+    // Find Python executable
+    const venvPython = path.join(PROJECT_ROOT, '.venv', 'Scripts', 'python.exe');
+    const pythonExe = fs.existsSync(venvPython) ? venvPython : 'python';
+
+    const converterModule = path.join(PROJECT_ROOT, 'acestep', 'tools', 'gguf_converter.py');
+    if (!fs.existsSync(converterModule)) {
+        sendEvent('❌ gguf_converter.py not found', 'error');
+        res.end();
+        return;
+    }
+
+    // Build command args
+    const args = [converterModule];
+    if (convertAll) {
+        args.push('--all');
+    } else {
+        args.push(model);
+    }
+    args.push('--quant', quant);
+    args.push('--checkpoints', path.join(PROJECT_ROOT, 'checkpoints'));
+
+    sendEvent(`Starting conversion: ${convertAll ? 'all models' : model} → ${quant}`);
+
+    const proc = spawn(pythonExe, args, {
+        cwd: PROJECT_ROOT,
+        env: { ...process.env, PYTHONUNBUFFERED: '1', ACESTEP_PROJECT_ROOT: PROJECT_ROOT },
+    });
+
+    proc.stdout.on('data', (chunk: Buffer) => {
+        const lines = chunk.toString('utf-8').split('\n');
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed) sendEvent(trimmed);
+        }
+    });
+
+    proc.stderr.on('data', (chunk: Buffer) => {
+        const lines = chunk.toString('utf-8').split('\n');
+        for (const line of lines) {
+            const trimmed = line.trim();
+            if (trimmed) sendEvent(trimmed);
+        }
+    });
+
+    proc.on('close', (code: number | null) => {
+        if (code === 0) {
+            sendEvent('✅ All conversions completed successfully', 'done');
+        } else {
+            sendEvent(`❌ Conversion failed (exit code ${code})`, 'error');
+        }
+        res.end();
+    });
+
+    proc.on('error', (err: Error) => {
+        sendEvent(`❌ Failed to start conversion: ${err.message}`, 'error');
+        res.end();
+    });
+
+    // Handle client disconnect
+    req.on('close', () => {
+        if (!proc.killed) {
+            proc.kill('SIGTERM');
+        }
+    });
+});
+
 export default router;

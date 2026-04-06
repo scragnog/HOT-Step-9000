@@ -398,11 +398,25 @@
                 </select>
             </div>
             <div class="model-row" id="ggufQuantRow" style="display:none">
-                <label>GGUF Quantization</label>
+                <label>GGUF Quantization <span id="ggufStatusBadge" style="font-size:.65rem;padding:1px 6px;border-radius:3px;margin-left:6px"></span></label>
                 <select id="ggufQuantSelect">
-                    <option value="auto">Auto (best for model)</option>
+                    <option value="Q4_K_M">Q4_K_M — smallest VRAM</option>
+                    <option value="Q5_K_M" selected>Q5_K_M — best balance ⭐</option>
+                    <option value="Q6_K">Q6_K — high quality</option>
+                    <option value="Q8_0">Q8_0 — near-lossless</option>
+                    <option value="BF16">BF16 — full precision (largest)</option>
                 </select>
-                <div style="font-size:.62rem;color:#666;margin-top:.2rem">Lower quant = less VRAM, slight quality loss. Q8_0 is lossless; Q5_K_M is a good balance.</div>
+                <div style="font-size:.62rem;color:#666;margin-top:.2rem">Lower quant = less VRAM, slight quality loss. Requires local conversion from safetensors.</div>
+            </div>
+            <div class="model-row" id="ggufConvertRow" style="display:none">
+                <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.4rem">
+                    <button id="ggufConvertBtn" style="padding:5px 14px;border:1px solid rgba(136,170,238,.4);border-radius:4px;background:rgba(136,170,238,.12);color:#8ae;font-size:.72rem;cursor:pointer;transition:all .2s">🔧 Convert to GGUF</button>
+                    <label style="font-size:.62rem;color:#888;display:flex;align-items:center;gap:.3rem;cursor:pointer">
+                        <input type="checkbox" id="ggufConvertAll" style="accent-color:#8ae"> Convert all LM models
+                    </label>
+                </div>
+                <div id="ggufProgressPanel" style="display:none;background:rgba(0,0,0,.35);border:1px solid rgba(136,170,238,.15);border-radius:4px;padding:.5rem;margin-top:.3rem;max-height:180px;overflow-y:auto;font-family:'Fira Code','Cascadia Code',monospace;font-size:.58rem;line-height:1.5;color:#9ab">
+                </div>
             </div>
             <div class="model-row" id="gpuLayersRow" style="display:none">
                 <label>GPU Layers <span id="gpuLayersValue" style="color:#8ae;font-weight:600">-1 (all)</span></label>
@@ -551,46 +565,147 @@
         gpuLayersValue.textContent = CURRENT_LM_GPU_LAYERS === '-1' ? '-1 (all)' : CURRENT_LM_GPU_LAYERS;
         gpuLayersRow.style.display = CURRENT_LM_BACKEND === 'llama-cpp' ? '' : 'none';
 
-        // GGUF Quantization dropdown
+        // GGUF Conversion UI
         const ggufQuantSelect = document.getElementById('ggufQuantSelect');
         const ggufQuantRow = document.getElementById('ggufQuantRow');
-        // Available quants per LM model (matches GGUF_REGISTRY in model_downloader.py)
-        const GGUF_QUANTS = {
-            'acestep-5Hz-lm-0.6B': ['Q8_0', 'BF16'],
-            'acestep-5Hz-lm-1.7B': ['Q8_0', 'BF16'],
-            'acestep-5Hz-lm-4B': ['Q5_K_M', 'Q6_K', 'Q8_0', 'BF16'],
-        };
-        const GGUF_LABELS = {
-            'Q5_K_M': 'Q5_K_M — best VRAM/quality balance (~3 GB)',
-            'Q6_K': 'Q6_K — high quality (~3.5 GB)',
-            'Q8_0': 'Q8_0 — near-lossless',
-            'BF16': 'BF16 — full precision (largest)',
-        };
-        function updateGGUFOptions() {
-            const lm = lmModelSelect.value;
-            const quants = GGUF_QUANTS[lm] || ['Q8_0'];
-            ggufQuantSelect.innerHTML = '<option value="auto">Auto (best for model)</option>';
-            quants.forEach(q => {
-                const opt = document.createElement('option');
-                opt.value = q;
-                opt.textContent = GGUF_LABELS[q] || q;
-                if (q === CURRENT_GGUF_QUANT) opt.selected = true;
-                ggufQuantSelect.appendChild(opt);
-            });
+        const ggufConvertRow = document.getElementById('ggufConvertRow');
+        const ggufConvertBtn = document.getElementById('ggufConvertBtn');
+        const ggufConvertAll = document.getElementById('ggufConvertAll');
+        const ggufProgressPanel = document.getElementById('ggufProgressPanel');
+        const ggufStatusBadge = document.getElementById('ggufStatusBadge');
+
+        // Restore saved quant selection
+        if (CURRENT_GGUF_QUANT && CURRENT_GGUF_QUANT !== 'auto') {
+            ggufQuantSelect.value = CURRENT_GGUF_QUANT;
         }
+
+        let ggufStatusCache = {};  // { Q4_K_M: true, Q5_K_M: false, ... }
+        let isConverting = false;
+
+        async function checkGGUFStatus() {
+            const model = lmModelSelect.value;
+            try {
+                const resp = await fetch(`http://localhost:3001/api/models/gguf-status/${model}`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    ggufStatusCache = data.availableGguf || {};
+                    updateGGUFBadge();
+                    updateConvertButtonState();
+                }
+            } catch (e) {
+                // Server not yet up — will retry on visibility change
+            }
+        }
+
+        function updateGGUFBadge() {
+            const quant = ggufQuantSelect.value;
+            const isAvailable = ggufStatusCache[quant];
+            if (isAvailable) {
+                ggufStatusBadge.textContent = '🟢 Ready';
+                ggufStatusBadge.style.background = 'rgba(80,200,120,.15)';
+                ggufStatusBadge.style.color = '#6c6';
+            } else {
+                ggufStatusBadge.textContent = '⚪ Not converted';
+                ggufStatusBadge.style.background = 'rgba(255,255,255,.06)';
+                ggufStatusBadge.style.color = '#888';
+            }
+        }
+
+        function updateConvertButtonState() {
+            const quant = ggufQuantSelect.value;
+            const isAvailable = ggufStatusCache[quant];
+            if (isAvailable && !isConverting) {
+                ggufConvertBtn.textContent = '✅ Already converted';
+                ggufConvertBtn.style.opacity = '0.5';
+                ggufConvertBtn.style.cursor = 'default';
+            } else if (isConverting) {
+                ggufConvertBtn.textContent = '⏳ Converting...';
+                ggufConvertBtn.style.opacity = '0.5';
+                ggufConvertBtn.style.cursor = 'wait';
+            } else {
+                ggufConvertBtn.textContent = '🔧 Convert to GGUF';
+                ggufConvertBtn.style.opacity = '1';
+                ggufConvertBtn.style.cursor = 'pointer';
+            }
+        }
+
         function updateLlamaCppVisibility() {
             const isLlamaCpp = lmBackendSelect.value === 'llama-cpp';
             gpuLayersRow.style.display = isLlamaCpp ? '' : 'none';
             ggufQuantRow.style.display = isLlamaCpp ? '' : 'none';
+            ggufConvertRow.style.display = isLlamaCpp ? '' : 'none';
+            if (isLlamaCpp) checkGGUFStatus();
         }
-        updateGGUFOptions();
         updateLlamaCppVisibility();
 
-        // Toggle visibility when backend or LM model changes
+        // Event listeners
         lmBackendSelect.addEventListener('change', updateLlamaCppVisibility);
-        lmModelSelect.addEventListener('change', () => { updateGGUFOptions(); });
+        lmModelSelect.addEventListener('change', () => { checkGGUFStatus(); });
+        ggufQuantSelect.addEventListener('change', () => { updateGGUFBadge(); updateConvertButtonState(); });
         gpuLayersSlider.addEventListener('input', () => {
             gpuLayersValue.textContent = gpuLayersSlider.value === '-1' ? '-1 (all)' : gpuLayersSlider.value;
+        });
+
+        // Convert button handler
+        ggufConvertBtn.addEventListener('click', async () => {
+            const quant = ggufQuantSelect.value;
+            const model = lmModelSelect.value;
+            const isAvailable = ggufStatusCache[quant];
+
+            if (isAvailable || isConverting) return;
+
+            isConverting = true;
+            updateConvertButtonState();
+            ggufProgressPanel.style.display = 'block';
+            ggufProgressPanel.innerHTML = '';
+
+            function appendLog(text) {
+                const line = document.createElement('div');
+                line.textContent = text;
+                // Color-code special lines
+                if (text.startsWith('✅')) line.style.color = '#6c6';
+                else if (text.startsWith('❌')) line.style.color = '#e66';
+                else if (text.includes('Step ')) line.style.color = '#8ae';
+                else if (text.includes('Writing:') || text.includes('quantiz')) line.style.color = '#aaa';
+                ggufProgressPanel.appendChild(line);
+                ggufProgressPanel.scrollTop = ggufProgressPanel.scrollHeight;
+            }
+
+            try {
+                const resp = await fetch('http://localhost:3001/api/models/convert-gguf', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ model, quant, convertAll: ggufConvertAll.checked }),
+                });
+
+                const reader = resp.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    // Parse SSE events
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();  // Keep incomplete line
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            appendLog(line.slice(6));
+                        }
+                    }
+                }
+                // Process remaining buffer
+                if (buffer.startsWith('data: ')) {
+                    appendLog(buffer.slice(6));
+                }
+            } catch (e) {
+                appendLog(`❌ Connection error: ${e.message}`);
+            }
+
+            isConverting = false;
+            await checkGGUFStatus();
+            updateConvertButtonState();
         });
 
         // Set Redmond Mode toggle from saved config
