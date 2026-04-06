@@ -144,6 +144,15 @@ class LLMHandler:
                 # Step 3: Clean up distributed state
                 self._cleanup_torch_distributed_state()
 
+            elif self.llm_backend == "llama-cpp" and self.llm is not None:
+                # llama-cpp-python backend — close and delete
+                try:
+                    if hasattr(self.llm, 'close'):
+                        self.llm.close()
+                    del self.llm
+                except Exception:
+                    pass
+
             elif self.llm_backend in ("pt", None) and self.llm is not None:
                 # HuggingFace PT backend — drop model directly
                 try:
@@ -648,6 +657,88 @@ class LLMHandler:
         except Exception as e:
             return False, f"❌ Error initializing 5Hz LM: {str(e)}\n\nTraceback:\n{traceback.format_exc()}"
 
+    def _find_gguf_file(self, model_dir: str) -> Optional[str]:
+        """Find the best GGUF file in a model directory.
+        Priority: Q5_K_M > Q8_0 > Q6_K > Q4_K_M > BF16 > any .gguf
+        """
+        import glob
+        gguf_files = glob.glob(os.path.join(model_dir, "*.gguf"))
+        if not gguf_files:
+            # Check for GGUF files alongside the safetensors model dir
+            # e.g. checkpoints/acestep-5Hz-lm-4B/ might have a .gguf next to .safetensors
+            parent = os.path.dirname(model_dir)
+            model_name = os.path.basename(model_dir)
+            # Also check for a -GGUF sibling (e.g. checkpoints/gguf/acestep-5Hz-lm-4B-Q5_K_M.gguf)
+            gguf_dir = os.path.join(parent, "gguf")
+            if os.path.isdir(gguf_dir):
+                gguf_files = [f for f in glob.glob(os.path.join(gguf_dir, "*.gguf"))
+                              if model_name.replace("acestep-5Hz-lm-", "").split("-")[0] in os.path.basename(f)]
+        if not gguf_files:
+            return None
+
+        # Priority order
+        priority = ["Q5_K_M", "Q8_0", "Q6_K", "Q4_K_M", "BF16"]
+        for quant in priority:
+            for f in gguf_files:
+                if quant in os.path.basename(f):
+                    return f
+        return gguf_files[0]  # Fallback to first found
+
+    def _load_llamacpp_model(self, model_path: str, n_gpu_layers: int = -1) -> Tuple[bool, str]:
+        """Load a GGUF model via llama-cpp-python.
+
+        Args:
+            model_path: Path to the HF model directory (will search for .gguf files)
+            n_gpu_layers: Number of layers to offload to GPU. -1 = all layers.
+        """
+        try:
+            from llama_cpp import Llama
+        except ImportError:
+            return False, (
+                "❌ llama-cpp-python is not installed.\n"
+                "Install it with the correct CUDA wheel for your GPU.\n"
+                "See: https://huggingface.co/dougeeai/llama-cpp-python-wheels"
+            )
+
+        try:
+            gguf_path = self._find_gguf_file(model_path)
+            if gguf_path is None:
+                return False, (
+                    f"❌ No GGUF file found in {model_path}\n"
+                    "Download GGUF models from: https://huggingface.co/Serveurperso/ACE-Step-1.5-GGUF"
+                )
+
+            logger.info(f"Loading GGUF model: {gguf_path} (n_gpu_layers={n_gpu_layers})")
+            self.llm = Llama(
+                model_path=gguf_path,
+                n_gpu_layers=n_gpu_layers,
+                n_ctx=4096,
+                verbose=False,
+                logits_all=False,  # Only need last-token logits
+            )
+            self.llm_backend = "llama-cpp"
+            self.llm_initialized = True
+            self._llamacpp_gguf_path = gguf_path
+
+            quant_type = "unknown"
+            basename = os.path.basename(gguf_path)
+            for q in ["Q4_K_M", "Q5_K_M", "Q6_K", "Q8_0", "BF16"]:
+                if q in basename:
+                    quant_type = q
+                    break
+
+            logger.info(f"GGUF model loaded: {basename} (quant={quant_type}, layers_gpu={n_gpu_layers})")
+            status_msg = (
+                f"✅ 5Hz LM initialized (llama-cpp)\n"
+                f"Model: {basename}\n"
+                f"Quantization: {quant_type}\n"
+                f"GPU Layers: {n_gpu_layers}\n"
+                f"Backend: llama-cpp-python"
+            )
+            return True, status_msg
+        except Exception as e:
+            return False, f"❌ Error loading GGUF model: {str(e)}\n\nTraceback:\n{traceback.format_exc()}"
+
     def _apply_top_k_filter(self, logits: torch.Tensor, top_k: Optional[int]) -> torch.Tensor:
         """Apply top-k filtering to logits"""
         if top_k is not None and top_k > 0:
@@ -910,6 +1001,23 @@ class LLMHandler:
                     f"[initialize] {backend} backend requires CUDA, using PyTorch backend for device={device}."
                 )
                 backend = "pt"
+
+            # ── llama-cpp-python backend ──
+            if backend == "llama-cpp":
+                n_gpu_layers = int(os.environ.get("ACESTEP_LM_GPU_LAYERS", "-1"))
+                success, status_msg = self._load_llamacpp_model(full_lm_model_path, n_gpu_layers=n_gpu_layers)
+                if success:
+                    logger.info("=" * 60)
+                    logger.info(f"=== ACTIVE LM MODE: {self.llm_backend} ===")
+                    logger.info("=" * 60)
+                    return status_msg, True
+                else:
+                    logger.warning(f"llama-cpp backend failed: {status_msg}, falling back to PyTorch")
+                    success, status_msg = self._load_pytorch_model(full_lm_model_path, device)
+                    if not success:
+                        return status_msg, False
+                    status_msg = f"✅ 5Hz LM initialized (PyTorch fallback from llama-cpp)\nModel: {full_lm_model_path}\nBackend: PyTorch"
+                    return status_msg, True
 
             # Initialize based on user-selected backend
             if backend in ("vllm", "custom-vllm"):
@@ -1635,6 +1743,232 @@ class LLMHandler:
             caption=caption,
             lyrics=lyrics,
             cot_text=cot_text,
+        )
+
+    # ─────────────────── llama-cpp-python backend ───────────────────
+
+    def _run_llamacpp_single(
+        self,
+        formatted_prompt: str,
+        temperature: float,
+        cfg_scale: float,
+        negative_prompt: str,
+        top_k: Optional[int],
+        top_p: Optional[float],
+        repetition_penalty: float,
+        use_constrained_decoding: bool,
+        constrained_decoding_debug: bool,
+        target_duration: Optional[float],
+        user_metadata: Optional[Dict[str, Optional[str]]],
+        stop_at_reasoning: bool,
+        skip_genres: bool,
+        skip_caption: bool,
+        skip_language: bool,
+        generation_phase: str,
+        caption: str,
+        lyrics: str,
+        cot_text: str,
+    ) -> str:
+        """Single-prompt generation using llama-cpp-python with constrained decoding + CFG."""
+        import numpy as np
+        llm = self.llm  # Llama instance
+
+        # Setup constrained processor
+        constrained_processor = self._setup_constrained_processor(
+            use_constrained_decoding=use_constrained_decoding,
+            constrained_decoding_debug=constrained_decoding_debug,
+            target_duration=target_duration,
+            user_metadata=user_metadata,
+            stop_at_reasoning=stop_at_reasoning,
+            skip_genres=skip_genres,
+            skip_caption=skip_caption,
+            skip_language=skip_language,
+            generation_phase=generation_phase,
+            is_batch=False,
+        )
+
+        # Compute max tokens
+        max_new_tokens = self._compute_max_new_tokens(
+            target_duration=target_duration,
+            generation_phase=generation_phase,
+            fallback_max=4096,
+        )
+
+        # Tokenize prompt using llama-cpp tokenizer
+        cond_tokens = llm.tokenize(formatted_prompt.encode("utf-8"), add_bos=True)
+
+        # Setup CFG if needed
+        use_cfg = cfg_scale > 1.0
+        uncond_tokens = None
+        if use_cfg:
+            formatted_unconditional_prompt = self._build_unconditional_prompt(
+                caption=caption, lyrics=lyrics, cot_text=cot_text,
+                negative_prompt=negative_prompt, generation_phase=generation_phase,
+                is_batch=False,
+            )
+            uncond_tokens = llm.tokenize(formatted_unconditional_prompt.encode("utf-8"), add_bos=True)
+
+        # Get EOS token ID from llama.cpp
+        eos_token_id = llm.token_eos()
+        vocab_size = llm.n_vocab()
+
+        # Prefill conditional prompt
+        llm.reset()
+        llm.eval(cond_tokens)
+        cond_state = llm.save_state() if use_cfg else None
+
+        # Prefill unconditional prompt (CFG only)
+        uncond_state = None
+        if use_cfg and uncond_tokens is not None:
+            llm.reset()
+            llm.eval(uncond_tokens)
+            uncond_state = llm.save_state()
+            # Restore conditional state for generation
+            llm.load_state(cond_state)
+
+        # Track generated token IDs for constrained decoding (needs full sequence)
+        # Use HF tokenizer IDs for the prompt (constrained processor expects HF token IDs)
+        hf_input_ids = self.llm_tokenizer.encode(formatted_prompt, return_tensors="pt")
+        generated_token_ids = hf_input_ids.clone()  # [1, seq_len]
+
+        generated_tokens_list = []  # llama.cpp token IDs for output decoding
+
+        for step in tqdm(range(max_new_tokens), desc="LLM Generation (llama-cpp)", unit="token", disable=self.disable_tqdm):
+            # Check for cancellation
+            if getattr(self, "_cancel_requested", False):
+                self._cancel_requested = False
+                raise RuntimeError("Generation cancelled by user")
+
+            # Get conditional logits from current state
+            scores = llm.scores  # numpy [n_tokens, vocab_size] — only last eval batch
+            cond_logits_np = scores[-1].copy()  # Last position logits
+
+            if use_cfg and uncond_state is not None:
+                # Save current conditional state
+                cond_state = llm.save_state()
+                # Load unconditional state, eval the last generated token
+                llm.load_state(uncond_state)
+                if generated_tokens_list:
+                    llm.eval([generated_tokens_list[-1]])
+                uncond_logits_np = llm.scores[-1].copy()
+                uncond_state = llm.save_state()
+                # Restore conditional state
+                llm.load_state(cond_state)
+
+                # CFG formula: logits = uncond + scale * (cond - uncond)
+                logits_np = uncond_logits_np + cfg_scale * (cond_logits_np - uncond_logits_np)
+            else:
+                logits_np = cond_logits_np
+
+            # Convert to torch for constrained decoding + sampling
+            logits_torch = torch.from_numpy(logits_np).unsqueeze(0).float()  # [1, vocab_size]
+
+            # Apply constrained processor (expects [batch, vocab] torch tensors)
+            if constrained_processor is not None:
+                logits_torch = constrained_processor(generated_token_ids, logits_torch)
+
+            # Apply repetition penalty
+            if repetition_penalty != 1.0:
+                logits_processor = self._build_logits_processor(repetition_penalty)
+                for processor in logits_processor:
+                    logits_torch = processor(generated_token_ids, logits_torch)
+
+            # Apply top-k and top-p filtering
+            logits_torch = self._apply_top_k_filter(logits_torch, top_k)
+            logits_torch = self._apply_top_p_filter(logits_torch, top_p)
+
+            # Sample token
+            next_token = self._sample_tokens(logits_torch, temperature)  # [1]
+            next_token_id = next_token.item()
+
+            # Update constrained processor state
+            self._update_constrained_processor_state(constrained_processor, next_token)
+
+            # Check EOS
+            if next_token_id == eos_token_id:
+                break
+            # Also check HF EOS
+            hf_eos = self.llm_tokenizer.eos_token_id
+            if hf_eos is not None and next_token_id == hf_eos:
+                break
+
+            # Append to tracking sequences
+            generated_token_ids = torch.cat(
+                [generated_token_ids, next_token.unsqueeze(0).unsqueeze(0)], dim=1
+            )
+            generated_tokens_list.append(next_token_id)
+
+            # Evaluate the new token in llama-cpp (advances KV cache)
+            llm.eval([next_token_id])
+
+        # Decode using HF tokenizer for consistency with other backends
+        if generated_tokens_list:
+            output_ids = torch.tensor(generated_tokens_list, dtype=torch.long)
+            output_text = self.llm_tokenizer.decode(output_ids, skip_special_tokens=False)
+        else:
+            output_text = ""
+
+        return output_text
+
+    def _run_llamacpp(
+        self,
+        formatted_prompts: Union[str, List[str]],
+        temperature: float,
+        cfg_scale: float,
+        negative_prompt: str,
+        top_k: Optional[int],
+        top_p: Optional[float],
+        repetition_penalty: float,
+        use_constrained_decoding: bool = True,
+        constrained_decoding_debug: bool = False,
+        target_duration: Optional[float] = None,
+        user_metadata: Optional[Dict[str, Optional[str]]] = None,
+        stop_at_reasoning: bool = False,
+        skip_genres: bool = True,
+        skip_caption: bool = False,
+        skip_language: bool = False,
+        generation_phase: str = "cot",
+        caption: str = "",
+        lyrics: str = "",
+        cot_text: str = "",
+        seeds: Optional[List[int]] = None,
+    ) -> Union[str, List[str]]:
+        """Unified llama-cpp generation supporting single and batch modes."""
+        formatted_prompt_list, is_batch = self._normalize_batch_input(formatted_prompts)
+
+        if is_batch:
+            output_texts = []
+            for i, formatted_prompt in enumerate(formatted_prompt_list):
+                if seeds and i < len(seeds):
+                    torch.manual_seed(seeds[i])
+                output_text = self._run_llamacpp_single(
+                    formatted_prompt=formatted_prompt,
+                    temperature=temperature, cfg_scale=cfg_scale,
+                    negative_prompt=negative_prompt, top_k=top_k, top_p=top_p,
+                    repetition_penalty=repetition_penalty,
+                    use_constrained_decoding=use_constrained_decoding,
+                    constrained_decoding_debug=constrained_decoding_debug,
+                    target_duration=target_duration, user_metadata=None,
+                    stop_at_reasoning=False, skip_genres=True,
+                    skip_caption=True, skip_language=True,
+                    generation_phase=generation_phase,
+                    caption=caption, lyrics=lyrics, cot_text=cot_text,
+                )
+                output_texts.append(output_text)
+            return output_texts
+
+        return self._run_llamacpp_single(
+            formatted_prompt=formatted_prompt_list[0],
+            temperature=temperature, cfg_scale=cfg_scale,
+            negative_prompt=negative_prompt, top_k=top_k, top_p=top_p,
+            repetition_penalty=repetition_penalty,
+            use_constrained_decoding=use_constrained_decoding,
+            constrained_decoding_debug=constrained_decoding_debug,
+            target_duration=target_duration, user_metadata=user_metadata,
+            stop_at_reasoning=stop_at_reasoning, skip_genres=skip_genres,
+            skip_caption=skip_caption, skip_language=skip_language,
+            generation_phase=generation_phase,
+            caption=caption, lyrics=lyrics, cot_text=cot_text,
         )
 
     def has_all_metas(self, user_metadata: Optional[Dict[str, Optional[str]]]) -> bool:
@@ -2817,6 +3151,30 @@ class LLMHandler:
                     cot_text=cot_text,
                 )
                 return output_text, f"✅ Generated successfully (mlx) | length={len(output_text)}"
+
+            elif self.llm_backend == "llama-cpp":
+                output_text = self._run_llamacpp(
+                    formatted_prompts=formatted_prompt,
+                    temperature=temperature,
+                    cfg_scale=cfg_scale,
+                    negative_prompt=negative_prompt,
+                    top_k=top_k,
+                    top_p=top_p,
+                    repetition_penalty=repetition_penalty,
+                    use_constrained_decoding=use_constrained_decoding,
+                    constrained_decoding_debug=constrained_decoding_debug,
+                    target_duration=target_duration,
+                    user_metadata=user_metadata,
+                    stop_at_reasoning=stop_at_reasoning,
+                    skip_genres=skip_genres,
+                    skip_caption=skip_caption,
+                    skip_language=skip_language,
+                    generation_phase=generation_phase,
+                    caption=caption,
+                    lyrics=lyrics,
+                    cot_text=cot_text,
+                )
+                return output_text, f"✅ Generated successfully (llama-cpp) | length={len(output_text)}"
 
             # PyTorch backend (fallback)
             output_text = self._run_pt(
