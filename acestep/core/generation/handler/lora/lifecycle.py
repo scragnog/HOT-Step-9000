@@ -670,7 +670,7 @@ def remove_lora(self, adapter_name: str) -> str:
                 mem_before = self._memory_allocated() / (1024**3)
                 logger.info(f"VRAM before LoRA unload: {mem_before:.2f}GB")
             self.model.decoder = decoder.get_base_model()
-            load_result = self.model.decoder.load_state_dict(self._base_decoder, strict=False)
+            load_result = self.model.decoder.load_state_dict(self._base_decoder, strict=False, assign=True)
             if load_result.missing_keys:
                 logger.warning(f"Missing keys when restoring decoder: {load_result.missing_keys[:5]}")
             if load_result.unexpected_keys:
@@ -752,14 +752,14 @@ def unload_lora(self) -> str:
             # Linear layers (LoraLayer) in place — their forward hooks keep applying
             # the delta, so unload appears to have no effect.
             self.model.decoder = self.model.decoder.merge_and_unload()
-            load_result = self.model.decoder.load_state_dict(self._base_decoder, strict=False)
+            load_result = self.model.decoder.load_state_dict(self._base_decoder, strict=False, assign=True)
             if load_result.missing_keys:
                 logger.warning(f"Missing keys when restoring decoder: {load_result.missing_keys[:5]}")
             if load_result.unexpected_keys:
                 logger.warning(f"Unexpected keys when restoring decoder: {load_result.unexpected_keys[:5]}")
         else:
             logger.info("Restoring base decoder from state_dict backup")
-            load_result = self.model.decoder.load_state_dict(self._base_decoder, strict=False)
+            load_result = self.model.decoder.load_state_dict(self._base_decoder, strict=False, assign=True)
             if load_result.missing_keys:
                 logger.warning(f"Missing keys when restoring decoder: {load_result.missing_keys[:5]}")
             if load_result.unexpected_keys:

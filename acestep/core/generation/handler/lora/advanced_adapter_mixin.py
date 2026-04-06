@@ -136,7 +136,7 @@ def _extract_adapter_delta(self, lora_path: str) -> dict:
     # the compilation context, causing "Offset increment outside graph
     # capture" when we modify decoder weights.
     torch._dynamo.reset()
-    self.model.decoder.load_state_dict(self._base_decoder, strict=False)
+    self.model.decoder.load_state_dict(self._base_decoder, strict=False, assign=True)
     self.model.decoder = self.model.decoder.to(self.device).to(self.dtype)
     self.model.decoder.eval()
 
@@ -270,7 +270,7 @@ def _extract_adapter_delta(self, lora_path: str) -> dict:
     del adapted_sd
 
     # Restore decoder to base state
-    self.model.decoder.load_state_dict(self._base_decoder, strict=False)
+    self.model.decoder.load_state_dict(self._base_decoder, strict=False, assign=True)
     self.model.decoder = self.model.decoder.to(self.device).to(self.dtype)
     self.model.decoder.eval()
 
@@ -313,7 +313,7 @@ def _apply_merged_weights(self) -> None:
 
     if not active_slots:
         logger.info(f"[DIAG] No active slots (use_lora={self.use_lora}), restoring base decoder")
-        self.model.decoder.load_state_dict(self._base_decoder, strict=False)
+        self.model.decoder.load_state_dict(self._base_decoder, strict=False, assign=True)
         self.model.decoder = self.model.decoder.to(self.device).to(self.dtype)
         self.model.decoder.eval()
         self._merged_dirty = False
@@ -355,7 +355,7 @@ def _apply_merged_weights(self) -> None:
             merged[k] = base_val
 
     torch._dynamo.reset()
-    self.model.decoder.load_state_dict(merged, strict=False)
+    self.model.decoder.load_state_dict(merged, strict=False, assign=True)
     self.model.decoder = self.model.decoder.to(self.device).to(self.dtype)
     self.model.decoder.eval()
 
@@ -390,7 +390,7 @@ def _apply_merged_weights_with_groups(self) -> None:
     }
 
     if not active_slots:
-        self.model.decoder.load_state_dict(self._base_decoder, strict=False)
+        self.model.decoder.load_state_dict(self._base_decoder, strict=False, assign=True)
         self.model.decoder = self.model.decoder.to(self.device).to(self.dtype)
         self.model.decoder.eval()
         self._merged_dirty = False
@@ -431,7 +431,7 @@ def _apply_merged_weights_with_groups(self) -> None:
         else:
             merged[k] = base_val
 
-    self.model.decoder.load_state_dict(merged, strict=False)
+    self.model.decoder.load_state_dict(merged, strict=False, assign=True)
     self.model.decoder = self.model.decoder.to(self.device).to(self.dtype)
     self.model.decoder.eval()
 
@@ -796,7 +796,7 @@ def _apply_merged_weights_temporal(self, schedule_scales: Dict[int, float]) -> N
 
     if not active_slots:
         torch._dynamo.reset()
-        self.model.decoder.load_state_dict(self._base_decoder, strict=False)
+        self.model.decoder.load_state_dict(self._base_decoder, strict=False, assign=True)
         self.model.decoder = self.model.decoder.to(self.device).to(self.dtype)
         self.model.decoder.eval()
         return
@@ -836,7 +836,7 @@ def _apply_merged_weights_temporal(self, schedule_scales: Dict[int, float]) -> N
             merged[k] = base_val
 
     torch._dynamo.reset()
-    self.model.decoder.load_state_dict(merged, strict=False)
+    self.model.decoder.load_state_dict(merged, strict=False, assign=True)
     self.model.decoder = self.model.decoder.to(self.device).to(self.dtype)
     self.model.decoder.eval()
     del merged
