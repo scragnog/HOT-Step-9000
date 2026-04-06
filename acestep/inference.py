@@ -1127,6 +1127,7 @@ def generate_music(
             beat_stability=params.beat_stability,
             frequency_damping=params.frequency_damping,
             temporal_smoothing=params.temporal_smoothing,
+            stork_substeps=params.stork_substeps,
             guidance_scale_text=params.guidance_scale_text,
             guidance_scale_lyric=params.guidance_scale_lyric,
             apg_momentum=params.apg_momentum,
