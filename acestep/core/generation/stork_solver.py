@@ -29,6 +29,13 @@ ModelFn = Callable[[Tensor, float], Tensor]
 DEFAULT_SUBSTEPS = 50
 
 
+def _euler_fallback(xt: Tensor, vt: Tensor, dt_val: float) -> Tensor:
+    """Plain Euler step as safety fallback when sub-stepping produces NaN/Inf."""
+    bsz = xt.shape[0]
+    dt_t = dt_val * torch.ones((bsz,), device=xt.device, dtype=xt.dtype).unsqueeze(-1).unsqueeze(-1)
+    return xt - vt * dt_t
+
+
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
@@ -195,6 +202,10 @@ def stork2_step(
 
     xt_next = Y_j.to(orig_dtype)
 
+    # Safety: fall back to Euler if sub-stepping produced NaN/Inf
+    if not torch.isfinite(xt_next).all():
+        xt_next = _euler_fallback(xt, vt, dt_val)
+
     # Update state
     state["step_index"] = step_idx + 1
     history = state.setdefault("velocity_history", [])
@@ -354,6 +365,10 @@ def stork4_step(
     F4 = velocity
 
     xt_next = (Y_j + temp1_4 * F1 + temp2_4 * F2 + temp3_4 * F3 + temp4_4 * F4).to(orig_dtype)
+
+    # Safety: fall back to Euler if sub-stepping produced NaN/Inf
+    if not torch.isfinite(xt_next).all():
+        xt_next = _euler_fallback(xt, vt, dt_val)
 
     # Update state
     state["step_index"] = step_idx + 1
