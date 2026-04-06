@@ -218,6 +218,10 @@ def stork4_step(
     dtype = xt.dtype
     step_idx = state.get("step_index", 0)
     s = state.get("stork_substeps", DEFAULT_SUBSTEPS)
+    # ROCK4 precomputed coefficients only go up to degree 148
+    MAX_ROCK4_SUBSTEPS = int(MS.max())
+    if s > MAX_ROCK4_SUBSTEPS:
+        s = MAX_ROCK4_SUBSTEPS
     dt_val = t_curr - t_prev
 
     # --- Bootstrap: step 0 uses plain Euler ---

@@ -395,10 +395,10 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
                                         <EditableSlider
                                             label="Sub-Steps"
                                             value={props.storkSubsteps ?? 50}
-                                            min={10} max={200} step={5}
+                                            min={10} max={148} step={2}
                                             onChange={(v) => props.onStorkSubstepsChange?.(v)}
                                             formatDisplay={(v) => String(v)}
-                                            helpText="Internal RKG/ROCK sub-iterations per step — more = stabler but diminishing returns (default: 50)"
+                                            helpText="Internal RKG/ROCK sub-iterations per step — more = stabler but diminishing returns (default: 50, max 148 for STORK 4)"
                                         />
                                     </div>
                                 )}
