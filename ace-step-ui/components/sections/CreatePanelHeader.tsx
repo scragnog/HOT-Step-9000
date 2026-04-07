@@ -214,7 +214,7 @@ export const CreatePanelHeader: React.FC<CreatePanelHeaderProps> = ({
                     </div>
                     <div className="mt-1 px-3 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700/50">
                         <p className="text-[10px] text-zinc-500 dark:text-zinc-400">
-                            🔒 LoRA / LoKR adapters are incompatible with XL models (different architecture dimensions)
+                            ⚠️ XL models require adapters trained specifically on the XL architecture — standard 1.5B adapters are not compatible
                         </p>
                     </div>
                 </>

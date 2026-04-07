@@ -82,7 +82,7 @@ The XL variants are **twice the parameter count** (4B vs 1.5B) of the standard m
 | `acestep-v15-xl-base` | XL base model. | 40+ | ~10 GB |
 | `acestep-v15-merge-sft-turbo-xl-ta-0.5` | Community SFT+Turbo merge at α=0.5 by [jeankassio](https://huggingface.co/jeankassio). Blends SFT quality with Turbo speed. | 15–30 | ~20 GB |
 
-> **Note:** XL models do not currently support adapter (LoRA/LoKr) loading due to their different architecture. Multi-batch generation (`batch_size > 1`) is also not recommended for XL models at this time.
+> **Note:** XL models support LoRA/LoKr adapters, but only those **trained specifically on the XL architecture** — standard 1.5B adapters are not compatible due to different layer dimensions. Multi-batch generation (`batch_size > 1`) is also not recommended for XL models at this time.
 
 **Download via CLI:**
 ```bash
