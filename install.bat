@@ -252,7 +252,68 @@ if /i "!COVERART_CHOICE!"=="Y" (
 echo.
 
 :: -------------------------------------------------------------------
-:: 5d. Optional: Download Redmond Mode (DPO Quality Refinement)
+:: 5d. Optional: Download XL (4B DiT) Models
+:: -------------------------------------------------------------------
+echo.
+echo  ============================================================
+echo    Optional: XL (4B DiT) Models
+echo  ============================================================
+echo.
+echo    The XL models are larger, higher-quality 4B-parameter DiT
+echo    variants of ACE-Step 1.5. They produce richer audio but
+echo    require more VRAM (~12 GB minimum).
+echo    Size: ~10 GB each
+echo.
+echo    1) XL Turbo only  (fastest XL variant, 8 steps)
+echo    2) All three XL models  (base + sft + turbo)
+echo    3) Skip
+echo.
+
+set /p XL_CHOICE="  Your choice [1/2/3] (default=3): "
+if "%XL_CHOICE%"=="" set XL_CHOICE=3
+
+if "%XL_CHOICE%"=="1" (
+    echo.
+    echo  Downloading XL Turbo model...
+    python -m acestep.model_downloader --model acestep-v15-xl-turbo --skip-main
+    if errorlevel 1 (
+        echo  WARNING: XL Turbo download had errors. You can retry later with:
+        echo    python -m acestep.model_downloader --model acestep-v15-xl-turbo --skip-main
+    ) else (
+        echo  XL Turbo model downloaded successfully.
+    )
+) else if "%XL_CHOICE%"=="2" (
+    echo.
+    echo  Downloading all XL models...
+    echo.
+    echo  [1/3] XL Base...
+    python -m acestep.model_downloader --model acestep-v15-xl-base --skip-main
+    if errorlevel 1 (
+        echo  WARNING: XL Base download had errors.
+    )
+    echo.
+    echo  [2/3] XL SFT...
+    python -m acestep.model_downloader --model acestep-v15-xl-sft --skip-main
+    if errorlevel 1 (
+        echo  WARNING: XL SFT download had errors.
+    )
+    echo.
+    echo  [3/3] XL Turbo...
+    python -m acestep.model_downloader --model acestep-v15-xl-turbo --skip-main
+    if errorlevel 1 (
+        echo  WARNING: XL Turbo download had errors.
+    )
+    echo.
+    echo  XL model downloads complete.
+) else (
+    echo  Skipping XL models. They will auto-download on first use if selected,
+    echo  or you can download later with:
+    echo    python -m acestep.model_downloader --model acestep-v15-xl-turbo --skip-main
+)
+echo.
+
+:: -------------------------------------------------------------------
+:: 5e. Optional: Download Redmond Mode (DPO Quality Refinement)
 :: -------------------------------------------------------------------
 echo.
 echo  ============================================================
