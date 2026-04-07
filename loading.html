@@ -430,9 +430,10 @@
                     <option value="auto">Auto (tier-based)</option>
                     <option value="int8_weight_only">INT8 — ~50% VRAM reduction, no quality loss</option>
                     <option value="int4_weight_only">INT4 — ~75% VRAM reduction, experimental</option>
+                    <option value="nf4">NF4 — ~75% VRAM reduction, better quality than INT4</option>
                     <option value="none">None — full precision (most VRAM)</option>
                 </select>
-                <div style="font-size:.62rem;color:#666;margin-top:.2rem">Reduces DiT model weight memory via torchao. INT8 is safe; INT4 saves more VRAM but may affect audio quality.</div>
+                <div style="font-size:.62rem;color:#666;margin-top:.2rem">Reduces DiT model weight memory via torchao. INT8 is safe; INT4/NF4 save more VRAM but may affect audio quality. NF4 uses a non-uniform distribution optimised for neural networks.</div>
             </div>
             <div class="toggle-row" id="redmondRow" style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid rgba(255,255,255,.06)">
                 <div class="toggle-info">

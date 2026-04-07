@@ -465,7 +465,7 @@ def load_lora_slot(self, lora_path: str, slot: Optional[int] = None) -> str:
     if self.quantization is not None:
         logger.warning(
             f"⚠️ Loading LoRA on quantized model ({self.quantization}) — "
-            "this may fail or produce unexpected results. INT8 usually works, INT4 is risky."
+            "this may fail or produce unexpected results. INT8 usually works, INT4/NF4 are risky."
         )
 
     if not lora_path or not lora_path.strip():

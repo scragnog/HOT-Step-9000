@@ -422,7 +422,7 @@ def add_lora(self, lora_path: str, adapter_name: str | None = None) -> str:
     if self.quantization is not None:
         logger.warning(
             f"⚠️ Loading LoRA on quantized model ({self.quantization}) — "
-            "this may fail or produce unexpected results. INT8 usually works, INT4 is risky."
+            "this may fail or produce unexpected results. INT8 usually works, INT4/NF4 are risky."
         )
 
     # Block adapter loading on XL (4B) models — 2B adapters are incompatible

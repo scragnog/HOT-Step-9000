@@ -203,6 +203,23 @@ class InitServiceLoaderMixin:
                 elif quantization == "w8a8_dynamic":
                     from torchao.quantization import Int8DynamicActivationInt8WeightConfig, MappingType
                     quant_config = Int8DynamicActivationInt8WeightConfig(act_mapping_type=MappingType.ASYMMETRIC)
+                elif quantization == "nf4":
+                    # NF4 uses a different path: manual per-layer weight conversion
+                    # via torchao NF4Tensor (Normal Float 4-bit with non-uniform
+                    # quantization levels tuned to neural network weight distributions).
+                    from torchao.dtypes import to_nf4
+                    import torch.nn as nn
+                    nf4_count = 0
+                    for name, module in self.model.named_modules():
+                        if isinstance(module, nn.Linear):
+                            skip = any(part in name.split(".") for part in ("tokenizer", "detokenizer"))
+                            if not skip:
+                                module.weight = nn.Parameter(
+                                    to_nf4(module.weight), requires_grad=False
+                                )
+                                nf4_count += 1
+                    logger.info(f"[initialize_service] NF4 applied to {nf4_count} linear layers")
+                    quant_config = None  # skip quantize_() call below
                 else:
                     raise ValueError(f"Unsupported quantization type: {quantization}")
 
@@ -215,7 +232,8 @@ class InitServiceLoaderMixin:
                             return False
                     return True
 
-                quantize_(self.model, quant_config, filter_fn=_dit_filter_fn)
+                if quant_config is not None:
+                    quantize_(self.model, quant_config, filter_fn=_dit_filter_fn)
                 logger.info(f"[initialize_service] DiT quantized with: {quantization}")
 
         silence_latent_path = os.path.join(model_checkpoint_path, "silence_latent.pt")

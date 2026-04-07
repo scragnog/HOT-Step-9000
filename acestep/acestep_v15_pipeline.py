@@ -314,7 +314,7 @@ def main():
         "--quantization",
         type=str,
         default=_default_quantization,
-        choices=["int8_weight_only", "int4_weight_only", None],
+        choices=["int8_weight_only", "int4_weight_only", "nf4", None],
         help=f"DiT quantization method (default: {_default_quantization}, auto-detected based on GPU tier)",
     )
     parser.add_argument(
