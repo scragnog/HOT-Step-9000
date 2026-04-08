@@ -184,15 +184,32 @@ class LLMHandler:
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
+            # Diagnostic: show free VRAM after cleanup
+            try:
+                free_bytes, total_bytes = torch.cuda.mem_get_info()
+                free_gb = free_bytes / 1024**3
+                total_gb = total_bytes / 1024**3
+                reserved_gb = torch.cuda.memory_reserved() / 1024**3
+                allocated_gb = torch.cuda.memory_allocated() / 1024**3
+                print(
+                    f"[LLMHandler] Unloaded — VRAM: "
+                    f"free={free_gb:.2f}GB/{total_gb:.2f}GB, "
+                    f"pytorch_reserved={reserved_gb:.2f}GB, "
+                    f"pytorch_allocated={allocated_gb:.2f}GB, "
+                    f"cached_ratio=CLEARED"
+                )
+            except Exception:
+                print("[LLMHandler] Unloaded — VRAM cache flushed.")
         elif hasattr(torch, "mps") and torch.backends.mps.is_available():
             if hasattr(torch.mps, "synchronize"):
                 torch.mps.synchronize()
             if hasattr(torch.mps, "empty_cache"):
                 torch.mps.empty_cache()
+            print("[LLMHandler] Unloaded — VRAM cache flushed.")
         elif hasattr(torch, "xpu") and torch.xpu.is_available():
             torch.xpu.empty_cache()
             torch.xpu.synchronize()
-        print("[LLMHandler] Unloaded — VRAM cache flushed.")
+            print("[LLMHandler] Unloaded — VRAM cache flushed.")
 
     # ── LM LoRA (merge-based) ────────────────────────────────────────
 

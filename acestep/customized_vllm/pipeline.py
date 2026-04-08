@@ -174,9 +174,25 @@ class InferencePipeline:
         block_bytes = 2 * hf.num_hidden_layers * self.block_size * num_kv_heads * head_dim * self.dtype.itemsize
 
         target = total * self.gpu_memory_utilization
-        avail = min(free * 0.9, target - current, max(0, free - 1024**3) * 0.9)
+        term_a = free * 0.9
+        term_b = target - current
+        term_c = max(0, free - 1024**3) * 0.9
+        avail = min(term_a, term_b, term_c)
+        used_fallback = False
         if avail <= 0:
             avail = free * 0.5
+            used_fallback = True
+
+        logger.info(
+            f"[customized_vllm] KV budget: "
+            f"free={free / 1024**3:.2f}GB, total={total / 1024**3:.2f}GB, "
+            f"pytorch_alloc={current / 1024**3:.2f}GB, "
+            f"gpu_mem_util={self.gpu_memory_utilization:.3f}, "
+            f"target={target / 1024**3:.2f}GB, "
+            f"terms=[{term_a / 1024**3:.2f}, {term_b / 1024**3:.2f}, {term_c / 1024**3:.2f}], "
+            f"avail={avail / 1024**3:.2f}GB"
+            f"{' (FALLBACK: avail was <=0)' if used_fallback else ''}"
+        )
 
         self._num_cache_blocks = max(1, int(avail) // block_bytes)
         cap = self._num_cache_blocks * self.block_size
