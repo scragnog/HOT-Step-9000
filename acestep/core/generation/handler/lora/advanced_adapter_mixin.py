@@ -24,16 +24,16 @@ MAX_ADAPTER_SLOTS = 4
 
 
 def _dequantize_decoder_nf4(model) -> int:
-    """Dequantize all NF4Tensor weights in the decoder back to their original dtype.
+    """Dequantize all NF4Tensor weights in the decoder back to bfloat16.
 
     This must be called before adapter operations (backup, PEFT injection, merge)
     because NF4Tensor does not support in-place operations, state_dict round-trips,
     or parameter assignment that the adapter pipeline requires.
 
-    Uses multiple fallback strategies for different torchao versions:
-    1. weight.dequantize() — standard torchao method
-    2. weight.get_original_weight() — older torchao versions
-    3. weight.data.to(torch.bfloat16) — last resort float cast
+    Uses ``weight.data.float()`` which goes through NF4Tensor's
+    ``__torch_dispatch__`` to properly dequantize, then casts to bfloat16.
+    This is more reliable than ``.dequantize()`` which is a classmethod in
+    some torchao versions (requires ``(value, nf4)`` positional args).
 
     Returns:
         Number of parameters dequantized.
@@ -53,35 +53,16 @@ def _dequantize_decoder_nf4(model) -> int:
         if w_type in ("Tensor", "Parameter"):
             continue
 
-        # Try multiple dequantization strategies
-        deq = None
         try:
-            if hasattr(w, 'dequantize'):
-                deq = w.dequantize().detach()
-            elif hasattr(w.data, 'dequantize'):
-                deq = w.data.dequantize().detach()
-            elif hasattr(w, 'get_original_weight'):
-                deq = w.get_original_weight().detach()
-            else:
-                # Last resort: cast through float
-                deq = w.data.to(torch.bfloat16).detach()
-        except Exception as e:
-            logger.warning(
-                f"[NF4 compat] Failed to dequantize {_name} "
-                f"(type={w_type}): {e}"
-            )
-            # Absolute last resort: try going through CPU float
-            try:
-                deq = w.data.float().cpu().to(torch.bfloat16).detach()
-                logger.info(f"[NF4 compat] Recovered {_name} via float() fallback")
-            except Exception as e2:
-                logger.error(f"[NF4 compat] All dequantization strategies failed for {_name}: {e2}")
-                errors += 1
-                continue
-
-        if deq is not None:
+            # float() goes through NF4Tensor.__torch_dispatch__ → proper dequant
+            deq = w.data.float().to(torch.bfloat16).detach()
             module.weight = nn.Parameter(deq, requires_grad=False)
             count += 1
+        except Exception as e:
+            logger.error(
+                f"[NF4 compat] Cannot dequantize {_name} (type={w_type}): {e}"
+            )
+            errors += 1
 
     logger.info(
         f"[NF4 compat] Dequantized {count} linear layers for adapter operations"
@@ -604,11 +585,13 @@ def load_lora_slot(self, lora_path: str, slot: Optional[int] = None) -> str:
             logger.info("Backing up base decoder state_dict to CPU")
             backup = {}
             for k, v in self.model.decoder.state_dict().items():
-                # Dequantize torchao quantized tensors so merge math works
-                if hasattr(v, 'dequantize'):
-                    backup[k] = v.dequantize().detach().cpu().clone()
-                else:
+                # After _dequantize_decoder_nf4, weights should be plain bf16.
+                # Use float() as a safe universal path that handles any
+                # remaining quantized tensors via __torch_dispatch__.
+                try:
                     backup[k] = v.detach().cpu().clone()
+                except Exception:
+                    backup[k] = v.float().to(torch.bfloat16).detach().cpu().clone()
             self._base_decoder = backup
             backup_mb = sum(v.numel() * v.element_size() for v in self._base_decoder.values()) / (1024**2)
             logger.info(f"Base decoder backed up ({backup_mb:.1f}MB)")
