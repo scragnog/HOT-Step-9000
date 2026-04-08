@@ -290,7 +290,7 @@ export const RecentSongsList: React.FC<RecentSongsListProps> = ({ onPlaySong, sh
 
 const AddToPlaylistBtn: React.FC<{ rs: RecentSong }> = ({ rs }) => {
   const playlist = usePlaylist();
-  const itemId = rs.ag_id || `recent-${rs.song_title}`;
+  const itemId = String(rs.ag_id) || `recent-${rs.song_title}`;
   const inPlaylist = playlist.isIn(itemId);
 
   const toggle = (e: React.MouseEvent) => {
