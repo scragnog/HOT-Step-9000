@@ -1,5 +1,6 @@
 """LoRA/LoKr adapter load/unload lifecycle management."""
 
+import gc
 import json
 import dataclasses
 import os
@@ -14,6 +15,31 @@ from acestep.debug_utils import debug_log
 from acestep.core.generation.handler.lora.lokr_config import LoKRConfig
 
 LOKR_WEIGHTS_FILENAME = "lokr_weights.safetensors"
+
+
+def _flush_vram(label: str = "") -> None:
+    """Force Python GC and release cached CUDA/MPS memory back to the OS.
+
+    Call at every VRAM-sensitive transition point (before/after PEFT wrapping,
+    after state_dict backup, after adapter unload, etc.) to reclaim fragmented
+    blocks and maximize contiguous free VRAM.
+    """
+    gc.collect()
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            alloc = torch.cuda.memory_allocated() / (1024**3)
+            reserved = torch.cuda.memory_reserved() / (1024**3)
+            logger.debug(
+                f"VRAM flush{f' ({label})' if label else ''}: "
+                f"allocated={alloc:.2f}GB, reserved={reserved:.2f}GB"
+            )
+        elif hasattr(torch, "mps") and hasattr(torch.mps, "empty_cache"):
+            torch.mps.empty_cache()
+    except Exception:
+        pass
 
 
 def _try_prepare_bare_peft_safetensors(safetensors_path: str) -> Optional[str]:
@@ -502,12 +528,14 @@ def add_lora(self, lora_path: str, adapter_name: str | None = None) -> str:
             if self._base_decoder is None:
                 if hasattr(self, "_memory_allocated"):
                     mem_before = self._memory_allocated() / (1024**3)
-                    logger.info(f"VRAM before LoRA load: {mem_before:.2f}GB")
+                    logger.info(f"VRAM before LoRA backup: {mem_before:.2f}GB")
                 try:
                     state_dict = decoder.state_dict()
                     if not state_dict:
                         raise ValueError("state_dict is empty - cannot backup decoder")
-                    # Dequantize torchao quantized tensors so LoRA merge math works
+                    # Dequantize torchao quantized tensors so LoRA merge math works.
+                    # Process one tensor at a time to minimise transient VRAM from
+                    # dequantize() creating temporary bf16 tensors on GPU.
                     backup = {}
                     for k, v in state_dict.items():
                         if hasattr(v, 'dequantize'):
@@ -515,11 +543,24 @@ def add_lora(self, lora_path: str, adapter_name: str | None = None) -> str:
                         else:
                             backup[k] = v.detach().cpu().clone()
                     self._base_decoder = backup
+                    del backup  # alias no longer needed
                 except Exception as e:
                     logger.error(f"Failed to create state_dict backup: {e}")
                     raise
+                finally:
+                    # Release state_dict GPU tensor references ASAP — holding them
+                    # through PEFT wrapping prevents the CUDA allocator from reusing
+                    # those memory blocks and can push 16GB GPUs over the edge.
+                    try:
+                        del state_dict
+                    except NameError:
+                        pass
+                    _flush_vram("post-backup")
                 backup_size_mb = sum(v.numel() * v.element_size() for v in self._base_decoder.values()) / (1024**2)
                 logger.info(f"Base decoder state_dict backed up to CPU ({backup_size_mb:.1f}MB)")
+
+            # Flush VRAM before adapter injection — maximise contiguous free blocks
+            _flush_vram("pre-adapter-inject")
 
             if lokr_weights_path is not None:
                 logger.info(f"Loading LoKr adapter from {lokr_weights_path} as '{effective_name}'")
@@ -552,8 +593,11 @@ def add_lora(self, lora_path: str, adapter_name: str | None = None) -> str:
             self.model.decoder.load_adapter(lora_path, adapter_name=effective_name)
             self._adapter_type = "lora"
 
+        # Flush stale CUDA blocks from adapter injection before casting
+        _flush_vram("post-adapter-inject")
         self.model.decoder = self.model.decoder.to(self.device).to(self.dtype)
         self.model.decoder.eval()
+        _flush_vram("post-adapter-cast")
 
         if hasattr(self, "_memory_allocated"):
             mem_after = self._memory_allocated() / (1024**3)
@@ -648,6 +692,7 @@ def remove_lora(self, adapter_name: str) -> str:
         decoder.delete_adapter(adapter_name)
         _active_loras.pop(adapter_name, None)
         remaining = list(_active_loras.keys())
+        _flush_vram("post-delete-adapter")
 
         if not remaining:
             # No adapters left: restore base decoder
@@ -664,17 +709,20 @@ def remove_lora(self, adapter_name: str) -> str:
                 self._lora_adapter_registry = {}
                 self._lora_active_adapter = None
                 self._lora_scale_state = {}
+                _flush_vram("post-remove-no-backup")
                 return "✅ Last adapter removed; base decoder still wrapped (no backup). Restart or load a new LoRA."
             mem_before = None
             if hasattr(self, "_memory_allocated"):
                 mem_before = self._memory_allocated() / (1024**3)
                 logger.info(f"VRAM before LoRA unload: {mem_before:.2f}GB")
             self.model.decoder = decoder.get_base_model()
+            _flush_vram("post-get-base-model")
             load_result = self.model.decoder.load_state_dict(self._base_decoder, strict=False, assign=True)
             if load_result.missing_keys:
                 logger.warning(f"Missing keys when restoring decoder: {load_result.missing_keys[:5]}")
             if load_result.unexpected_keys:
                 logger.warning(f"Unexpected keys when restoring decoder: {load_result.unexpected_keys[:5]}")
+            _flush_vram("pre-restore-cast")
             self.model.decoder = self.model.decoder.to(self.device).to(self.dtype)
             self.model.decoder.eval()
             self.lora_loaded = False
@@ -689,6 +737,7 @@ def remove_lora(self, adapter_name: str) -> str:
             self._lora_adapter_registry = {}
             self._lora_active_adapter = None
             self._lora_scale_state = {}
+            _flush_vram("post-restore-complete")
             if mem_before is not None and hasattr(self, "_memory_allocated"):
                 mem_after = self._memory_allocated() / (1024**3)
                 logger.info(f"VRAM after LoRA unload: {mem_after:.2f}GB (freed: {mem_before - mem_after:.2f}GB)")
@@ -739,6 +788,7 @@ def unload_lora(self) -> str:
             else:
                 logger.warning("Decoder has _lycoris_net but no restore() method; continuing with state_dict restore")
             self.model.decoder._lycoris_net = None
+            _flush_vram("post-lycoris-restore")
 
         try:
             from peft import PeftModel
@@ -752,6 +802,7 @@ def unload_lora(self) -> str:
             # Linear layers (LoraLayer) in place — their forward hooks keep applying
             # the delta, so unload appears to have no effect.
             self.model.decoder = self.model.decoder.merge_and_unload()
+            _flush_vram("post-merge-and-unload")
             load_result = self.model.decoder.load_state_dict(self._base_decoder, strict=False, assign=True)
             if load_result.missing_keys:
                 logger.warning(f"Missing keys when restoring decoder: {load_result.missing_keys[:5]}")
@@ -765,6 +816,7 @@ def unload_lora(self) -> str:
             if load_result.unexpected_keys:
                 logger.warning(f"Unexpected keys when restoring decoder: {load_result.unexpected_keys[:5]}")
 
+        _flush_vram("pre-unload-cast")
         self.model.decoder = self.model.decoder.to(self.device).to(self.dtype)
         self.model.decoder.eval()
 
@@ -786,6 +838,7 @@ def unload_lora(self) -> str:
         self._lora_active_adapter = None
         self._lora_scale_state = {}
 
+        _flush_vram("post-unload-complete")
         if mem_before is not None and hasattr(self, "_memory_allocated"):
             mem_after = self._memory_allocated() / (1024**3)
             logger.info(f"VRAM after LoRA unload: {mem_after:.2f}GB (freed: {mem_before - mem_after:.2f}GB)")
