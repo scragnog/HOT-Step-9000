@@ -31,7 +31,7 @@ let _cachedRefreshKey = -1;
 let _fetchInFlight = false;
 
 async function _loadRecentSongs(): Promise<RecentSong[]> {
-  const res = await lireekApi.getRecentSongs(30);
+  const res = await lireekApi.getRecentSongs(50);
   // Only keep songs that have pre-resolved audio URLs
   return (res.songs || []).filter(s => !!s.audio_url);
 }
@@ -211,8 +211,8 @@ export const RecentSongsList: React.FC<RecentSongsListProps> = ({ onPlaySong, sh
 
   return (
     <>
-      <div className="grid grid-cols-2 grid-rows-4 gap-1 px-2 py-1.5 h-full">
-        {songs.slice(0, 8).map((rs) => {
+      <div className="flex flex-col gap-1 px-2 py-1.5 overflow-y-auto scrollbar-hide" style={{ maxHeight: '100%' }}>
+        {songs.slice(0, 50).map((rs) => {
           const dur = rs.duration || 0;
           const mins = Math.floor(dur / 60);
           const secs = String(Math.floor(dur % 60)).padStart(2, '0');

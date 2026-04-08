@@ -885,6 +885,17 @@ def delete_audio_generation(ag_id: int) -> bool:
         conn.close()
 
 
+def delete_all_audio_generations() -> int:
+    """Delete ALL audio generation records (music, not lyrics). Returns count deleted."""
+    conn = _connect()
+    try:
+        cursor = conn.execute("DELETE FROM audio_generations")
+        conn.commit()
+        return cursor.rowcount
+    finally:
+        conn.close()
+
+
 def get_recent_audio_generations(limit: int = 30) -> list[dict[str, Any]]:
     """Return recent audio generations across ALL artists with full context.
 

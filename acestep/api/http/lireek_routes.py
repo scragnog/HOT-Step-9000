@@ -1052,6 +1052,13 @@ def register_lireek_routes(app: FastAPI) -> None:
             return JSONResponse(status_code=404, content={"error": "Audio generation not found"})
         return {"deleted": True}
 
+    @app.delete("/api/lireek/audio-generations")
+    async def delete_all_audio_generations_route():
+        """Delete ALL audio generation records (music only, preserves lyrics/profiles)."""
+        from acestep.api.lireek.lireek_db import delete_all_audio_generations
+        count = delete_all_audio_generations()
+        return {"deleted": True, "count": count}
+
     @app.get("/api/lireek/recent-songs")
     async def get_recent_songs(limit: int = 30):
         """Return recent Lireek audio generations across all artists."""

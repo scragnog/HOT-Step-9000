@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, User as UserIcon, Palette, Info, Edit3, ExternalLink, Globe, ChevronDown, Github, Save, Activity, Sliders, Download, Zap, Tag } from 'lucide-react';
+import { X, User as UserIcon, Palette, Info, Edit3, ExternalLink, Globe, ChevronDown, Github, Save, Activity, Sliders, Download, Zap, Tag, Trash2, Music } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useI18n } from '../context/I18nContext';
 import { EditProfileModal } from './EditProfileModal';
@@ -51,6 +51,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
     const [triggerPlacement, setTriggerPlacement] = useState<'prepend' | 'append' | 'replace'>(() =>
         (localStorage.getItem('ace-globalTriggerPlacement') as 'prepend' | 'append' | 'replace') || 'prepend'
     );
+    const [lsClearLoading, setLsClearLoading] = useState(false);
 
     // Redmond Mode state
     const [redmondEnabled, setRedmondEnabled] = useState(false);
@@ -712,6 +713,45 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
                                     <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-zinc-500 pointer-events-none" />
                                 </div>
                             </div>
+                        </div>
+                    </div>
+
+                    {/* Lyric Studio Data Section */}
+                    <div className="space-y-4">
+                        <div className="flex items-center gap-2 text-zinc-900 dark:text-white">
+                            <Music size={20} />
+                            <h3 className="font-semibold">Lyric Studio Data</h3>
+                        </div>
+                        <div className="pl-7 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-zinc-900 dark:text-white font-medium">Clear all music generations</p>
+                                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">Delete all audio generation records from Lyric Studio. Lyrics, profiles, and presets are kept.</p>
+                                </div>
+                            </div>
+                            <button
+                                onClick={async () => {
+                                    if (!confirm('This will delete ALL music generation records from Lyric Studio.\n\nLyrics, profiles, and album presets will NOT be affected.\n\nThis cannot be undone. Continue?')) return;
+                                    setLsClearLoading(true);
+                                    try {
+                                        const res = await fetch('/api/lireek/audio-generations', { method: 'DELETE' });
+                                        if (res.ok) {
+                                            const data = await res.json();
+                                            alert(`Deleted ${data.count} music generation records.`);
+                                        } else {
+                                            alert('Failed to delete. Check console for details.');
+                                        }
+                                    } catch (err) {
+                                        alert('Network error. Is the backend running?');
+                                    }
+                                    setLsClearLoading(false);
+                                }}
+                                disabled={lsClearLoading}
+                                className="w-full py-2 px-4 text-sm font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-800/50 rounded-lg hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                            >
+                                <Trash2 size={14} />
+                                {lsClearLoading ? 'Deleting...' : 'Delete All Music Generations'}
+                            </button>
                         </div>
                     </div>
 
