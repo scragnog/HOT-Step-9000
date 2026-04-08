@@ -18,8 +18,10 @@ export const getModelDisplayName = (modelId: string): string => {
     'acestep-v15-xl-base': 'XL-B',
     'acestep-v15-xl-sft': 'XL-S',
     'acestep-v15-xl-turbo': 'XL-T',
-    // Community merge models
-    'acestep-v15-merge-sft-turbo-xl-ta-0.5': 'XL-M',
+    // XL merge models
+    'acestep-v15-merge-sft-turbo-xl-ta-0.5': 'XL-ST',
+    'acestep-v15-merge-base-turbo-xl-ta-0.5': 'XL-BT',
+    'acestep-v15-merge-base-sft-xl-ta-0.5': 'XL-BS',
   };
   return mapping[modelId] || modelId;
 };
@@ -43,7 +45,7 @@ export const isBaseOnlyTask = (task: string): boolean => {
   return ['extract', 'lego', 'complete'].includes(task);
 };
 
-/** Check if model is an XL (4B DiT) variant — needs ≥16GB VRAM, no adapter support */
+/** Check if model is an XL (4B DiT) variant — needs ≥16GB VRAM, requires XL-trained adapters */
 export const isXlModel = (modelId: string): boolean => {
   return modelId.includes('-xl-');
 };

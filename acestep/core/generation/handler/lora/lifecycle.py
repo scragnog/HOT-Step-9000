@@ -425,14 +425,14 @@ def add_lora(self, lora_path: str, adapter_name: str | None = None) -> str:
             "this may fail or produce unexpected results. INT8 usually works, INT4/NF4 are risky."
         )
 
-    # Block adapter loading on XL (4B) models — 2B adapters are incompatible
+    # Warn when loading adapters on XL (4B) models — only XL-trained adapters are compatible
     from acestep.gpu_config import is_xl_model
     config_path = (getattr(self, "last_init_params", None) or {}).get("config_path", "")
     if is_xl_model(config_path):
-        return (
-            "❌ LoRA/LoKR adapters are not compatible with XL (4B) models. "
-            "Adapters trained on the 2B architecture have different dimensions. "
-            f"Current model: {config_path}"
+        logger.warning(
+            f"⚠️ Loading adapter on XL model ({config_path}). "
+            "Only adapters trained on the XL (4B) architecture will work — "
+            "standard 2B adapters have incompatible dimensions and will fail to load."
         )
 
     if not lora_path or not lora_path.strip():
