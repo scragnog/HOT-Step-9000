@@ -39,6 +39,8 @@ export interface AudioQueueItem {
   stage?: string;
   elapsed?: number;    // seconds
   error?: string;
+  /** Resolved audio URL (set on success for inline playback) */
+  audioUrl?: string;
 }
 
 export interface AudioGenQueueState {
@@ -424,6 +426,10 @@ async function _pollUntilDone(item: AudioQueueItem, token: string): Promise<void
       if (status.status === 'succeeded') {
         // Resolve and persist audio URL + cover art to Lireek DB
         const audioUrl = status.result?.audioUrls?.[0];
+        if (audioUrl) {
+          item.audioUrl = audioUrl;
+          _emit(); // persist audioUrl so it survives reload
+        }
         if (audioUrl && jobId) {
           let coverUrl: string | undefined;
           try {
