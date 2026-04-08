@@ -173,6 +173,12 @@ class LLMHandler:
         self._mlx_model_path = None
         self._hf_model_for_scoring = None
 
+        # Clear cached vLLM memory ratios so the next initialize() recalculates
+        # them for the new model's actual size instead of reusing a stale value
+        # from a previously-loaded (potentially much larger) model.
+        self._vllm_gpu_memory_utilization = None
+        self._vllm_max_model_len = None
+
         # Force Python GC then flush the CUDA cache
         gc.collect()
         if torch.cuda.is_available():
