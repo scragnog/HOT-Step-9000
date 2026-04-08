@@ -128,8 +128,8 @@ router.post('/lm/backend', authMiddleware, async (req: AuthenticatedRequest, res
 // No auth required — only called during startup before app is fully loaded
 router.post('/update-env', async (req: any, res: Response) => {
     try {
-        const { ACESTEP_CONFIG_PATH, ACESTEP_LM_MODEL_PATH, ACESTEP_LM_BACKEND, ACESTEP_REDMOND_MODE, ACESTEP_REDMOND_SCALE, ACESTEP_NO_INIT, ACESTEP_QUANTIZATION, ACESTEP_LM_GPU_LAYERS, ACESTEP_GGUF_QUANT } = req.body;
-        if (!ACESTEP_CONFIG_PATH && !ACESTEP_LM_MODEL_PATH && !ACESTEP_LM_BACKEND && ACESTEP_REDMOND_MODE === undefined && !ACESTEP_REDMOND_SCALE && ACESTEP_NO_INIT === undefined && ACESTEP_QUANTIZATION === undefined && ACESTEP_LM_GPU_LAYERS === undefined && ACESTEP_GGUF_QUANT === undefined) {
+        const { ACESTEP_CONFIG_PATH, ACESTEP_LM_MODEL_PATH, ACESTEP_LM_BACKEND, ACESTEP_REDMOND_MODE, ACESTEP_REDMOND_SCALE, ACESTEP_NO_INIT, ACESTEP_QUANTIZATION, ACESTEP_LM_GPU_LAYERS, ACESTEP_GGUF_QUANT, ACESTEP_ADAPTER_MERGE_MODE } = req.body;
+        if (!ACESTEP_CONFIG_PATH && !ACESTEP_LM_MODEL_PATH && !ACESTEP_LM_BACKEND && ACESTEP_REDMOND_MODE === undefined && !ACESTEP_REDMOND_SCALE && ACESTEP_NO_INIT === undefined && ACESTEP_QUANTIZATION === undefined && ACESTEP_LM_GPU_LAYERS === undefined && ACESTEP_GGUF_QUANT === undefined && ACESTEP_ADAPTER_MERGE_MODE === undefined) {
             res.status(400).json({ error: 'At least one setting required' });
             return;
         }
@@ -254,8 +254,20 @@ router.post('/update-env', async (req: any, res: Response) => {
             }
         }
 
+        // VRAM-optimized adapter merge mode
+        if (ACESTEP_ADAPTER_MERGE_MODE !== undefined) {
+            if (/^ACESTEP_ADAPTER_MERGE_MODE=.*/m.test(envContent)) {
+                envContent = envContent.replace(
+                    /^ACESTEP_ADAPTER_MERGE_MODE=.*/m,
+                    `ACESTEP_ADAPTER_MERGE_MODE=${ACESTEP_ADAPTER_MERGE_MODE}`
+                );
+            } else {
+                envContent = envContent.trimEnd() + `\nACESTEP_ADAPTER_MERGE_MODE=${ACESTEP_ADAPTER_MERGE_MODE}\n`;
+            }
+        }
+
         fs.writeFileSync(envPath, envContent, 'utf-8');
-        console.log(`[Models] .env updated: CONFIG_PATH=${ACESTEP_CONFIG_PATH || '(unchanged)'}, LM_MODEL_PATH=${ACESTEP_LM_MODEL_PATH || '(unchanged)'}, LM_BACKEND=${ACESTEP_LM_BACKEND || '(unchanged)'}, REDMOND_MODE=${ACESTEP_REDMOND_MODE ?? '(unchanged)'}, NO_INIT=${ACESTEP_NO_INIT ?? '(unchanged)'}, QUANTIZATION=${ACESTEP_QUANTIZATION ?? '(unchanged)'}, LM_GPU_LAYERS=${ACESTEP_LM_GPU_LAYERS ?? '(unchanged)'}, GGUF_QUANT=${ACESTEP_GGUF_QUANT ?? '(unchanged)'}`);
+        console.log(`[Models] .env updated: CONFIG_PATH=${ACESTEP_CONFIG_PATH || '(unchanged)'}, LM_MODEL_PATH=${ACESTEP_LM_MODEL_PATH || '(unchanged)'}, LM_BACKEND=${ACESTEP_LM_BACKEND || '(unchanged)'}, REDMOND_MODE=${ACESTEP_REDMOND_MODE ?? '(unchanged)'}, NO_INIT=${ACESTEP_NO_INIT ?? '(unchanged)'}, QUANTIZATION=${ACESTEP_QUANTIZATION ?? '(unchanged)'}, LM_GPU_LAYERS=${ACESTEP_LM_GPU_LAYERS ?? '(unchanged)'}, GGUF_QUANT=${ACESTEP_GGUF_QUANT ?? '(unchanged)'}, ADAPTER_MERGE_MODE=${ACESTEP_ADAPTER_MERGE_MODE ?? '(unchanged)'}`);
         res.json({ success: true });
     } catch (error: any) {
         console.error('[Models] Failed to update .env:', error);
@@ -290,7 +302,14 @@ router.get('/env-config', async (_req: any, res: Response) => {
             const matchQuant = qContent.match(/^ACESTEP_QUANTIZATION=(.*)$/m);
             if (matchQuant) quantization = matchQuant[1].trim().toLowerCase();
         }
-        res.json({ lmBackend, redmondMode, redmondScale, redmondAvailable, quantization });
+        // Read adapter merge mode setting
+        let adapterMergeMode = 'false';
+        if (fs.existsSync(envPath)) {
+            const amContent = fs.readFileSync(envPath, 'utf-8');
+            const matchAm = amContent.match(/^ACESTEP_ADAPTER_MERGE_MODE=(.*)$/m);
+            if (matchAm) adapterMergeMode = matchAm[1].trim().toLowerCase();
+        }
+        res.json({ lmBackend, redmondMode, redmondScale, redmondAvailable, quantization, adapterMergeMode });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }

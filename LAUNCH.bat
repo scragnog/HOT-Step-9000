@@ -53,9 +53,11 @@ if exist ".env" (
 REM Read Redmond Mode settings from .env
 set "CURRENT_REDMOND_MODE=false"
 set "CURRENT_REDMOND_SCALE=0.7"
+set "CURRENT_ADAPTER_MERGE_MODE=false"
 if exist ".env" (
     for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_REDMOND_MODE=" ".env"') do set "CURRENT_REDMOND_MODE=%%b"
     for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_REDMOND_SCALE=" ".env"') do set "CURRENT_REDMOND_SCALE=%%b"
+    for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_ADAPTER_MERGE_MODE=" ".env"') do set "CURRENT_ADAPTER_MERGE_MODE=%%b"
 )
 
 REM Check if Redmond adapter is available on disk
@@ -107,6 +109,7 @@ echo var CURRENT_NO_INIT = '%CURRENT_NO_INIT%';
 echo var CURRENT_QUANTIZATION = '%CURRENT_QUANTIZATION%';
 echo var CURRENT_LM_GPU_LAYERS = '%CURRENT_LM_GPU_LAYERS%';
 echo var CURRENT_GGUF_QUANT = '%CURRENT_GGUF_QUANT%';
+echo var CURRENT_ADAPTER_MERGE_MODE = '%CURRENT_ADAPTER_MERGE_MODE%';
 ) > "%~dp0loading-config.js"
 
 if "%IS_RESTART%"=="0" (

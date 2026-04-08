@@ -519,6 +519,101 @@ def add_lora(self, lora_path: str, adapter_name: str | None = None) -> str:
     if effective_name in _active_loras:
         return f"❌ Adapter name already in use: {effective_name}. Use a different name or remove it first."
 
+    # ── MERGE MODE: bake adapter weights into base model (zero VRAM overhead) ──
+    if getattr(self, "_adapter_merge_mode", False):
+        try:
+            from acestep.core.generation.handler.lora.advanced_adapter_mixin import (
+                _extract_adapter_delta,
+                _apply_merged_weights,
+            )
+
+            # Backup base decoder on first load (same as advanced system)
+            if self._base_decoder is None:
+                logger.info("[Merge mode] Backing up base decoder state_dict to CPU")
+                backup = {}
+                for k, v in self.model.decoder.state_dict().items():
+                    if hasattr(v, 'dequantize'):
+                        backup[k] = v.dequantize().detach().cpu().clone()
+                    else:
+                        backup[k] = v.detach().cpu().clone()
+                self._base_decoder = backup
+                del backup
+                _flush_vram("merge-post-backup")
+                backup_mb = sum(v.numel() * v.element_size() for v in self._base_decoder.values()) / (1024**2)
+                logger.info(f"[Merge mode] Base decoder backed up ({backup_mb:.1f}MB)")
+
+            logger.info(f"[Merge mode] Extracting adapter delta from {lora_path}")
+            result = _extract_adapter_delta(self, lora_path)
+            adapter_type = result["type"]
+            type_label = "LoRA" if adapter_type == "peft_lora" else "LoKr"
+
+            # Extract trigger word metadata
+            safetensors_file = result.get("safetensors_file") or lokr_weights_path
+            tw, tp = "", ""
+            if safetensors_file:
+                tw, tp = _read_trigger_word_from_safetensors(safetensors_file)
+
+            # Store in merged basic adapters registry
+            self._merged_basic_adapters[effective_name] = {
+                "path": lora_path,
+                "delta": result["delta"],
+                "scale": 1.0,
+                "type": adapter_type,
+                "trigger_word": tw or "",
+                "tag_position": tp or "prepend",
+            }
+
+            # Copy into advanced system's _adapter_slots so _apply_merged_weights works
+            slot_id = self._next_slot_id
+            self._next_slot_id += 1
+            self._adapter_slots[slot_id] = {
+                "path": lora_path,
+                "name": effective_name,
+                "type": adapter_type,
+                "delta": result["delta"],
+                "scale": 1.0,
+                "group_scales": {"self_attn": 1.0, "cross_attn": 1.0, "mlp": 1.0, "cond_embed": 1.0},
+                "layer_scales": {},
+                "trigger_word": tw or "",
+                "tag_position": tp or "prepend",
+            }
+
+            self.lora_loaded = True
+            self.use_lora = True
+            self._active_loras[effective_name] = 1.0
+            self._adapter_type = "lokr" if adapter_type == "lycoris_lokr" else "lora"
+            self._lora_active_adapter = effective_name
+            self._merged_dirty = True
+
+            if tw:
+                self._adapter_trigger_word = tw
+                self._adapter_tag_position = tp or "prepend"
+                logger.info(f"Adapter trigger word: '{tw}' (position: {tp or 'prepend'})")
+            else:
+                self._adapter_trigger_word = ""
+                self._adapter_tag_position = ""
+
+            # Apply merged weights to GPU decoder
+            _apply_merged_weights(self)
+            _flush_vram("merge-post-apply")
+
+            delta_keys = len(result["delta"])
+            logger.info(
+                f"[Merge mode] {type_label} adapter '{effective_name}' merged into base "
+                f"({delta_keys} delta keys, slot {slot_id})"
+            )
+            return f"✅ {type_label} '{effective_name}' merged into model (zero VRAM overhead)"
+        except Exception as e:
+            logger.exception("[Merge mode] Failed to load adapter")
+            return f"❌ Failed to merge adapter: {str(e)}"
+        finally:
+            if _bare_peft_tmp_dir and os.path.isdir(_bare_peft_tmp_dir):
+                try:
+                    shutil.rmtree(_bare_peft_tmp_dir, ignore_errors=True)
+                except Exception:
+                    pass
+
+    # ── PEFT MODE: standard runtime injection ──
     try:  # noqa: SIM117 — need finally for _bare_peft_tmp_dir cleanup
         decoder = self.model.decoder
         is_peft = PeftModel is not None and isinstance(decoder, PeftModel)
@@ -667,6 +762,41 @@ def remove_lora(self, adapter_name: str) -> str:
     if adapter_name not in _active_loras:
         return f"❌ Unknown adapter: {adapter_name}. Loaded: {list(_active_loras.keys())}"
 
+    # ── MERGE MODE: remove from registry and re-merge remaining ──
+    if getattr(self, "_adapter_merge_mode", False) and adapter_name in getattr(self, "_merged_basic_adapters", {}):
+        try:
+            from acestep.core.generation.handler.lora.advanced_adapter_mixin import _apply_merged_weights
+
+            del self._merged_basic_adapters[adapter_name]
+            _active_loras.pop(adapter_name, None)
+
+            # Remove corresponding slot from advanced system
+            slot_to_remove = None
+            for sid, s in self._adapter_slots.items():
+                if s.get("name") == adapter_name:
+                    slot_to_remove = sid
+                    break
+            if slot_to_remove is not None:
+                del self._adapter_slots[slot_to_remove]
+
+            if not self._merged_basic_adapters:
+                self.lora_loaded = False
+                self.use_lora = False
+                self._adapter_type = None
+                self._adapter_trigger_word = ""
+                self._adapter_tag_position = ""
+
+            self._merged_dirty = True
+            _apply_merged_weights(self)  # re-merge remaining (or restore base)
+            _flush_vram("merge-post-remove")
+
+            logger.info(f"[Merge mode] Adapter '{adapter_name}' removed")
+            return f"✅ Adapter '{adapter_name}' removed (merge mode)"
+        except Exception as e:
+            logger.exception("[Merge mode] Failed to remove adapter")
+            return f"❌ Failed to remove adapter: {str(e)}"
+
+    # ── PEFT MODE ──
     try:
         from peft import PeftModel
     except ImportError:
@@ -778,6 +908,36 @@ def unload_lora(self) -> str:
             mem_before = self._memory_allocated() / (1024**3)
             logger.info(f"VRAM before LoRA unload: {mem_before:.2f}GB")
 
+        # ── MERGE MODE: clear registries and restore base via _apply_merged_weights ──
+        if getattr(self, "_adapter_merge_mode", False) and getattr(self, "_merged_basic_adapters", None):
+            from acestep.core.generation.handler.lora.advanced_adapter_mixin import _apply_merged_weights
+
+            self._merged_basic_adapters.clear()
+            # Clear the slots that were created for merge mode
+            self._adapter_slots.clear()
+            self._next_slot_id = 0
+            self.use_lora = False
+            self._merged_dirty = True
+            _apply_merged_weights(self)  # restores base weights
+            _flush_vram("merge-post-unload")
+
+            self.lora_loaded = False
+            self._adapter_type = None
+            self.lora_scale = 1.0
+            self._adapter_trigger_word = ""
+            self._adapter_tag_position = ""
+            _active_loras = getattr(self, "_active_loras", None)
+            if _active_loras is not None:
+                _active_loras.clear()
+
+            if mem_before is not None and hasattr(self, "_memory_allocated"):
+                mem_after = self._memory_allocated() / (1024**3)
+                logger.info(f"VRAM after LoRA unload: {mem_after:.2f}GB (freed: {mem_before - mem_after:.2f}GB)")
+
+            logger.info("[Merge mode] All adapters unloaded, base decoder restored")
+            return "✅ All adapters unloaded, base model restored (merge mode)"
+
+        # ── PEFT MODE ──
         # If this decoder has an attached LyCORIS net, restore original module graph first.
         lycoris_net = getattr(self.model.decoder, "_lycoris_net", None)
         if lycoris_net is not None:

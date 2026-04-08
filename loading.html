@@ -456,6 +456,17 @@
                     <span class="toggle-slider"></span>
                 </label>
             </div>
+            <!-- VRAM-Optimized Adapter Merge Mode Toggle -->
+            <div class="toggle-row" id="mergeModeRow" style="margin-top:.5rem;padding-top:.5rem;border-top:1px solid rgba(255,255,255,.06)">
+                <div class="toggle-info">
+                    <div class="toggle-label">💾 VRAM-Optimized Adapters</div>
+                    <div class="toggle-desc">Merge adapter weights into the model — zero extra VRAM. Scale changes trigger a re-merge (~3-5s).</div>
+                </div>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="mergeModeToggle">
+                    <span class="toggle-slider"></span>
+                </label>
+            </div>
             <div class="env-updated" id="envUpdated">✓ Models saved to .env</div>
             <div class="actions">
                 <button type="button" class="btn btn-secondary" id="btnUpdate" disabled>Waiting for backend...</button>
@@ -522,6 +533,7 @@
         if (typeof CURRENT_QUANTIZATION === 'undefined') var CURRENT_QUANTIZATION = 'auto';
         if (typeof CURRENT_LM_GPU_LAYERS === 'undefined') var CURRENT_LM_GPU_LAYERS = '-1';
         if (typeof CURRENT_GGUF_QUANT === 'undefined') var CURRENT_GGUF_QUANT = 'auto';
+        if (typeof CURRENT_ADAPTER_MERGE_MODE === 'undefined') var CURRENT_ADAPTER_MERGE_MODE = 'false';
 
         document.getElementById('frontend-port').textContent = `(port ${VITE_PORT})`;
 
@@ -721,6 +733,10 @@
         const noInitToggle = document.getElementById('noInitToggle');
         noInitToggle.checked = CURRENT_NO_INIT === 'true';
 
+        // Set Merge Mode Toggle
+        const mergeModeToggle = document.getElementById('mergeModeToggle');
+        mergeModeToggle.checked = CURRENT_ADAPTER_MERGE_MODE === 'true';
+
         // ---- Buttons & Events ----
         const btnLaunch = document.getElementById('btnLaunch');
         const btnUpdate = document.getElementById('btnUpdate');
@@ -752,6 +768,7 @@
                             ACESTEP_QUANTIZATION: quantizationSelect.value,
                             ACESTEP_LM_GPU_LAYERS: gpuLayersSlider.value,
                             ACESTEP_GGUF_QUANT: ggufQuantSelect.value,
+                            ACESTEP_ADAPTER_MERGE_MODE: mergeModeToggle.checked ? 'true' : 'false',
                         }),
                     });
                     if (resp.ok) return true;

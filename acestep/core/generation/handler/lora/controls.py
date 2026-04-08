@@ -38,6 +38,17 @@ def set_use_lora(self, use_lora: bool) -> str:
         return "❌ No LoRA adapter loaded. Please load a LoRA first."
 
     self.use_lora = use_lora
+
+    # ── MERGE MODE: toggle via _apply_merged_weights (restores base or applies merged) ──
+    if getattr(self, "_adapter_merge_mode", False) and getattr(self, "_merged_basic_adapters", None):
+        from acestep.core.generation.handler.lora.advanced_adapter_mixin import _apply_merged_weights
+        self._merged_dirty = True
+        _apply_merged_weights(self)
+        adapter_label = "LoKr" if getattr(self, "_adapter_type", None) == "lokr" else "LoRA"
+        status = "enabled" if use_lora else "disabled"
+        return f"✅ {adapter_label} {status} (merge mode)"
+
+    # ── PEFT MODE ──
     model = getattr(self, "model", None)
     decoder = getattr(model, "decoder", None) if model is not None else None
     if self.lora_loaded and decoder is None:
@@ -114,6 +125,24 @@ def set_lora_scale(self, adapter_name_or_scale: str | float, scale: float | None
 
     adapter_label = "LoKr" if getattr(self, "_adapter_type", None) == "lokr" else "LoRA"
 
+    # ── MERGE MODE: update stored scale and re-merge ──
+    if getattr(self, "_adapter_merge_mode", False) and effective_name in getattr(self, "_merged_basic_adapters", {}):
+        self._merged_basic_adapters[effective_name]["scale"] = scale_value
+        # Also update the corresponding slot in the advanced system
+        for sid, s in self._adapter_slots.items():
+            if s.get("name") == effective_name:
+                s["scale"] = scale_value
+                break
+        if self.use_lora:
+            from acestep.core.generation.handler.lora.advanced_adapter_mixin import _apply_merged_weights
+            self._merged_dirty = True
+            _apply_merged_weights(self)
+            logger.info(f"[Merge mode] {adapter_label} scale for '{effective_name}' set to {scale_value:.2f} (re-merged)")
+        else:
+            logger.info(f"[Merge mode] {adapter_label} scale for '{effective_name}' set to {scale_value:.2f} (will apply when enabled)")
+        return f"✅ {adapter_label} scale ({effective_name}): {scale_value:.2f}"
+
+    # ── PEFT MODE ──
     if not self.use_lora:
         logger.info(f"{adapter_label} scale for '{effective_name}' set to {scale_value:.2f} (will apply when enabled)")
         return f"✅ {adapter_label} scale ({effective_name}): {scale_value:.2f} ({adapter_label} disabled)"
@@ -217,4 +246,5 @@ def get_lora_status(self) -> dict[str, Any]:
         "active_adapter": self._lora_active_adapter,
         "adapters": list(self._lora_service.registry.keys()),
         "synthetic_default_mode": self._lora_service.synthetic_default_mode,
+        "merge_mode": getattr(self, "_adapter_merge_mode", False),
     }

@@ -184,6 +184,13 @@ class AceStepHandler(
         self._lora_adapter_registry = {}  # adapter_name -> explicit scaling targets
         self._lora_active_adapter = None
 
+        # VRAM-optimized merge mode: bake adapter weights into base model instead
+        # of using PEFT runtime injection.  Zero extra VRAM for adapters.
+        self._adapter_merge_mode = os.environ.get(
+            "ACESTEP_ADAPTER_MERGE_MODE", "false"
+        ).strip().lower() in ("1", "true", "yes")
+        self._merged_basic_adapters = {}  # adapter_name -> {path, delta, scale, type, trigger_word, tag_position}
+
         # Advanced adapter state (slot-based weight-space merging)
         self._adapter_slots = {}      # slot_id -> {path, name, type, delta, scale, group_scales}
         self._next_slot_id = 0

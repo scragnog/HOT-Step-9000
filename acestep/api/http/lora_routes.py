@@ -295,12 +295,34 @@ def register_lora_routes(
             "active_adapter": status.get("active_adapter"),
             "adapters": status.get("adapters", []),
             "synthetic_default_mode": bool(status.get("synthetic_default_mode", False)),
+            "merge_mode": bool(status.get("merge_mode", getattr(handler, "_adapter_merge_mode", False))),
         }
         # Include advanced adapter info if any slots are loaded
         if hasattr(handler, "get_advanced_lora_status"):
             advanced = handler.get_advanced_lora_status()
             result["advanced"] = advanced
         return wrap_response(result)
+
+    @app.post("/v1/lora/merge-mode")
+    async def set_merge_mode_endpoint(request: Request, _: None = Depends(verify_api_key)):
+        """Toggle VRAM-optimized adapter merge mode.
+
+        When enabled, adapters are baked into the base model weights instead
+        of using PEFT runtime injection.  Zero extra VRAM for adapters, but
+        scale changes trigger a re-merge (~3-5s).
+        """
+        handler = _require_initialized_handler(app)
+        body = await request.json()
+        enabled = body.get("enabled")
+        if enabled is None:
+            return wrap_response(None, code=400, error="Missing 'enabled' field")
+
+        handler._adapter_merge_mode = bool(enabled)
+        logger.info(f"Adapter merge mode set to: {handler._adapter_merge_mode}")
+        return wrap_response({
+            "merge_mode": handler._adapter_merge_mode,
+            "message": f"Adapter merge mode {'enabled' if handler._adapter_merge_mode else 'disabled'}",
+        })
 
     # ── File browser endpoint ────────────────────────────────────────
 

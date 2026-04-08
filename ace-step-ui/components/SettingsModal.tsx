@@ -60,6 +60,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
     const [redmondLoading, setRedmondLoading] = useState(false);
     const [redmondFetched, setRedmondFetched] = useState(false);
 
+    // VRAM-optimized adapter merge mode
+    const [mergeModeEnabled, setMergeModeEnabled] = useState(false);
+    const [mergeModeLoading, setMergeModeLoading] = useState(false);
+    const [mergeModeFetched, setMergeModeFetched] = useState(false);
+
     // Fetch Redmond status from Python API on first open
     React.useEffect(() => {
         if (!isOpen || redmondFetched) return;
@@ -77,6 +82,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
             } catch { /* Python API might not be running yet */ }
         })();
     }, [isOpen, redmondFetched]);
+
+    // Fetch merge mode status from lora/status
+    React.useEffect(() => {
+        if (!isOpen || mergeModeFetched) return;
+        (async () => {
+            try {
+                const res = await fetch('/api/lora/status');
+                if (res.ok) {
+                    const json = await res.json();
+                    const data = json?.data || json;
+                    setMergeModeEnabled(!!data.merge_mode);
+                    setMergeModeFetched(true);
+                }
+            } catch { /* Python API might not be running yet */ }
+        })();
+    }, [isOpen, mergeModeFetched]);
 
     const handleRedmondToggle = async () => {
         setRedmondLoading(true);
@@ -98,6 +119,28 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
             }
         } catch { }
         setRedmondLoading(false);
+    };
+
+    const handleMergeModeToggle = async () => {
+        setMergeModeLoading(true);
+        try {
+            const next = !mergeModeEnabled;
+            const res = await fetch('/api/lora/merge-mode', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: next }),
+            });
+            if (res.ok) {
+                setMergeModeEnabled(next);
+                // Persist to .env
+                fetch('/api/models/update-env', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ ACESTEP_ADAPTER_MERGE_MODE: next ? 'true' : 'false' }),
+                }).catch(() => {});
+            }
+        } catch { }
+        setMergeModeLoading(false);
     };
 
     const handleRedmondScale = async (val: number) => {
@@ -592,6 +635,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
                                     </p>
                                 </div>
                             )}
+                        </div>
+                        {/* VRAM-Optimized Adapter Merge Mode */}
+                        <div className="pl-7 pt-3 border-t border-zinc-200 dark:border-zinc-700/50">
+                            <div className="flex items-center justify-between">
+                                <div>
+                                    <p className="text-sm text-zinc-900 dark:text-white font-medium flex items-center gap-1.5">
+                                        💾 VRAM-Optimized Mode
+                                        {mergeModeLoading && (
+                                            <span className="inline-block w-3 h-3 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" />
+                                        )}
+                                    </p>
+                                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5 leading-relaxed">
+                                        Merge adapter weights into the model — zero extra VRAM for adapters.<br />
+                                        Scale changes trigger a re-merge (~3-5s). Works with LoRA and LoKR.
+                                    </p>
+                                </div>
+                                <button
+                                    onClick={handleMergeModeToggle}
+                                    disabled={mergeModeLoading}
+                                    className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${mergeModeEnabled ? 'bg-emerald-600' : 'bg-zinc-300 dark:bg-zinc-600'} ${mergeModeLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                >
+                                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${mergeModeEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                                </button>
+                            </div>
                         </div>
                     </div>
 
