@@ -18,6 +18,15 @@ _ROCM_DTYPE_MAP = {
 }
 
 
+def _log_vram(label: str) -> None:
+    """Log current CUDA VRAM usage with a contextual label."""
+    if not torch.cuda.is_available():
+        return
+    alloc = torch.cuda.memory_allocated() / (1024 ** 3)
+    reserved = torch.cuda.memory_reserved() / (1024 ** 3)
+    logger.info(f"[VRAM] {label}: allocated={alloc:.2f}GB, reserved={reserved:.2f}GB")
+
+
 def _resolve_rocm_dtype() -> torch.dtype:
     """Return a safe model dtype for ROCm/HIP devices.
 
@@ -104,6 +113,8 @@ class InitServiceOrchestratorMixin:
             _redmond_path = getattr(self, "_redmond_adapter_path", "")
             _redmond_scale = getattr(self, "_redmond_scale", 0.7)
 
+            _log_vram("switch_dit_model start")
+
             # Clean up LoRA state from previous model
             if self.lora_loaded:
                 try:
@@ -112,6 +123,7 @@ class InitServiceOrchestratorMixin:
                 except Exception as exc:
                     logger.warning(f"[switch_dit_model] Failed to unload LoRA: {exc}")
             self._reset_lora_state()
+            _log_vram("after LoRA unload + reset")
 
             # Resolve checkpoint path
             base_root = (self.last_init_params or {}).get("project_root") or self._get_project_root()
@@ -164,6 +176,7 @@ class InitServiceOrchestratorMixin:
                 compile_model=compile_model,
                 quantization=effective_quant,
             )
+            _log_vram("after model load")
 
             # Update last_init_params to reflect new config
             if self.last_init_params is not None:
@@ -196,6 +209,7 @@ class InitServiceOrchestratorMixin:
                 gc.collect()
                 torch.cuda.empty_cache()
                 logger.info("[switch_dit_model] Post-switch VRAM cleanup complete")
+                _log_vram("switch_dit_model complete")
 
             return status, True
         except Exception as exc:

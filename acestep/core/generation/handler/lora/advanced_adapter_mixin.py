@@ -23,6 +23,15 @@ from loguru import logger
 MAX_ADAPTER_SLOTS = 4
 
 
+def _log_vram(label: str) -> None:
+    """Log current CUDA VRAM usage with a contextual label."""
+    if not torch.cuda.is_available():
+        return
+    alloc = torch.cuda.memory_allocated() / (1024 ** 3)
+    reserved = torch.cuda.memory_reserved() / (1024 ** 3)
+    logger.info(f"[VRAM] {label}: allocated={alloc:.2f}GB, reserved={reserved:.2f}GB")
+
+
 def _dequantize_decoder_nf4(model) -> int:
     """Dequantize all NF4Tensor weights in the decoder back to bfloat16.
 
@@ -39,6 +48,7 @@ def _dequantize_decoder_nf4(model) -> int:
         Number of parameters dequantized.
     """
     import torch.nn as nn
+    _log_vram("before dequantize")
     logger.info("[NF4 compat] Starting decoder dequantization...")
     count = 0
     errors = 0
@@ -68,6 +78,7 @@ def _dequantize_decoder_nf4(model) -> int:
         f"[NF4 compat] Dequantized {count} linear layers for adapter operations"
         + (f" ({errors} errors)" if errors else "")
     )
+    _log_vram("after dequantize")
     return count
 
 
@@ -107,6 +118,7 @@ def _requantize_decoder_nf4(model, skip_parts=("tokenizer", "detokenizer")) -> i
                 count += 1
     if count:
         logger.info(f"[NF4 compat] Re-quantized {count} linear layers after merge")
+        _log_vram("after NF4 re-quantize")
     else:
         logger.debug("[NF4 compat] Re-quantize: 0 layers needed conversion (all already NF4)")
     return count
@@ -466,6 +478,7 @@ def _apply_merged_weights(self) -> None:
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+    _log_vram("after merge + cleanup")
 
     elapsed = time.time() - t0
     slot_desc = ", ".join(
@@ -542,6 +555,7 @@ def _apply_merged_weights_with_groups(self) -> None:
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+    _log_vram("after group-merge + cleanup")
 
     elapsed = time.time() - t0
     logger.info(f"Merged {len(active_slots)} adapter(s) with group scales in {elapsed:.1f}s")
@@ -590,6 +604,7 @@ def load_lora_slot(self, lora_path: str, slot: Optional[int] = None) -> str:
 
         # Backup base decoder on first load
         if self._base_decoder is None:
+            _log_vram("before base decoder backup")
             logger.info("Backing up base decoder state_dict to CPU")
             backup = {}
             for k, v in self.model.decoder.state_dict().items():
@@ -603,6 +618,7 @@ def load_lora_slot(self, lora_path: str, slot: Optional[int] = None) -> str:
             self._base_decoder = backup
             backup_mb = sum(v.numel() * v.element_size() for v in self._base_decoder.values()) / (1024**2)
             logger.info(f"Base decoder backed up ({backup_mb:.1f}MB)")
+            _log_vram("after base decoder backup")
 
         # Extract delta
         logger.info(f"Extracting adapter delta from {lora_path}")
@@ -648,6 +664,7 @@ def load_lora_slot(self, lora_path: str, slot: Optional[int] = None) -> str:
                 self._adapter_trigger_word = ""
                 self._adapter_tag_position = ""
 
+        _log_vram("before merge")
         _apply_merged_weights(self)
 
         # Re-quantize merged weights back to NF4 for VRAM savings
@@ -656,6 +673,7 @@ def load_lora_slot(self, lora_path: str, slot: Optional[int] = None) -> str:
 
         delta_keys = len(result["delta"])
         type_label = "LoRA" if result["type"] == "peft_lora" else "LoKr"
+        _log_vram("adapter load complete")
         logger.info(f"Adapter loaded into slot {slot}: {adapter_name} ({type_label}, {delta_keys} keys)")
         return f"✅ {type_label} loaded into slot {slot}: {adapter_name}"
 
@@ -696,6 +714,7 @@ def unload_lora_slot(self, slot: Optional[int] = None) -> str:
             return f"✅ Unloaded slot {slot}: {name}"
         else:
             count = len(self._adapter_slots)
+            _log_vram("before unload all")
             self._adapter_slots.clear()
             self._next_slot_id = 0
             self.use_lora = False
@@ -708,6 +727,7 @@ def unload_lora_slot(self, slot: Optional[int] = None) -> str:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             logger.info(f"Unloaded all {count} adapter(s)")
+            _log_vram("after unload all")
             return f"✅ Unloaded all {count} adapter(s), using base model"
 
     except Exception as e:
