@@ -211,7 +211,7 @@ export const RecentSongsList: React.FC<RecentSongsListProps> = ({ onPlaySong, sh
 
   return (
     <>
-      <div className="flex flex-col gap-1 px-2 py-1.5 overflow-y-auto scrollbar-hide" style={{ maxHeight: '100%' }}>
+      <div className="grid grid-cols-2 auto-rows-[4.5rem] gap-1 px-2 py-1.5 overflow-y-auto scrollbar-hide" style={{ maxHeight: '100%' }}>
         {songs.slice(0, 50).map((rs) => {
           const dur = rs.duration || 0;
           const mins = Math.floor(dur / 60);
