@@ -23,6 +23,61 @@ from loguru import logger
 MAX_ADAPTER_SLOTS = 4
 
 
+def _dequantize_decoder_nf4(model) -> int:
+    """Dequantize all NF4Tensor weights in the decoder back to their original dtype.
+
+    This must be called before adapter operations (backup, PEFT injection, merge)
+    because NF4Tensor does not support in-place operations, state_dict round-trips,
+    or parameter assignment that the adapter pipeline requires.
+
+    Returns:
+        Number of parameters dequantized.
+    """
+    import torch.nn as nn
+    count = 0
+    for _name, module in model.decoder.named_modules():
+        if isinstance(module, nn.Linear) and hasattr(module.weight, 'dequantize'):
+            deq = module.weight.dequantize().detach()
+            module.weight = nn.Parameter(deq, requires_grad=False)
+            count += 1
+    if count:
+        logger.info(f"[NF4 compat] Dequantized {count} linear layers for adapter operations")
+    return count
+
+
+def _requantize_decoder_nf4(model, skip_parts=("tokenizer", "detokenizer")) -> int:
+    """Re-apply NF4 quantization to the decoder's linear layers after merge.
+
+    Called after adapter weight merging to restore VRAM savings.
+
+    Args:
+        model: The model containing a .decoder attribute.
+        skip_parts: Module name segments to exclude from quantization.
+
+    Returns:
+        Number of parameters re-quantized.
+    """
+    import torch.nn as nn
+    try:
+        from torchao.dtypes import to_nf4
+    except ImportError:
+        logger.warning("[NF4 compat] torchao not available — cannot re-quantize")
+        return 0
+
+    count = 0
+    for name, module in model.decoder.named_modules():
+        if isinstance(module, nn.Linear):
+            skip = any(part in name.split(".") for part in skip_parts)
+            if not skip and not hasattr(module.weight, 'dequantize'):
+                module.weight = nn.Parameter(
+                    to_nf4(module.weight.data), requires_grad=False
+                )
+                count += 1
+    if count:
+        logger.info(f"[NF4 compat] Re-quantized {count} linear layers after merge")
+    return count
+
+
 def _determine_group(module_name: str) -> str:
     """Determine which module group a named module belongs to.
 
@@ -316,6 +371,9 @@ def _apply_merged_weights(self) -> None:
         self.model.decoder.load_state_dict(self._base_decoder, strict=False, assign=True)
         self.model.decoder = self.model.decoder.to(self.device).to(self.dtype)
         self.model.decoder.eval()
+        # Re-quantize to NF4 if the model was originally NF4-quantized
+        if getattr(self, 'quantization', None) == 'nf4':
+            _requantize_decoder_nf4(self.model)
         self._merged_dirty = False
         gc.collect()
         if torch.cuda.is_available():
@@ -359,6 +417,10 @@ def _apply_merged_weights(self) -> None:
     self.model.decoder = self.model.decoder.to(self.device).to(self.dtype)
     self.model.decoder.eval()
 
+    # Re-quantize to NF4 if the model was originally NF4-quantized
+    if getattr(self, 'quantization', None) == 'nf4':
+        _requantize_decoder_nf4(self.model)
+
     # --- Diagnostic: count hooks on decoder AFTER merge ---
     hook_count_after = 0
     for m in self.model.decoder.modules():
@@ -393,6 +455,9 @@ def _apply_merged_weights_with_groups(self) -> None:
         self.model.decoder.load_state_dict(self._base_decoder, strict=False, assign=True)
         self.model.decoder = self.model.decoder.to(self.device).to(self.dtype)
         self.model.decoder.eval()
+        # Re-quantize to NF4 if the model was originally NF4-quantized
+        if getattr(self, 'quantization', None) == 'nf4':
+            _requantize_decoder_nf4(self.model)
         self._merged_dirty = False
         return
 
@@ -434,6 +499,10 @@ def _apply_merged_weights_with_groups(self) -> None:
     self.model.decoder.load_state_dict(merged, strict=False, assign=True)
     self.model.decoder = self.model.decoder.to(self.device).to(self.dtype)
     self.model.decoder.eval()
+
+    # Re-quantize to NF4 if the model was originally NF4-quantized
+    if getattr(self, 'quantization', None) == 'nf4':
+        _requantize_decoder_nf4(self.model)
 
     del merged
     gc.collect()
@@ -479,6 +548,12 @@ def load_lora_slot(self, lora_path: str, slot: Optional[int] = None) -> str:
         return f"❌ Maximum {MAX_ADAPTER_SLOTS} adapter slots. Please unload one first."
 
     try:
+        # If NF4 quantized, dequantize first so backup and adapter ops work
+        _needs_nf4_requant = False
+        if getattr(self, 'quantization', None) == 'nf4':
+            deq_count = _dequantize_decoder_nf4(self.model)
+            _needs_nf4_requant = deq_count > 0
+
         # Backup base decoder on first load
         if self._base_decoder is None:
             logger.info("Backing up base decoder state_dict to CPU")
@@ -538,6 +613,10 @@ def load_lora_slot(self, lora_path: str, slot: Optional[int] = None) -> str:
                 self._adapter_tag_position = ""
 
         _apply_merged_weights(self)
+
+        # Re-quantize merged weights back to NF4 for VRAM savings
+        if _needs_nf4_requant:
+            _requantize_decoder_nf4(self.model)
 
         delta_keys = len(result["delta"])
         type_label = "LoRA" if result["type"] == "peft_lora" else "LoKr"
