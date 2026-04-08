@@ -96,7 +96,7 @@ export const ArtistPageSidebar: React.FC<ArtistPageSidebarProps> = ({
           className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg bg-pink-600/20 hover:bg-pink-600/30 text-pink-400 text-xs font-semibold transition-colors"
         >
           <ListOrdered className="w-3.5 h-3.5" />
-          Bulk Generate
+          Bulk Operations
         </button>
         <button
           onClick={onOpenPromptEditor}

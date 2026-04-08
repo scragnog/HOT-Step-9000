@@ -753,22 +753,52 @@ def upsert_album_preset(
     adapter_scales: Optional[dict] = None,
     matchering_ref_path: Optional[str] = None,
 ) -> dict[str, Any]:
-    """Create or update the album preset for a lyrics set."""
+    """Create or update the album preset for a lyrics set.
+
+    Only the fields that are explicitly provided (not ``None``) are written.
+    Existing values for omitted fields are preserved, so updating just the
+    adapter won't clear the matchering reference and vice-versa.
+    """
     conn = _connect()
     try:
         now = datetime.now(timezone.utc).isoformat()
         scales_json = json.dumps(adapter_scales, ensure_ascii=False) if adapter_scales else None
-        conn.execute(
-            "INSERT INTO album_presets "
-            "(lyrics_set_id, adapter_path, adapter_scales, matchering_ref_path, updated_at) "
-            "VALUES (?, ?, ?, ?, ?) "
-            "ON CONFLICT(lyrics_set_id) DO UPDATE SET "
-            "adapter_path = excluded.adapter_path, "
-            "adapter_scales = excluded.adapter_scales, "
-            "matchering_ref_path = excluded.matchering_ref_path, "
-            "updated_at = excluded.updated_at",
-            (lyrics_set_id, adapter_path, scales_json, matchering_ref_path, now),
-        )
+
+        # Check if a preset already exists for this lyrics_set
+        existing = conn.execute(
+            "SELECT * FROM album_presets WHERE lyrics_set_id = ?",
+            (lyrics_set_id,),
+        ).fetchone()
+
+        if existing is None:
+            # Fresh INSERT — write everything (None columns stay NULL)
+            conn.execute(
+                "INSERT INTO album_presets "
+                "(lyrics_set_id, adapter_path, adapter_scales, matchering_ref_path, updated_at) "
+                "VALUES (?, ?, ?, ?, ?)",
+                (lyrics_set_id, adapter_path, scales_json, matchering_ref_path, now),
+            )
+        else:
+            # Partial UPDATE — only overwrite columns that were explicitly given
+            updates: list[str] = ["updated_at = ?"]
+            values: list[Any] = [now]
+
+            if adapter_path is not None:
+                updates.append("adapter_path = ?")
+                values.append(adapter_path)
+            if adapter_scales is not None:
+                updates.append("adapter_scales = ?")
+                values.append(scales_json)
+            if matchering_ref_path is not None:
+                updates.append("matchering_ref_path = ?")
+                values.append(matchering_ref_path)
+
+            values.append(lyrics_set_id)
+            conn.execute(
+                f"UPDATE album_presets SET {', '.join(updates)} WHERE lyrics_set_id = ?",
+                values,
+            )
+
         conn.commit()
         return get_album_preset(lyrics_set_id) or {}
     finally:
