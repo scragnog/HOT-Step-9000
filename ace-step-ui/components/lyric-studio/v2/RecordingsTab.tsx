@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Play, Trash2, Headphones, ChevronDown, ChevronRight, Loader2, Clock, X, Filter, Download } from 'lucide-react';
+import { Play, Trash2, Headphones, ChevronDown, ChevronRight, Loader2, Clock, X, Filter, Download, ListPlus, Check } from 'lucide-react';
 import { lireekApi, Generation, AudioGeneration } from '../../../services/lyricStudioApi';
 import { generateApi, songsApi } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 import { Song } from '../../../types';
 import { DownloadModal, DownloadFormat, DownloadVersion } from '../../DownloadModal';
+import { usePlaylist } from './playlistStore';
 
 interface SongGroup {
   generation: Generation;
@@ -362,6 +363,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
                             >
                               <Play className="w-3.5 h-3.5 text-pink-400 ml-0.5" />
                             </button>
+                            <AddToPlaylistButton song={song} artistName={artistName} />
                             <div className="flex-1 min-w-0">
                               <p className="text-sm text-zinc-300 truncate">
                                 {song.title || `Song ${idx + 1}`}
@@ -413,5 +415,51 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
         hasOriginal={!!(downloadSong?.generationParams?.originalAudioUrl || (downloadSong as any)?.originalAudioUrl)}
       />
     </>
+  );
+};
+
+// ── Add-to-playlist helper ───────────────────────────────────────────────────
+
+const AddToPlaylistButton: React.FC<{ song: Song; artistName?: string }> = ({ song, artistName }) => {
+  const playlist = usePlaylist();
+  const inPlaylist = playlist.isIn(song.id);
+
+  const toggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (inPlaylist) {
+      playlist.remove(song.id);
+    } else {
+      const dur = song.duration;
+      let seconds = 0;
+      if (typeof dur === 'string' && dur.includes(':')) {
+        const [m, s] = dur.split(':').map(Number);
+        seconds = (m || 0) * 60 + (s || 0);
+      } else if (typeof dur === 'number') {
+        seconds = dur;
+      }
+      playlist.add({
+        id: song.id,
+        title: song.title || 'Untitled',
+        audioUrl: song.audioUrl || '',
+        artistName: artistName || song.creator || '',
+        coverUrl: song.coverUrl || (song as any).cover_url || '',
+        duration: seconds,
+        style: song.style || '',
+      });
+    }
+  };
+
+  return (
+    <button
+      onClick={toggle}
+      className={`p-1 rounded-md transition-colors flex-shrink-0 ${
+        inPlaylist
+          ? 'text-pink-400 bg-pink-500/10 hover:bg-pink-500/20'
+          : 'text-zinc-600 hover:text-pink-400 hover:bg-pink-500/10'
+      }`}
+      title={inPlaylist ? 'Remove from playlist' : 'Add to playlist'}
+    >
+      {inPlaylist ? <Check className="w-3.5 h-3.5" /> : <ListPlus className="w-3.5 h-3.5" />}
+    </button>
   );
 };

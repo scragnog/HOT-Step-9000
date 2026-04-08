@@ -7,13 +7,14 @@
  */
 
 import React, { useRef, useState, useCallback, useEffect } from 'react';
-import { Loader2, CheckCircle2, XCircle, X, Music, Clock, Play, Square } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, X, Music, Clock, Play, Square, ListPlus, Check } from 'lucide-react';
 import {
   useAudioGenQueue,
   removeFromAudioQueue,
   clearFinishedFromAudioQueue,
   AudioQueueItem,
 } from '../../../stores/audioGenQueueStore';
+import { usePlaylist } from './playlistStore';
 
 export const InlineAudioQueue: React.FC = () => {
   const { items } = useAudioGenQueue();
@@ -230,6 +231,9 @@ const QueueItemRow: React.FC<QueueItemRowProps> = ({ item, playingId, onPlay }) 
               <X className="w-3 h-3" />
             </button>
           )}
+          {isSucceeded && item.audioUrl && (
+            <QueueAddToPlaylistBtn item={item} />
+          )}
         </div>
       </div>
 
@@ -262,5 +266,41 @@ const QueueItemRow: React.FC<QueueItemRowProps> = ({ item, playingId, onPlay }) 
         <p className="mt-1 text-[9px] text-red-400 truncate">{item.error}</p>
       )}
     </div>
+  );
+};
+
+// ── Add-to-playlist helper ───────────────────────────────────────────────────
+
+const QueueAddToPlaylistBtn: React.FC<{ item: AudioQueueItem }> = ({ item }) => {
+  const playlist = usePlaylist();
+  const inPlaylist = playlist.isIn(item.id);
+
+  const toggle = () => {
+    if (inPlaylist) {
+      playlist.remove(item.id);
+    } else {
+      playlist.add({
+        id: item.id,
+        title: item.generation.title || 'Untitled',
+        audioUrl: item.audioUrl || '',
+        artistName: item.artistName || '',
+        coverUrl: '',
+        duration: 0,
+      });
+    }
+  };
+
+  return (
+    <button
+      onClick={toggle}
+      className={`p-0.5 rounded transition-colors ${
+        inPlaylist
+          ? 'text-pink-400 bg-pink-500/10 hover:bg-pink-500/20'
+          : 'text-zinc-600 hover:text-pink-400 hover:bg-pink-500/10'
+      }`}
+      title={inPlaylist ? 'Remove from playlist' : 'Add to playlist'}
+    >
+      {inPlaylist ? <Check className="w-3 h-3" /> : <ListPlus className="w-3 h-3" />}
+    </button>
   );
 };

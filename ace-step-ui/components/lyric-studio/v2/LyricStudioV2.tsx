@@ -27,6 +27,7 @@ import { QueuePanel } from '../QueuePanel';
 import { PromptEditor } from '../PromptEditor';
 import { useStreamingStore } from '../../../stores/streamingStore';
 import { loadSelections } from '../ProviderSelector';
+import { FloatingPlaylist } from './FloatingPlaylist';
 
 // ── URL helpers ──────────────────────────────────────────────────────────────
 
@@ -70,7 +71,7 @@ interface NavState {
 // ── Main Component ──────────────────────────────────────────────────────────
 
 interface LyricStudioV2Props {
-  onPlaySong?: (song: Song) => void;
+  onPlaySong?: (song: Song, list?: Song[]) => void;
   isPlaying?: boolean;
   currentSong?: Song | null;
   currentTime?: number;
@@ -525,8 +526,8 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
     await sendToCreate(gen);
   }, [sendToCreate]);
 
-  const handlePlaySong = useCallback((song: Song) => {
-    onPlaySong?.(song);
+  const handlePlaySong = useCallback((song: Song, list?: Song[]) => {
+    onPlaySong?.(song, list);
   }, [onPlaySong]);
 
   const openFetchForArtist = useCallback(() => {
@@ -955,6 +956,9 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
       )}
 
       {/* Audio generation progress is now handled inline by RightSidebarPanel */}
+
+      {/* Floating Winamp-style playlist window */}
+      <FloatingPlaylist onPlaySong={handlePlaySong} />
     </div>
   );
 };

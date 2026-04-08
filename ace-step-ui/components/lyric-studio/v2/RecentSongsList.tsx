@@ -10,12 +10,13 @@
  */
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Play, Loader2, Music, Download, Trash2 } from 'lucide-react';
+import { Play, Loader2, Music, Download, Trash2, ListPlus, Check } from 'lucide-react';
 import { lireekApi, RecentSong } from '../../../services/lyricStudioApi';
 import { songsApi } from '../../../services/api';
 import { useAuth } from '../../../context/AuthContext';
 import { Song } from '../../../types';
 import { DownloadModal, DownloadFormat, DownloadVersion } from '../../DownloadModal';
+import { usePlaylist } from './playlistStore';
 
 interface RecentSongsListProps {
   onPlaySong: (song: Song) => void;
@@ -252,6 +253,7 @@ export const RecentSongsList: React.FC<RecentSongsListProps> = ({ onPlaySong, sh
               </div>
               {/* Action buttons — visible on hover */}
               <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <AddToPlaylistBtn rs={rs} />
                 <button
                   onClick={(e) => handleDownloadClick(e, rs)}
                   className="p-1.5 rounded-md bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
@@ -281,5 +283,43 @@ export const RecentSongsList: React.FC<RecentSongsListProps> = ({ onPlaySong, sh
         hasOriginal={!!hasOriginal}
       />
     </>
+  );
+};
+
+// ── Add-to-playlist helper ───────────────────────────────────────────────────
+
+const AddToPlaylistBtn: React.FC<{ rs: RecentSong }> = ({ rs }) => {
+  const playlist = usePlaylist();
+  const itemId = rs.ag_id || `recent-${rs.song_title}`;
+  const inPlaylist = playlist.isIn(itemId);
+
+  const toggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (inPlaylist) {
+      playlist.remove(itemId);
+    } else {
+      playlist.add({
+        id: itemId,
+        title: rs.song_title || 'Untitled',
+        audioUrl: rs.audio_url || '',
+        artistName: rs.artist_name || '',
+        coverUrl: rs.cover_url || rs.album_image || rs.artist_image || '',
+        duration: rs.duration || 0,
+      });
+    }
+  };
+
+  return (
+    <button
+      onClick={toggle}
+      className={`p-1.5 rounded-md transition-colors ${
+        inPlaylist
+          ? 'bg-pink-500/20 text-pink-400 hover:bg-pink-500/30'
+          : 'bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-pink-400'
+      }`}
+      title={inPlaylist ? 'Remove from playlist' : 'Add to playlist'}
+    >
+      {inPlaylist ? <Check className="w-3 h-3" /> : <ListPlus className="w-3 h-3" />}
+    </button>
   );
 };
