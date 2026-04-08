@@ -150,8 +150,9 @@ export const RecentSongsList: React.FC<RecentSongsListProps> = ({ onPlaySong, sh
     if (!downloadSong) return;
     const { rs, dbSong } = downloadSong;
     const audioUrl = rs.audio_url || '';
+    const filenamePrepend = localStorage.getItem('lireek-downloadFilenamePrepend')?.replace(/^"|"$/g, '') || '';
     const artistPrefix = rs.artist_name ? `${rs.artist_name} - ` : '';
-    const displayTitle = `${artistPrefix}${rs.song_title || 'Untitled'}`;
+    const displayTitle = `${filenamePrepend}${artistPrefix}${rs.song_title || 'Untitled'}`;
 
     const downloadSingleURL = (url: string, suffix: string) => {
       const targetUrl = new URL('/api/songs/download', window.location.origin);
@@ -276,7 +277,7 @@ export const RecentSongsList: React.FC<RecentSongsListProps> = ({ onPlaySong, sh
         isOpen={downloadModalOpen}
         onClose={() => { setDownloadModalOpen(false); setDownloadSong(null); }}
         onDownload={handleDownload}
-        songTitle={downloadSong ? `${downloadSong.rs.artist_name ? downloadSong.rs.artist_name + ' - ' : ''}${downloadSong.rs.song_title || 'Untitled'}` : undefined}
+        songTitle={downloadSong ? `${(localStorage.getItem('lireek-downloadFilenamePrepend')?.replace(/^"|"$/g, '') || '')}${downloadSong.rs.artist_name ? downloadSong.rs.artist_name + ' - ' : ''}${downloadSong.rs.song_title || 'Untitled'}` : undefined}
         hasOriginal={!!hasOriginal}
       />
     </>

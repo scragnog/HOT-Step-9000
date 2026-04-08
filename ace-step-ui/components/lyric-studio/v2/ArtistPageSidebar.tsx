@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronDown, ChevronRight, ListOrdered, Code2, Zap } from 'lucide-react';
+import { ChevronDown, ChevronRight, ListOrdered, Code2, Zap, Download } from 'lucide-react';
 import { Artist } from '../../../services/lyricStudioApi';
 import { TripleProviderSelector, ModelSelections, loadSelections, saveSelections } from '../ProviderSelector';
 import { EditableSlider } from '../../EditableSlider';
@@ -43,6 +43,7 @@ export const ArtistPageSidebar: React.FC<ArtistPageSidebarProps> = ({
   const [globalScaleOverrideEnabled, setGlobalScaleOverrideEnabled] = usePersistedState('ace-globalScaleOverride', false);
   const [globalOverallScale, setGlobalOverallScale] = usePersistedState('ace-globalOverallScale', 1.0);
   const [globalGroupScales, setGlobalGroupScales] = usePersistedState<{ self_attn: number; cross_attn: number; mlp: number; cond_embed: number }>('ace-globalGroupScales', { self_attn: 1.0, cross_attn: 1.0, mlp: 1.0, cond_embed: 1.0 });
+  const [filenamePrepend, setFilenamePrepend] = usePersistedState<string>('lireek-downloadFilenamePrepend', '');
 
   const gradient = (name: string) => {
     const hash = name.split('').reduce((a, c) => ((a << 5) - a + c.charCodeAt(0)) | 0, 0);
@@ -188,6 +189,30 @@ export const ArtistPageSidebar: React.FC<ArtistPageSidebarProps> = ({
               </div>
             </div>
           )}
+        </div>
+
+        {/* ── Download Filename Prepend ─────────────────────────── */}
+        <div>
+          <div
+            className="w-full flex items-center justify-between px-3 py-2 rounded-lg bg-white/[0.03] border border-white/5 text-[11px] text-zinc-500 uppercase tracking-wider font-semibold"
+          >
+            <span className="flex items-center gap-1.5">
+              <Download className="w-3 h-3" />
+              Filename Prepend
+            </span>
+          </div>
+          <div className="mt-2 px-1">
+            <input
+              type="text"
+              value={filenamePrepend}
+              onChange={e => setFilenamePrepend(e.target.value)}
+              placeholder="e.g. MyLabel - "
+              className="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-pink-500 transition-colors"
+            />
+            <p className="text-[10px] text-zinc-600 mt-1 leading-tight">
+              Prepended to download filenames, e.g. <span className="text-zinc-500">{filenamePrepend || '...'}</span>Artist - Song.flac
+            </p>
+          </div>
         </div>
 
         {/* ── LLM Models ──────────────────────────────────────────── */}

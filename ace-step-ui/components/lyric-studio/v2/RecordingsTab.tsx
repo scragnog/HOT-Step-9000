@@ -231,8 +231,9 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
   // ── Download handler ──
   const handleDownload = useCallback((song: Song, format: DownloadFormat, version: DownloadVersion) => {
     if (!song.audioUrl) return;
+    const filenamePrepend = localStorage.getItem('lireek-downloadFilenamePrepend')?.replace(/^"|"$/g, '') || '';
     const prefix = artistName ? `${artistName} - ` : '';
-    const baseTitle = `${prefix}${song.title || 'download'}`;
+    const baseTitle = `${filenamePrepend}${prefix}${song.title || 'download'}`;
 
     const downloadSingleURL = (url: string, suffix: string) => {
       const targetUrl = new URL('/api/songs/download', window.location.origin);
@@ -408,7 +409,7 @@ export const RecordingsTab: React.FC<RecordingsTabProps> = ({
         onDownload={(format, version) => {
           if (downloadSong) handleDownload(downloadSong, format, version);
         }}
-        songTitle={downloadSong ? `${artistName ? artistName + ' - ' : ''}${downloadSong.title || 'Untitled'}` : undefined}
+        songTitle={downloadSong ? `${(localStorage.getItem('lireek-downloadFilenamePrepend')?.replace(/^"|"$/g, '') || '')}${artistName ? artistName + ' - ' : ''}${downloadSong.title || 'Untitled'}` : undefined}
         hasOriginal={!!(downloadSong?.generationParams?.originalAudioUrl || (downloadSong as any)?.originalAudioUrl)}
       />
     </>
