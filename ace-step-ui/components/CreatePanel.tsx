@@ -304,6 +304,10 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   // Available models fetched from backend
   const [fetchedModels, setFetchedModels] = useState<{ name: string; is_active: boolean; is_preloaded: boolean }[]>([]);
   const [activeBackendModel, setActiveBackendModel] = useState<string | null>(null);
+  const [ditQuantization, setDitQuantization] = useState<string>(() => {
+    // Initialize from localStorage or default to 'none' (will be synced from backend)
+    return localStorage.getItem('ace-ditQuantization') || 'none';
+  });
   const [isSwitching, setIsSwitching] = useState(false);
   const [isLmSwitching, setIsLmSwitching] = useState(false);
   const [backendUnavailable, setBackendUnavailable] = useState(false);
@@ -1335,6 +1339,13 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                   setLmModel(loadedLm);
                   localStorage.setItem('ace-lmModel', JSON.stringify(loadedLm));
                 }
+                // Sync DiT quantization from backend
+                const backendQuant = statusData?.quantization;
+                if (isMountedRef.current) {
+                  const q = backendQuant || 'none';
+                  setDitQuantization(q);
+                  localStorage.setItem('ace-ditQuantization', q);
+                }
               }
             } catch {
               // Non-critical — just use persisted/default value
@@ -1445,6 +1456,84 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       setIsSwitching(false);
     }
   }, [token, isSwitching, refreshModels, adapterSlots, loraLoaded, savedOverallScales, savedGroupScales]);
+
+  const handleDitQuantizationChange = useCallback(async (newQuant: string) => {
+    if (!token || isSwitching || !activeBackendModel) return;
+    // Bail if nothing changed
+    if (newQuant === ditQuantization) return;
+
+    setDitQuantization(newQuant);
+    localStorage.setItem('ace-ditQuantization', newQuant);
+    setIsSwitching(true);
+
+    // Save current adapter state before switch (backend will unload them)
+    const prevSlots = [...adapterSlots];
+    const hadAdapters = prevSlots.length > 0 && loraLoaded;
+
+    try {
+      const result = await generateApi.switchModel(activeBackendModel, token, newQuant);
+      if (result.switched) {
+        setActiveBackendModel(result.active_model);
+        void refreshModels(false);
+
+        // Persist to .env
+        try {
+          await fetch('/api/models/update-env', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ ACESTEP_QUANTIZATION: newQuant }),
+          });
+        } catch {
+          console.warn('[Quant Switch] Failed to persist to .env');
+        }
+
+        // Re-apply adapters to the new model if any were loaded
+        if (hadAdapters) {
+          setIsLoraLoading(true);
+          setAdapterLoadingMessage('Re-applying adapters to new model...');
+          setAdapterSlots([]);
+          setLoraLoaded(false);
+
+          for (const slot of prevSlots) {
+            try {
+              setAdapterLoadingMessage(`Loading ${slot.name}...`);
+              const effectiveScale = globalScaleOverrideEnabled ? globalOverallScale : savedOverallScales[slot.name];
+              const effectiveGroups = globalScaleOverrideEnabled ? globalGroupScales : savedGroupScales[slot.name];
+              await generateApi.loadLora({
+                lora_path: slot.path,
+                slot: slot.slot,
+                ...(effectiveScale != null && effectiveScale !== 1.0 ? { scale: effectiveScale } : {}),
+                ...(effectiveGroups != null ? { group_scales: effectiveGroups } : {}),
+              }, token);
+            } catch (err) {
+              console.error(`Failed to re-apply adapter ${slot.name}:`, err);
+            }
+          }
+
+          // Refresh status after all adapters loaded
+          try {
+            const status = await generateApi.getLoraStatus(token);
+            if (status?.advanced?.slots && status.advanced.slots.length > 0) {
+              setAdapterSlots(status.advanced.slots);
+              setLoraLoaded(true);
+              setAdapterTriggerWord((status as any).trigger_word || '');
+            }
+          } catch {
+            // ignore status refresh failure
+          }
+          setIsLoraLoading(false);
+          setAdapterLoadingMessage('');
+        }
+      }
+    } catch (err: any) {
+      console.error('Quantization switch failed:', err.message);
+      // Revert on failure
+      setDitQuantization(ditQuantization);
+      localStorage.setItem('ace-ditQuantization', ditQuantization);
+    } finally {
+      setIsSwitching(false);
+    }
+  }, [token, isSwitching, activeBackendModel, ditQuantization, refreshModels, adapterSlots, loraLoaded, savedOverallScales, savedGroupScales]);
 
   const handleLmModelChange = useCallback(async (targetModel: string) => {
     // Always update local state immediately for visual feedback
@@ -2699,6 +2788,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           isSwitching={isSwitching}
           isGenerating={isGenerating}
           handleSwitchModel={handleSwitchModel}
+          ditQuantization={ditQuantization}
+          onDitQuantizationChange={handleDitQuantizationChange}
           taskType={taskType}
           setTaskType={setTaskType}
           useReferenceAudio={useReferenceAudio}

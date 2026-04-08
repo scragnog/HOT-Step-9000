@@ -685,11 +685,19 @@ export const generateApi = {
     active_model: string | null;
   }> => api('/api/models', { token }),
 
-  switchModel: (model: string, token: string): Promise<{
+  switchModel: (model: string, token: string, quantization?: string): Promise<{
     message: string;
     active_model: string;
     switched: boolean;
-  }> => api('/api/models/switch', { method: 'POST', body: { model }, token }),
+    quantization?: string | null;
+  }> => api('/api/models/switch', {
+    method: 'POST',
+    body: {
+      model,
+      ...(quantization !== undefined ? { quantization } : {}),
+    },
+    token,
+  }),
 
   switchLmModel: (model: string, token: string): Promise<{
     message: string;

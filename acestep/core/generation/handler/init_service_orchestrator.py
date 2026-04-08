@@ -74,18 +74,26 @@ class InitServiceOrchestratorMixin:
         reset_redmond_state(self)
         logger.info("[_reset_lora_state] LoRA/LoKr/adapter-slot state cleared")
 
+    # Sentinel value to distinguish "caller didn't provide quantization"
+    # from "caller wants quantization=None" (i.e., full precision).
+    _QUANT_UNCHANGED = object()
+
     def switch_dit_model(
         self,
         config_path: str,
         use_flash_attention: bool = False,
+        quantization: object = _QUANT_UNCHANGED,
     ) -> Tuple[str, bool]:
-        """Hot-swap only the DiT model checkpoint without reloading VAE/text encoder.
+        """Hot-swap the DiT model checkpoint and/or quantization without reloading VAE/text encoder.
 
         Cleans up LoRA state and resets _base_decoder to prevent stale backups.
 
         Args:
             config_path: Model directory name under checkpoints/ (e.g. 'acestep-v15-turbo').
             use_flash_attention: Whether to request flash attention for the new model.
+            quantization: Optional quantization mode ('int8_weight_only', 'nf4', etc.) or
+                None to disable quantization.  Uses sentinel ``_QUANT_UNCHANGED`` when not
+                provided so the caller can explicitly pass ``None`` to mean "full precision".
 
         Returns:
             Tuple of (status_message, success_bool).
@@ -116,7 +124,36 @@ class InitServiceOrchestratorMixin:
             # Reuse compile/quantization settings from last init
             params = self.last_init_params or {}
             compile_model = params.get("compile_model", False)
-            quantization = params.get("quantization", None)
+
+            # Handle quantization change
+            if quantization is not self._QUANT_UNCHANGED:
+                effective_quant = quantization  # may be None (= full precision) or a string
+                # Validate torchao availability when enabling quantization
+                if effective_quant is not None:
+                    try:
+                        import torchao  # noqa: F401
+                    except ImportError:
+                        return (
+                            "torchao is required for quantization but is not installed. "
+                            "Please install torchao to use quantization features.",
+                            False,
+                        )
+                    # Auto-enable compile_model — quantization requires it
+                    if not compile_model:
+                        logger.info(
+                            "[switch_dit_model] Auto-enabling compile_model "
+                            "(required for quantization)"
+                        )
+                        compile_model = True
+                        if self.last_init_params is not None:
+                            self.last_init_params["compile_model"] = True
+                # Update handler state
+                self.quantization = effective_quant
+                if self.last_init_params is not None:
+                    self.last_init_params["quantization"] = effective_quant
+                logger.info(f"[switch_dit_model] Quantization changed to: {effective_quant}")
+            else:
+                effective_quant = params.get("quantization", None)
 
             self._sync_model_code_if_needed(config_path, Path(checkpoint_dir))
 
@@ -125,7 +162,7 @@ class InitServiceOrchestratorMixin:
                 device=str(self.device),
                 use_flash_attention=use_flash_attention,
                 compile_model=compile_model,
-                quantization=quantization,
+                quantization=effective_quant,
             )
 
             # Update last_init_params to reflect new config
@@ -134,10 +171,12 @@ class InitServiceOrchestratorMixin:
                 self.last_init_params["use_flash_attention"] = use_flash_attention
 
             attn = getattr(self.config, "_attn_implementation", "eager")
-            status = f"[OK] Switched to {config_path} on {self.device} (attn={attn})"
+            quant_label = effective_quant or "none"
+            status = f"[OK] Switched to {config_path} on {self.device} (attn={attn}, quant={quant_label})"
             logger.info(f"[switch_dit_model] {status}")
 
             # Re-apply Redmond Mode if it was active before the switch (uses pre-reset values)
+            # Redmond is incompatible with quantized weights (AffineQuantizedTensor dispatch)
             if _redmond_was_enabled and _redmond_path and self.quantization is None:
                 if os.path.isdir(_redmond_path):
                     logger.info(f"[switch_dit_model] Re-applying Redmond Mode at scale {_redmond_scale:.2f}")
@@ -146,6 +185,11 @@ class InitServiceOrchestratorMixin:
                         apply_redmond_at_startup(self, _redmond_path, _redmond_scale)
                     except Exception as exc:
                         logger.warning(f"[switch_dit_model] Failed to re-apply Redmond: {exc}")
+            elif _redmond_was_enabled and self.quantization is not None:
+                logger.info(
+                    "[switch_dit_model] Redmond Mode was active but quantization is enabled — "
+                    "skipping Redmond re-application (incompatible with quantized weights)"
+                )
 
             # Post-switch VRAM cleanup: release cached allocator blocks
             if torch.cuda.is_available():

@@ -27,6 +27,9 @@ interface CreatePanelHeaderProps {
     isSwitching: boolean;
     isGenerating: boolean;
     handleSwitchModel: (id: string) => void;
+    // Quantization
+    ditQuantization: string;
+    onDitQuantizationChange: (val: string) => void;
     // Task type
     taskType: string;
     setTaskType: (val: string) => void;
@@ -54,6 +57,8 @@ export const CreatePanelHeader: React.FC<CreatePanelHeaderProps> = ({
     isSwitching,
     isGenerating,
     handleSwitchModel,
+    ditQuantization,
+    onDitQuantizationChange,
     taskType,
     setTaskType,
     useReferenceAudio,
@@ -79,72 +84,104 @@ export const CreatePanelHeader: React.FC<CreatePanelHeaderProps> = ({
 
                 {/* Right column — Model, Task Type, JSON buttons */}
                 <div className="flex-1 flex flex-col gap-2 min-w-0">
-                    {/* Model Selector */}
-                    <div className="relative" ref={modelMenuRef}>
-                        <label className="block text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-1">
-                            Model
-                        </label>
-                        <button
-                            onClick={() => setShowModelMenu(!showModelMenu)}
-                            className="w-full bg-zinc-200 dark:bg-black/40 border border-zinc-300 dark:border-white/5 rounded-md px-2.5 py-1.5 text-[11px] font-medium text-zinc-900 dark:text-white hover:bg-zinc-300 dark:hover:bg-black/50 transition-colors flex items-center justify-between gap-1"
-                            disabled={availableModels.length === 0}
-                        >
-                            <span className="truncate">
-                                {availableModels.length === 0 ? '...' : getModelDisplayName(selectedModel)}
-                            </span>
-                            <ChevronDown size={10} className="text-zinc-600 dark:text-zinc-400 flex-shrink-0" />
-                        </button>
-
-                        {/* Floating Model Menu */}
-                        {showModelMenu && availableModels.length > 0 && (
-                            <div className="absolute top-full right-0 mt-1 w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-2xl z-50 overflow-hidden">
-                                {/* Backend unavailable hint */}
-                                {backendUnavailable && fetchedModels.length === 0 && (
-                                    <div className="px-4 py-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 flex items-center gap-2">
-                                        <span className="inline-block w-2 h-2 rounded-full bg-amber-400 dark:bg-amber-500 animate-pulse flex-shrink-0" />
-                                        {t('backendNotStarted') || 'ACE-Step 后端暂未启动，使用默认模型列表'}
-                                    </div>
+                    {/* Model + Quantization row */}
+                    <div className="flex gap-2 items-end">
+                        {/* Model Selector */}
+                        <div className="relative flex-1 min-w-0" ref={modelMenuRef}>
+                            <label className="block text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-1">
+                                Model
+                            </label>
+                            <button
+                                onClick={() => setShowModelMenu(!showModelMenu)}
+                                className="w-full bg-zinc-200 dark:bg-black/40 border border-zinc-300 dark:border-white/5 rounded-md px-2.5 py-1.5 text-[11px] font-medium text-zinc-900 dark:text-white hover:bg-zinc-300 dark:hover:bg-black/50 transition-colors flex items-center justify-between gap-1"
+                                disabled={availableModels.length === 0 || isSwitching}
+                            >
+                                {isSwitching ? (
+                                    <span className="flex items-center gap-1.5 text-zinc-500 dark:text-zinc-400">
+                                        <Loader2 size={10} className="animate-spin" />
+                                        Switching…
+                                    </span>
+                                ) : (
+                                    <>
+                                        <span className="truncate">
+                                            {availableModels.length === 0 ? '...' : getModelDisplayName(selectedModel)}
+                                        </span>
+                                        <ChevronDown size={10} className="text-zinc-600 dark:text-zinc-400 flex-shrink-0" />
+                                    </>
                                 )}
-                                <div className="max-h-96 overflow-y-auto custom-scrollbar">
-                                    {availableModels.map(model => (
-                                        <button
-                                            key={model.id}
-                                            onClick={() => {
-                                                setSelectedModel(model.id);
-                                                if (!isTurboModel(model.id)) {
-                                                    setInferenceSteps(20);
-                                                    setUseAdg(true);
-                                                }
-                                                setShowModelMenu(false);
-                                            }}
-                                            className={`w-full px-4 py-3 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors border-b border-zinc-100 dark:border-zinc-800 last:border-b-0 ${selectedModel === model.id ? 'bg-zinc-50 dark:bg-zinc-800/50' : ''
-                                                }`}
-                                        >
-                                            <div className="flex items-center justify-between mb-1">
-                                                <div className="flex items-center gap-2">
-                                                    <span className="text-sm font-semibold text-zinc-900 dark:text-white">
-                                                        {getModelDisplayName(model.id)}
-                                                    </span>
-                                                    {fetchedModels.find(m => m.name === model.id)?.is_preloaded && (
-                                                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
-                                                            {fetchedModels.find(m => m.name === model.id)?.is_active ? t('modelActive') : t('modelReady')}
+                            </button>
+
+                            {/* Floating Model Menu */}
+                            {showModelMenu && availableModels.length > 0 && (
+                                <div className="absolute top-full right-0 mt-1 w-72 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-2xl z-50 overflow-hidden">
+                                    {/* Backend unavailable hint */}
+                                    {backendUnavailable && fetchedModels.length === 0 && (
+                                        <div className="px-4 py-2 text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border-b border-amber-200 dark:border-amber-800 flex items-center gap-2">
+                                            <span className="inline-block w-2 h-2 rounded-full bg-amber-400 dark:bg-amber-500 animate-pulse flex-shrink-0" />
+                                            {t('backendNotStarted') || 'ACE-Step 后端暂未启动，使用默认模型列表'}
+                                        </div>
+                                    )}
+                                    <div className="max-h-96 overflow-y-auto custom-scrollbar">
+                                        {availableModels.map(model => (
+                                            <button
+                                                key={model.id}
+                                                onClick={() => {
+                                                    setSelectedModel(model.id);
+                                                    if (!isTurboModel(model.id)) {
+                                                        setInferenceSteps(20);
+                                                        setUseAdg(true);
+                                                    }
+                                                    setShowModelMenu(false);
+                                                }}
+                                                className={`w-full px-4 py-3 text-left hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors border-b border-zinc-100 dark:border-zinc-800 last:border-b-0 ${selectedModel === model.id ? 'bg-zinc-50 dark:bg-zinc-800/50' : ''
+                                                    }`}
+                                            >
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="text-sm font-semibold text-zinc-900 dark:text-white">
+                                                            {getModelDisplayName(model.id)}
                                                         </span>
+                                                        {fetchedModels.find(m => m.name === model.id)?.is_preloaded && (
+                                                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400">
+                                                                {fetchedModels.find(m => m.name === model.id)?.is_active ? t('modelActive') : t('modelReady')}
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {selectedModel === model.id && (
+                                                        <div className="w-4 h-4 rounded-full bg-pink-500 flex items-center justify-center">
+                                                            <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                                            </svg>
+                                                        </div>
                                                     )}
                                                 </div>
-                                                {selectedModel === model.id && (
-                                                    <div className="w-4 h-4 rounded-full bg-pink-500 flex items-center justify-center">
-                                                        <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                                        </svg>
-                                                    </div>
-                                                )}
-                                            </div>
-                                            <p className="text-xs text-zinc-500 dark:text-zinc-400">{model.id}</p>
-                                        </button>
-                                    ))}
+                                                <p className="text-xs text-zinc-500 dark:text-zinc-400">{model.id}</p>
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
+
+                        {/* Quantization Selector */}
+                        <div className="flex-shrink-0" style={{ minWidth: '100px' }}>
+                            <label className="block text-[10px] font-semibold text-zinc-400 dark:text-zinc-500 uppercase tracking-wider mb-1">
+                                Quant
+                            </label>
+                            <select
+                                id="dit-quant-select"
+                                value={ditQuantization}
+                                onChange={(e) => onDitQuantizationChange(e.target.value)}
+                                disabled={isSwitching}
+                                className="w-full bg-zinc-200 dark:bg-black/40 border border-zinc-300 dark:border-white/5 rounded-md px-2 py-1.5 text-[11px] font-medium text-zinc-900 dark:text-white hover:bg-zinc-300 dark:hover:bg-black/50 transition-colors cursor-pointer focus:outline-none focus:border-pink-500 disabled:opacity-50 disabled:cursor-not-allowed [&>option]:bg-white [&>option]:dark:bg-zinc-800"
+                                title="DiT model quantization — reduces VRAM, may affect quality"
+                            >
+                                <option value="none">Full (bf16)</option>
+                                <option value="int8_weight_only">INT8</option>
+                                <option value="int4_weight_only">INT4</option>
+                                <option value="nf4">NF4</option>
+                            </select>
+                        </div>
                     </div>
 
                     {/* Task Type Selector (compact — no card wrapper) */}

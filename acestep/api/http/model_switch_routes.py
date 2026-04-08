@@ -78,15 +78,23 @@ def register_model_switch_routes(
 
         no_init = os.getenv("ACESTEP_NO_INIT", "").strip().lower() in ("true", "1", "yes")
 
+        # Current DiT quantization and compile state
+        handler: AceStepHandler = app.state.handler
+        dit_params = getattr(handler, "last_init_params", None) or {} if handler else {}
+        current_quantization = dit_params.get("quantization", None)
+        compile_model = dit_params.get("compile_model", False)
+
         return wrap_response({
             "active_model": current_model,
             "lm_model": current_lm,
             "no_init": no_init,
+            "quantization": current_quantization,
+            "compile_model": compile_model,
         })
 
     @app.post("/v1/models/switch")
     async def switch_model_endpoint(request: Request, _: None = Depends(verify_api_key)):
-        """Explicitly switch the primary handler's DiT model."""
+        """Explicitly switch the primary handler's DiT model and/or quantization."""
         handler: AceStepHandler = app.state.handler
         if handler is None:
             raise HTTPException(status_code=500, detail="Handler not initialized")
@@ -96,8 +104,12 @@ def register_model_switch_routes(
         if not target_model:
             raise HTTPException(status_code=400, detail="'model' field is required")
 
+        # Optional quantization change
+        new_quantization = body.get("quantization", "_unchanged")
+        quant_changing = new_quantization != "_unchanged"
+
         current_model = get_model_name(app.state._config_path) if getattr(app.state, "_initialized", False) else None
-        if target_model == current_model:
+        if target_model == current_model and not quant_changing:
             return wrap_response({
                 "message": f"Model '{target_model}' is already active",
                 "active_model": current_model,
@@ -105,13 +117,25 @@ def register_model_switch_routes(
             })
 
         use_flash = getattr(app.state, "_use_flash_attention", True)
-        status_msg, ok = handler.switch_dit_model(target_model, use_flash_attention=use_flash)
+
+        # Build kwargs for switch_dit_model
+        switch_kwargs: dict = {
+            "config_path": target_model,
+            "use_flash_attention": use_flash,
+        }
+        if quant_changing:
+            # Map "none" string to None (= full precision)
+            switch_kwargs["quantization"] = None if new_quantization in (None, "none") else new_quantization
+
+        status_msg, ok = handler.switch_dit_model(**switch_kwargs)
         if ok:
             app.state._config_path = target_model
+            dit_params = getattr(handler, "last_init_params", None) or {}
             return wrap_response({
                 "message": status_msg,
                 "active_model": target_model,
                 "switched": True,
+                "quantization": dit_params.get("quantization", None),
             })
         else:
             raise HTTPException(status_code=500, detail=status_msg)
