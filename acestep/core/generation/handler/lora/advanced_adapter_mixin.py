@@ -86,6 +86,7 @@ def _requantize_decoder_nf4(model, skip_parts=("tokenizer", "detokenizer")) -> i
     import torch.nn as nn
     try:
         from torchao.dtypes import to_nf4
+        from torchao.dtypes.nf4tensor import NF4Tensor
     except ImportError:
         logger.warning("[NF4 compat] torchao not available — cannot re-quantize")
         return 0
@@ -94,13 +95,20 @@ def _requantize_decoder_nf4(model, skip_parts=("tokenizer", "detokenizer")) -> i
     for name, module in model.decoder.named_modules():
         if isinstance(module, nn.Linear):
             skip = any(part in name.split(".") for part in skip_parts)
-            if not skip and not hasattr(module.weight, 'dequantize'):
+            # Check if the weight is already NF4 by inspecting the actual tensor type.
+            # NOTE: hasattr(t, 'dequantize') is True for ALL torch.Tensor objects
+            # in modern PyTorch — it's a built-in method on the Tensor class.
+            # We must check the concrete type instead.
+            is_already_nf4 = isinstance(module.weight.data, NF4Tensor)
+            if not skip and not is_already_nf4:
                 module.weight = nn.Parameter(
                     to_nf4(module.weight.data), requires_grad=False
                 )
                 count += 1
     if count:
         logger.info(f"[NF4 compat] Re-quantized {count} linear layers after merge")
+    else:
+        logger.debug("[NF4 compat] Re-quantize: 0 layers needed conversion (all already NF4)")
     return count
 
 
