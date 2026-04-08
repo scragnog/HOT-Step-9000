@@ -30,18 +30,63 @@ def _dequantize_decoder_nf4(model) -> int:
     because NF4Tensor does not support in-place operations, state_dict round-trips,
     or parameter assignment that the adapter pipeline requires.
 
+    Uses multiple fallback strategies for different torchao versions:
+    1. weight.dequantize() — standard torchao method
+    2. weight.get_original_weight() — older torchao versions
+    3. weight.data.to(torch.bfloat16) — last resort float cast
+
     Returns:
         Number of parameters dequantized.
     """
     import torch.nn as nn
+    logger.info("[NF4 compat] Starting decoder dequantization...")
     count = 0
+    errors = 0
     for _name, module in model.decoder.named_modules():
-        if isinstance(module, nn.Linear) and hasattr(module.weight, 'dequantize'):
-            deq = module.weight.dequantize().detach()
+        if not isinstance(module, nn.Linear):
+            continue
+
+        w = module.weight
+        w_type = type(w.data).__name__
+
+        # Skip already-dequantized weights (plain Tensor / Parameter)
+        if w_type in ("Tensor", "Parameter"):
+            continue
+
+        # Try multiple dequantization strategies
+        deq = None
+        try:
+            if hasattr(w, 'dequantize'):
+                deq = w.dequantize().detach()
+            elif hasattr(w.data, 'dequantize'):
+                deq = w.data.dequantize().detach()
+            elif hasattr(w, 'get_original_weight'):
+                deq = w.get_original_weight().detach()
+            else:
+                # Last resort: cast through float
+                deq = w.data.to(torch.bfloat16).detach()
+        except Exception as e:
+            logger.warning(
+                f"[NF4 compat] Failed to dequantize {_name} "
+                f"(type={w_type}): {e}"
+            )
+            # Absolute last resort: try going through CPU float
+            try:
+                deq = w.data.float().cpu().to(torch.bfloat16).detach()
+                logger.info(f"[NF4 compat] Recovered {_name} via float() fallback")
+            except Exception as e2:
+                logger.error(f"[NF4 compat] All dequantization strategies failed for {_name}: {e2}")
+                errors += 1
+                continue
+
+        if deq is not None:
             module.weight = nn.Parameter(deq, requires_grad=False)
             count += 1
-    if count:
-        logger.info(f"[NF4 compat] Dequantized {count} linear layers for adapter operations")
+
+    logger.info(
+        f"[NF4 compat] Dequantized {count} linear layers for adapter operations"
+        + (f" ({errors} errors)" if errors else "")
+    )
     return count
 
 
