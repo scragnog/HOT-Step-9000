@@ -980,6 +980,13 @@ def unload_lora(self) -> str:
         self.model.decoder = self.model.decoder.to(self.device).to(self.dtype)
         self.model.decoder.eval()
 
+        # Re-quantize to NF4 if the model was originally NF4-quantized.
+        # Without this, the restored bf16 base decoder stays in full precision
+        # (~8GB) instead of NF4 (~3GB), leaking VRAM on model switch.
+        if getattr(self, 'quantization', None) == 'nf4':
+            from acestep.core.generation.handler.lora.advanced_adapter_mixin import _requantize_decoder_nf4
+            _requantize_decoder_nf4(self.model)
+
         self.lora_loaded = False
         self.use_lora = False
         self._adapter_type = None

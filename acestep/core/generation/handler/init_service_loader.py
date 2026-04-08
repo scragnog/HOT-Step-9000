@@ -92,6 +92,10 @@ class InitServiceLoaderMixin:
 
         if torch.cuda.is_available():
             if getattr(self, "model", None) is not None:
+                # Reset torch._dynamo BEFORE deleting the old model.
+                # Compiled graph caches hold references to the model's tensors;
+                # without this, del model won't actually free the CUDA memory.
+                torch._dynamo.reset()
                 del self.model
                 self.model = None
             gc.collect()
