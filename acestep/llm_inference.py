@@ -23,7 +23,7 @@ from transformers.generation.logits_process import (
 )
 from acestep.constrained_logits_processor import MetadataConstrainedLogitsProcessor
 from acestep.constants import DEFAULT_LM_INSTRUCTION, DEFAULT_LM_UNDERSTAND_INSTRUCTION, DEFAULT_LM_INSPIRED_INSTRUCTION, DEFAULT_LM_REWRITE_INSTRUCTION, DURATION_MIN, DURATION_MAX
-from acestep.gpu_config import get_lm_gpu_memory_ratio, get_gpu_memory_gb, get_lm_model_size, get_global_gpu_config
+from acestep.gpu_config import get_lm_gpu_memory_ratio, get_gpu_memory_gb, get_lm_model_size, get_global_gpu_config, LM_VRAM
 
 # Minimum free VRAM (GB) required to attempt vLLM initialization.
 # vLLM's KV cache allocator adapts to available memory, so we only need a
@@ -1341,6 +1341,15 @@ class LLMHandler:
                 self._vllm_max_model_len = self.max_model_len
 
             logger.info(f"Initializing 5Hz LM with model: {model_path}, enforce_eager: {enforce_eager}, tensor_parallel_size: 1, max_model_len: {self.max_model_len}, gpu_memory_utilization: {gpu_memory_utilization:.3f}")
+
+            # Compute KV cache cap from empirical model data to prevent
+            # over-allocation due to CUDA-vs-PyTorch accounting discrepancy
+            model_size = get_lm_model_size(model_path)
+            lm_info = LM_VRAM.get(model_size, LM_VRAM["0.6B"])
+            kv_key = "kv_cache_4k" if self.max_model_len >= 4096 else "kv_cache_2k"
+            max_kv_cache_gb = lm_info[kv_key] + 0.5  # empirical + 0.5GB overhead
+            logger.info(f"KV cache cap for {model_size}: {max_kv_cache_gb:.2f}GB (base={lm_info[kv_key]}GB + 0.5GB overhead)")
+
             start_time = time.time()
             try:
                 self.llm = LLM(
@@ -1350,6 +1359,7 @@ class LLMHandler:
                     max_model_len=self.max_model_len,
                     gpu_memory_utilization=gpu_memory_utilization,
                     tokenizer=self.llm_tokenizer,
+                    max_kv_cache_gb=max_kv_cache_gb,
                 )
             except (OverflowError, Exception) as init_err:
                 # OverflowError ("Python int too large to convert to C long")
@@ -1388,6 +1398,7 @@ class LLMHandler:
                         max_model_len=self.max_model_len,
                         gpu_memory_utilization=gpu_memory_utilization,
                         tokenizer=self.llm_tokenizer,
+                        max_kv_cache_gb=max_kv_cache_gb,
                     )
                 else:
                     raise  # Re-raise non-overflow errors or already-eager failures

@@ -76,7 +76,7 @@ class InferencePipeline:
 
     def __init__(self, hf_config, model_path: str, block_size: int, max_num_seqs: int,
                  max_num_batched_tokens: int, max_model_len: int, gpu_memory_utilization: float,
-                 enforce_eager: bool):
+                 enforce_eager: bool, max_kv_cache_gb: float = 0.0):
         torch._dynamo.config.capture_scalar_outputs = True
         torch._dynamo.config.verbose = True
         self.block_size = block_size
@@ -85,6 +85,7 @@ class InferencePipeline:
         self.max_model_len = max_model_len
         self.max_num_batched_tokens = max_num_batched_tokens
         self.gpu_memory_utilization = gpu_memory_utilization
+        self.max_kv_cache_gb = max_kv_cache_gb
         self.hf_config = hf_config
 
         torch.cuda.set_device(0)
@@ -183,6 +184,16 @@ class InferencePipeline:
             avail = free * 0.5
             used_fallback = True
 
+        # Cap KV cache to what the model actually needs.  Without this cap,
+        # a CUDA-vs-PyTorch accounting discrepancy (CUDA context, driver
+        # memory, etc.) inflates term_b by ~5-6 GB for ALL model sizes
+        # equally, causing small models to allocate the same KV cache as
+        # large models.
+        kv_cap_bytes = None
+        if self.max_kv_cache_gb > 0:
+            kv_cap_bytes = int(self.max_kv_cache_gb * 1024**3)
+            avail = min(avail, kv_cap_bytes)
+
         logger.info(
             f"[customized_vllm] KV budget: "
             f"free={free / 1024**3:.2f}GB, total={total / 1024**3:.2f}GB, "
@@ -190,6 +201,7 @@ class InferencePipeline:
             f"gpu_mem_util={self.gpu_memory_utilization:.3f}, "
             f"target={target / 1024**3:.2f}GB, "
             f"terms=[{term_a / 1024**3:.2f}, {term_b / 1024**3:.2f}, {term_c / 1024**3:.2f}], "
+            f"kv_cap={self.max_kv_cache_gb:.2f}GB, "
             f"avail={avail / 1024**3:.2f}GB"
             f"{' (FALLBACK: avail was <=0)' if used_fallback else ''}"
         )

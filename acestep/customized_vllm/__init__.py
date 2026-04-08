@@ -203,6 +203,7 @@ class _EngineConfig:
     gpu_memory_utilization: float = 0.9
     enforce_eager: bool = False
     kvcache_block_size: int = 256
+    max_kv_cache_gb: float = 0.0
 
     def __post_init__(self):
         assert os.path.isdir(self.model)
@@ -235,6 +236,7 @@ class LLM:
             gpu_memory_utilization=kwargs.get("gpu_memory_utilization", 0.9),
             enforce_eager=kwargs.get("enforce_eager", False),
             kvcache_block_size=kwargs.get("kvcache_block_size", 256),
+            max_kv_cache_gb=kwargs.get("max_kv_cache_gb", 0.0),
         )
         self._cfg = cfg
         self._lock = _threading.Lock()
@@ -245,6 +247,7 @@ class LLM:
             max_model_len=cfg.max_model_len,
             gpu_memory_utilization=cfg.gpu_memory_utilization,
             enforce_eager=cfg.enforce_eager,
+            max_kv_cache_gb=cfg.max_kv_cache_gb,
         )
         tok = kwargs.get("tokenizer", None)
         self.tokenizer = tok if tok is not None else AutoTokenizer.from_pretrained(model, use_fast=True)
