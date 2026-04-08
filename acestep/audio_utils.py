@@ -68,17 +68,23 @@ def ensure_mp3_for_matchering(ref_path: str, temp_dir: str) -> str:
 
     Matchering only reliably accepts MP3 reference files. If the supplied
     path is already an MP3, it is returned unchanged. Otherwise the file
-    is converted to a 320 kbps MP3 inside *temp_dir* via ffmpeg and the
-    new path is returned.
+    is converted to a 320 kbps MP3 via ffmpeg.
+
+    The converted file is cached alongside the original reference file
+    using the same basename (e.g. ``song.flac`` → ``song.mp3``). If that
+    cached MP3 already exists, the conversion is skipped entirely. This
+    avoids redundant ffmpeg calls when the same reference is reused across
+    multiple generations. If writing next to the reference fails (e.g.
+    read-only directory), the conversion falls back to *temp_dir*.
 
     Args:
         ref_path: Absolute path to the reference audio file.
-        temp_dir: A temporary directory where the converted file can be
-                  written (the caller is responsible for cleanup).
+        temp_dir: A temporary directory used as fallback when writing next
+                  to the reference is not possible.
 
     Returns:
         The original *ref_path* if it is already MP3, or the path to the
-        newly created MP3 inside *temp_dir*.
+        (possibly cached) MP3 conversion.
 
     Raises:
         FileNotFoundError: If *ref_path* does not exist on disk.
@@ -91,11 +97,27 @@ def ensure_mp3_for_matchering(ref_path: str, temp_dir: str) -> str:
     if ext == ".mp3":
         return ref_path  # Already MP3, nothing to do
 
-    mp3_path = os.path.join(temp_dir, "matchering_ref.mp3")
+    # Derive cached path: same directory and stem as the original, with .mp3
+    ref_stem = os.path.splitext(os.path.basename(ref_path))[0]
+    ref_dir = os.path.dirname(ref_path)
+    cached_path = os.path.join(ref_dir, f"{ref_stem}.mp3")
+
+    # If a cached conversion already exists, reuse it
+    if os.path.isfile(cached_path):
+        logger.info(
+            f"[Matchering] Using cached MP3 conversion: "
+            f"'{os.path.basename(cached_path)}'"
+        )
+        return cached_path
+
     logger.info(
         f"[Matchering] Converting reference '{os.path.basename(ref_path)}' "
         f"({ext or 'unknown'}) → MP3 for Matchering compatibility"
     )
+
+    # Try to write next to the original; fall back to temp_dir on failure
+    mp3_path = cached_path
+    use_fallback = False
 
     cmd = [
         "ffmpeg", "-y",
@@ -105,7 +127,7 @@ def ensure_mp3_for_matchering(ref_path: str, temp_dir: str) -> str:
         mp3_path,
     ]
     try:
-        result = subprocess.run(
+        subprocess.run(
             cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True,
         )
     except FileNotFoundError:
@@ -115,12 +137,40 @@ def ensure_mp3_for_matchering(ref_path: str, temp_dir: str) -> str:
             "(https://ffmpeg.org/download.html) or use an MP3 reference."
         )
     except subprocess.CalledProcessError as exc:
-        raise RuntimeError(
-            f"ffmpeg conversion failed (exit {exc.returncode}): "
-            f"{exc.stderr.decode(errors='replace')[:500]}"
-        )
+        # If it failed because of a permission/path issue writing to
+        # ref_dir, retry into the temp directory as a one-off fallback.
+        if not use_fallback:
+            fallback_path = os.path.join(temp_dir, f"{ref_stem}.mp3")
+            logger.warning(
+                f"[Matchering] Could not write to '{ref_dir}', "
+                f"falling back to temp dir"
+            )
+            cmd[-1] = fallback_path
+            try:
+                subprocess.run(
+                    cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    check=True,
+                )
+                mp3_path = fallback_path
+                use_fallback = True
+            except subprocess.CalledProcessError as exc2:
+                raise RuntimeError(
+                    f"ffmpeg conversion failed (exit {exc2.returncode}): "
+                    f"{exc2.stderr.decode(errors='replace')[:500]}"
+                )
+        else:
+            raise RuntimeError(
+                f"ffmpeg conversion failed (exit {exc.returncode}): "
+                f"{exc.stderr.decode(errors='replace')[:500]}"
+            )
 
-    logger.info(f"[Matchering] Converted reference saved to {mp3_path}")
+    if use_fallback:
+        logger.info(f"[Matchering] Converted reference saved to {mp3_path} (temp)")
+    else:
+        logger.info(
+            f"[Matchering] Converted reference cached as "
+            f"'{os.path.basename(mp3_path)}' for future reuse"
+        )
     return mp3_path
 
 
