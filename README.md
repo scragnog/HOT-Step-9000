@@ -28,7 +28,7 @@ While currently optimized and supported specifically for **Windows environments*
 HOT-Step 9000 sits on top of the original ACE-Step backend but introduces a massive array of new tools and features for advanced AI music creation:
 
 - **Auto-Mastering:** Every generated track can be automatically mastered with two options — a built-in 6-stage Processing Chain (EQ, saturation, stereo widening, compression, limiter) or reference-based mastering via [Matchering](https://github.com/sergree/matchering) with optional per-stem processing for superior tonal fidelity. Interactive console for real-time tweaks, persistent presets, and one-click remastering of existing tracks.
-- **Advanced Multi-Adapter System:** Slot-based loading of up to 4 simultaneous LoRA/LoKr adapters with per-layer scaling via weight-space merging.
+- **Advanced Multi-Adapter System:** Slot-based loading of up to 4 simultaneous LoRA/LoKr adapters with per-layer scaling via weight-space merging. Includes saveable scale presets and an optional **merge mode** that bakes adapter weights directly into the base model for zero runtime VRAM overhead.
 - **Activation Steering (TADA):** Experimental zero-shot generation guidance by modifying model activations directly.
 - **Advanced Guidance & Solvers:** 7 guidance modes (including PAG, APG, ADG) and 6 ODE solvers (Euler, Heun, DPM++ 2M, RK4, JKASS, JKASS Fast) with per-solver parameter tuning. Advanced Guidance sub-panel for independent text/lyric scales, APG tuning, and guidance decay scheduling.
 - **JKASS Inference Solvers:** Purpose-built music diffusion solvers with frequency damping, beat stability, and temporal smoothing — configurable per-generation via dedicated UI controls.
@@ -45,7 +45,7 @@ HOT-Step 9000 sits on top of the original ACE-Step backend but introduces a mass
 - **A/B Track Comparison:** Side-by-side simultaneous playback of any two tracks with instant toggle and parameter diff view.
 - **Layer Ablation Lab:** Developer tool for automated layer sweeps to isolate adapter functional impact across 24 transformer layers.
 - **One-Click Launcher:** Interactive loading screen with model selection dropdowns, auto-continue timer, and real-time service health polling.
-- **Model Hot-Switching:** Change LM and DiT models instantly without restarting the server, with dynamic model discovery from the checkpoints directory.
+- **Model Hot-Switching:** Change LM and DiT models instantly without restarting the server, with dynamic model discovery from the checkpoints directory. DiT quantization can also be hot-swapped on-the-fly from the UI.
 - **JSON Export/Import:** Save and share complete generation configurations including adapter and steering state.
 - **Creation Panel Overhaul:** Reorganized from a single monolithic panel into ~13 modular accordion sections with Simple vs Custom modes.
 - **Audio Enhancement Studio (Legacy):** Per-stem DSP engine with 6 presets, reverb, echo, stereo widening, and optional Demucs stem separation.
@@ -81,6 +81,8 @@ The XL variants are **twice the parameter count** (4B vs 1.5B) of the standard m
 | `acestep-v15-xl-sft` | XL SFT — highest quality XL variant. | 40+ | ~10 GB |
 | `acestep-v15-xl-base` | XL base model. | 40+ | ~10 GB |
 | `acestep-v15-merge-sft-turbo-xl-ta-0.5` | Community SFT+Turbo merge at α=0.5 by [jeankassio](https://huggingface.co/jeankassio). Blends SFT quality with Turbo speed. | 15–30 | ~20 GB |
+| `acestep-v15-merge-base-turbo-xl-ta-0.5` | Community Base+Turbo merge at α=0.5 by [jeankassio](https://huggingface.co/jeankassio). | 15–30 | ~20 GB |
+| `acestep-v15-merge-base-sft-xl-ta-0.5` | Community Base+SFT merge at α=0.5 by [jeankassio](https://huggingface.co/jeankassio). | 40+ | ~20 GB |
 
 > **Note:** XL models support LoRA/LoKr adapters, but only those **trained specifically on the XL architecture** — standard 1.5B adapters are not compatible due to different layer dimensions. Multi-batch generation (`batch_size > 1`) is also not recommended for XL models at this time.
 
@@ -111,16 +113,19 @@ The DiT (Diffusion Transformer) is the largest model component. HOT-Step support
 |---------|-----------|----------------|-----------------|
 | `none` (BF16) | Baseline | None | ✅ Full support |
 | `int8_weight_only` | ~2.5 GB | Negligible | ✅ Full support |
+| `nf4` | ~5.5 GB | Minor | ✅ Works via dequantize→merge→requantize pipeline |
 | `int4_weight_only` | ~6.5 GB | Minor; experimental | ✅ Works via dequantized merge |
 
 **Configuration:** Set `ACESTEP_QUANTIZATION` in your `.env` file:
 
 ```env
-# Options: auto, none, int8_weight_only, int4_weight_only
+# Options: auto, none, int8_weight_only, int4_weight_only, nf4
 ACESTEP_QUANTIZATION=auto
 ```
 
 When set to `auto`, HOT-Step detects your GPU VRAM and applies the appropriate quantization level automatically. Quantization is applied at model load time — no model re-download required.
+
+**Hot-swapping from the UI:** Quantization can also be changed on-the-fly from the model dropdown panel without restarting the server. Changing quantization will reload the DiT model with the new setting.
 
 > **LoRA on quantized models:** Adapters work on both INT8 and INT4 quantized DiTs. Internally, base weights are dequantized for the merge computation, so adapter-modified layers run in BF16. VRAM increases slightly when LoRA is active, but remains well below the unquantized baseline.
 
