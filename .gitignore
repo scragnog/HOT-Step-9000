@@ -267,6 +267,10 @@ lokr_output/
 config.json
 
 acestep_output/
+
+# Matchering reference conversion cache (local only)
+matchering_references/
+
 # macOS
 .DS_Store
 
