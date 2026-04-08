@@ -136,8 +136,26 @@ router.post('/update-env', async (req: any, res: Response) => {
 
         const envPath = path.join(PROJECT_ROOT, '.env');
         if (!fs.existsSync(envPath)) {
-            res.status(404).json({ error: '.env file not found' });
-            return;
+            // Auto-create .env from .env.example (fresh installs won't have it yet)
+            const examplePath = path.join(PROJECT_ROOT, '.env.example');
+            if (fs.existsSync(examplePath)) {
+                fs.copyFileSync(examplePath, envPath);
+                console.log('[Models] Created .env from .env.example (first run)');
+            } else {
+                // Minimal fallback if .env.example is also missing
+                const minimal = [
+                    'ACESTEP_CONFIG_PATH=acestep-v15-turbo',
+                    'ACESTEP_LM_MODEL_PATH=acestep-5Hz-lm-1.7B',
+                    'ACESTEP_LM_BACKEND=vllm',
+                    'ACESTEP_DEVICE=auto',
+                    'ACESTEP_INIT_LLM=auto',
+                    'ACESTEP_QUANTIZATION=auto',
+                    'VITE_PORT=3000',
+                    '',
+                ].join('\n');
+                fs.writeFileSync(envPath, minimal, 'utf-8');
+                console.log('[Models] Created minimal .env (no .env.example found)');
+            }
         }
 
         let envContent = fs.readFileSync(envPath, 'utf-8');
