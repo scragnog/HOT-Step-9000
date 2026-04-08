@@ -6,10 +6,11 @@
  */
 
 import React, { useRef, useState, useEffect, useCallback, useMemo } from 'react';
+// Note: No Audio elements here — all playback routes through the main player
 import {
-  Play, Pause, X, Minus, Maximize2, Minimize2,
+  Play, X, Minus, Maximize2,
   ListPlus, Trash2, ChevronUp, ChevronDown,
-  Music, GripVertical, ListMusic, Square,
+  Music, ListMusic, Square,
 } from 'lucide-react';
 import { Song } from '../../../types';
 import { usePlaylist, PlaylistItem } from './playlistStore';
@@ -54,15 +55,15 @@ function saveWindowState(state: WindowState): void {
 
 interface FloatingPlaylistProps {
   onPlaySong: (song: Song, list?: Song[]) => void;
+  /** ID of the song currently playing in the main player — used for highlight */
+  currentSongId?: string | null;
 }
 
-export const FloatingPlaylist: React.FC<FloatingPlaylistProps> = ({ onPlaySong }) => {
+export const FloatingPlaylist: React.FC<FloatingPlaylistProps> = ({ onPlaySong, currentSongId }) => {
   const playlist = usePlaylist();
   const [windowState, setWindowState] = useState<WindowState>(loadWindowState);
   const [isDragging, setIsDragging] = useState(false);
   const [isResizing, setIsResizing] = useState(false);
-  const [playingId, setPlayingId] = useState<string | null>(null);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const windowRef = useRef<HTMLDivElement>(null);
   const dragStart = useRef({ x: 0, y: 0, wx: 0, wy: 0 });
   const resizeStart = useRef({ x: 0, y: 0, w: 0, h: 0 });
@@ -142,40 +143,12 @@ export const FloatingPlaylist: React.FC<FloatingPlaylistProps> = ({ onPlaySong }
     };
   }, [isResizing, updateWindow]);
 
-  // ── Inline playback (separate from main player) ──────────────────────────
-
-  const handleInlinePlay = useCallback((item: PlaylistItem) => {
-    if (!item.audioUrl) return;
-
-    if (playingId === item.id) {
-      audioRef.current?.pause();
-      setPlayingId(null);
-      return;
-    }
-
-    if (audioRef.current) {
-      audioRef.current.pause();
-    }
-
-    const audio = new Audio(item.audioUrl);
-    audio.addEventListener('ended', () => setPlayingId(null));
-    audio.addEventListener('error', () => setPlayingId(null));
-    audio.play().catch(() => setPlayingId(null));
-    audioRef.current = audio;
-    setPlayingId(item.id);
-  }, [playingId]);
-
-  // Cleanup on unmount
-  useEffect(() => () => { audioRef.current?.pause(); }, []);
+  // ── No inline playback — all plays go through the main player ─────────────
 
   // ── Play via main player (sets full queue) ───────────────────────────────
 
   const handlePlayMain = useCallback((item: PlaylistItem) => {
-    // Stop inline playback
-    audioRef.current?.pause();
-    setPlayingId(null);
-
-    // Convert playlist items to Song objects
+    // Convert playlist items to Song objects for the main player queue
     const songList: Song[] = playlist.items.map(i => ({
       id: i.id,
       title: i.title,
@@ -341,7 +314,7 @@ export const FloatingPlaylist: React.FC<FloatingPlaylistProps> = ({ onPlaySong }
         ) : (
           <div className="divide-y divide-white/5">
             {playlist.items.map((item, idx) => {
-              const isItemPlaying = playingId === item.id;
+              const isItemPlaying = currentSongId === item.id;
               return (
                 <div
                   key={item.id}
@@ -355,9 +328,9 @@ export const FloatingPlaylist: React.FC<FloatingPlaylistProps> = ({ onPlaySong }
                       {idx + 1}
                     </span>
                     <button
-                      onClick={() => handleInlinePlay(item)}
+                      onClick={() => handlePlayMain(item)}
                       className="hidden group-hover:flex w-5 h-5 items-center justify-center rounded-full hover:bg-white/10 transition-colors"
-                      title={isItemPlaying ? 'Pause' : 'Preview'}
+                      title={isItemPlaying ? 'Now Playing' : 'Play'}
                     >
                       {isItemPlaying
                         ? <Square className="w-2.5 h-2.5 text-pink-400" />

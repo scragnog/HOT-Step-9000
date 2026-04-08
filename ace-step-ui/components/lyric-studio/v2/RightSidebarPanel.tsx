@@ -32,6 +32,8 @@ interface RightSidebarPanelProps {
   onSongCountChange?: (count: number) => void;
   recordingsRefreshKey?: number;
   artistName?: string;
+  /** ID of the song currently playing in the main player */
+  currentSongId?: string | null;
 }
 
 interface SectionProps {
@@ -91,6 +93,7 @@ export const RightSidebarPanel: React.FC<RightSidebarPanelProps> = ({
   onSongCountChange,
   recordingsRefreshKey = 0,
   artistName,
+  currentSongId,
 }) => {
   const queue = useAudioGenQueue();
   const queueCount = queue.items.filter(i => i.status === 'pending' || i.status === 'loading-adapter' || i.status === 'generating').length;
@@ -142,7 +145,7 @@ export const RightSidebarPanel: React.FC<RightSidebarPanelProps> = ({
         countColor="bg-pink-500/20 text-pink-300"
         defaultOpen={true}
       >
-        <InlineAudioQueue />
+        <InlineAudioQueue onPlaySong={onPlaySong} currentSongId={currentSongId} />
       </Section>
     </div>
   );

@@ -671,6 +671,7 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
                 onPlaySong={handlePlaySong}
                 showToast={showToast}
                 recordingsRefreshKey={recordingsRefreshKey}
+                currentSongId={currentSong?.id}
               />
             </div>
           </div>
@@ -731,6 +732,7 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
                 onPlaySong={handlePlaySong}
                 showToast={showToast}
                 recordingsRefreshKey={recordingsRefreshKey}
+                currentSongId={currentSong?.id}
               />
             </div>
           </div>
@@ -864,6 +866,7 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
                   onSongCountChange={setSongCount}
                   recordingsRefreshKey={recordingsRefreshKey}
                   artistName={nav.selectedArtist?.name}
+                  currentSongId={currentSong?.id}
                 />
               </div>
             </div>
@@ -958,7 +961,7 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
       {/* Audio generation progress is now handled inline by RightSidebarPanel */}
 
       {/* Floating Winamp-style playlist window */}
-      <FloatingPlaylist onPlaySong={handlePlaySong} />
+      <FloatingPlaylist onPlaySong={handlePlaySong} currentSongId={currentSong?.id} />
     </div>
   );
 };

@@ -3,10 +3,11 @@
  * Shows active, pending, and completed audio generation jobs from the audioGenQueueStore.
  *
  * Order: Active (generating/loading) → Queued (pending) → Completed (succeeded/failed, newest first)
- * Completed items with an audioUrl get an inline play/stop button.
+ * Completed items play through the main player (onPlaySong) so they drive the
+ * playbar, visualisations, and cover art background like every other playback path.
  */
 
-import React, { useRef, useState, useCallback, useEffect } from 'react';
+import React, { useCallback } from 'react';
 import { Loader2, CheckCircle2, XCircle, X, Music, Clock, Play, Square, ListPlus, Check } from 'lucide-react';
 import {
   useAudioGenQueue,
@@ -15,8 +16,16 @@ import {
   AudioQueueItem,
 } from '../../../stores/audioGenQueueStore';
 import { usePlaylist } from './playlistStore';
+import { Song } from '../../../types';
 
-export const InlineAudioQueue: React.FC = () => {
+interface InlineAudioQueueProps {
+  /** Route playback through the main player (App → Player → visualisations etc.) */
+  onPlaySong?: (song: Song) => void;
+  /** ID of the song currently playing in the main player — used for highlight state */
+  currentSongId?: string | null;
+}
+
+export const InlineAudioQueue: React.FC<InlineAudioQueueProps> = ({ onPlaySong, currentSongId }) => {
   const { items } = useAudioGenQueue();
 
   // ── Group & sort ──────────────────────────────────────────────────────
@@ -33,49 +42,30 @@ export const InlineAudioQueue: React.FC = () => {
   const pendingCount = queued.length;
   const finishedCount = finished.length;
 
-  // ── Inline playback state ─────────────────────────────────────────────
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const [playingId, setPlayingId] = useState<string | null>(null);
-
+  // ── Play via main player ──────────────────────────────────────────────
   const handlePlay = useCallback((item: AudioQueueItem) => {
-    if (!item.audioUrl) return;
+    if (!item.audioUrl || !onPlaySong) return;
 
-    // If already playing this item → stop
-    if (playingId === item.id) {
-      audioRef.current?.pause();
-      audioRef.current = null;
-      setPlayingId(null);
-      return;
-    }
-
-    // Stop any existing playback
-    audioRef.current?.pause();
-
-    const audio = new Audio(item.audioUrl);
-    audio.volume = 0.8;
-    audio.onended = () => {
-      setPlayingId(null);
-      audioRef.current = null;
+    // Build a Song object the main player understands
+    const song: Song = {
+      id: item.id,
+      title: item.generation.title || 'Untitled',
+      lyrics: '',
+      style: item.generation.style || '',
+      audioUrl: item.audioUrl,
+      coverUrl: '',
+      duration: '0:00',
+      createdAt: new Date(),
+      tags: [],
+      isPublic: false,
+      likeCount: 0,
+      viewCount: 0,
+      userId: '',
+      creator: item.artistName || '',
     };
-    audio.onerror = () => {
-      setPlayingId(null);
-      audioRef.current = null;
-    };
-    audio.play().catch(() => {
-      setPlayingId(null);
-      audioRef.current = null;
-    });
-    audioRef.current = audio;
-    setPlayingId(item.id);
-  }, [playingId]);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    return () => {
-      audioRef.current?.pause();
-      audioRef.current = null;
-    };
-  }, []);
+    onPlaySong(song);
+  }, [onPlaySong]);
 
   if (items.length === 0) {
     return (
@@ -110,7 +100,7 @@ export const InlineAudioQueue: React.FC = () => {
         <>
           <GroupLabel label="Active" color="text-pink-400" />
           {active.map(item => (
-            <QueueItemRow key={item.id} item={item} playingId={playingId} onPlay={handlePlay} />
+            <QueueItemRow key={item.id} item={item} isPlayingInMain={currentSongId === item.id} onPlay={handlePlay} />
           ))}
         </>
       )}
@@ -120,7 +110,7 @@ export const InlineAudioQueue: React.FC = () => {
         <>
           <GroupLabel label="Queued" color="text-zinc-400" />
           {queued.map(item => (
-            <QueueItemRow key={item.id} item={item} playingId={playingId} onPlay={handlePlay} />
+            <QueueItemRow key={item.id} item={item} isPlayingInMain={currentSongId === item.id} onPlay={handlePlay} />
           ))}
         </>
       )}
@@ -130,7 +120,7 @@ export const InlineAudioQueue: React.FC = () => {
         <>
           <GroupLabel label="Completed" color="text-green-400" />
           {finished.map(item => (
-            <QueueItemRow key={item.id} item={item} playingId={playingId} onPlay={handlePlay} />
+            <QueueItemRow key={item.id} item={item} isPlayingInMain={currentSongId === item.id} onPlay={handlePlay} />
           ))}
         </>
       )}
@@ -150,16 +140,15 @@ const GroupLabel: React.FC<{ label: string; color: string }> = ({ label, color }
 
 interface QueueItemRowProps {
   item: AudioQueueItem;
-  playingId: string | null;
+  isPlayingInMain: boolean;
   onPlay: (item: AudioQueueItem) => void;
 }
 
-const QueueItemRow: React.FC<QueueItemRowProps> = ({ item, playingId, onPlay }) => {
+const QueueItemRow: React.FC<QueueItemRowProps> = ({ item, isPlayingInMain, onPlay }) => {
   const isRunning = item.status === 'loading-adapter' || item.status === 'generating';
   const isSucceeded = item.status === 'succeeded';
   const isFailed = item.status === 'failed';
   const isPending = item.status === 'pending';
-  const isPlaying = playingId === item.id;
 
   const elapsed = item.elapsed || 0;
   const mins = Math.floor(elapsed / 60);
@@ -177,7 +166,7 @@ const QueueItemRow: React.FC<QueueItemRowProps> = ({ item, playingId, onPlay }) 
         : 'border-white/5';
 
   return (
-    <div className={`rounded-lg border ${borderColor} bg-white/[0.02] px-3 py-2 transition-all`}>
+    <div className={`rounded-lg border ${borderColor} bg-white/[0.02] px-3 py-2 transition-all ${isPlayingInMain ? 'ring-1 ring-pink-500/40 bg-pink-500/5' : ''}`}>
       <div className="flex items-center gap-2">
         {/* Status icon / Play button */}
         <div className="flex-shrink-0">
@@ -187,13 +176,13 @@ const QueueItemRow: React.FC<QueueItemRowProps> = ({ item, playingId, onPlay }) 
             <button
               onClick={() => onPlay(item)}
               className={`p-0.5 rounded-full transition-colors ${
-                isPlaying
+                isPlayingInMain
                   ? 'bg-green-500/20 text-green-300 hover:bg-green-500/30'
                   : 'text-green-400 hover:bg-green-500/20 hover:text-green-300'
               }`}
-              title={isPlaying ? 'Stop' : 'Play'}
+              title={isPlayingInMain ? 'Playing' : 'Play'}
             >
-              {isPlaying
+              {isPlayingInMain
                 ? <Square className="w-3 h-3" />
                 : <Play className="w-3 h-3" />
               }
@@ -206,7 +195,7 @@ const QueueItemRow: React.FC<QueueItemRowProps> = ({ item, playingId, onPlay }) 
 
         {/* Info */}
         <div className="flex-1 min-w-0">
-          <p className="text-xs font-medium text-zinc-200 truncate">
+          <p className={`text-xs font-medium truncate ${isPlayingInMain ? 'text-pink-300' : 'text-zinc-200'}`}>
             {item.generation.title || 'Untitled'}
           </p>
           <p className="text-[10px] text-zinc-500 truncate">
