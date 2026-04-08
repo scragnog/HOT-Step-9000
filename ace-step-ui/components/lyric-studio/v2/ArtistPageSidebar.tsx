@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, ListOrdered, Code2, Zap, Download } from 'lu
 import { Artist } from '../../../services/lyricStudioApi';
 import { TripleProviderSelector, ModelSelections, loadSelections, saveSelections } from '../ProviderSelector';
 import { EditableSlider } from '../../EditableSlider';
+import { ScaleOverridePresets } from '../../ScaleOverridePresets';
 
 // ── Persisted state hook (same implementation as usePersistedState) ──────────
 function usePersistedState<T>(key: string, defaultValue: T): [T, React.Dispatch<React.SetStateAction<T>>] {
@@ -145,6 +146,16 @@ export const ArtistPageSidebar: React.FC<ArtistPageSidebarProps> = ({
 
               {/* Sliders — always visible (greyed when disabled) */}
               <div className={!globalScaleOverrideEnabled ? 'opacity-40 pointer-events-none' : ''}>
+                {/* Scale Override Presets */}
+                <ScaleOverridePresets
+                  currentOverallScale={globalOverallScale}
+                  currentGroupScales={globalGroupScales}
+                  onLoad={(overall, groups) => {
+                    setGlobalOverallScale(overall);
+                    setGlobalGroupScales(groups);
+                  }}
+                  compact
+                />
                 <EditableSlider
                   label="Overall Scale"
                   value={globalOverallScale}

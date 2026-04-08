@@ -5,6 +5,7 @@ import { useAuth } from '../../context/AuthContext';
 import { generateApi } from '../../services/api';
 import { EditableSlider } from '../EditableSlider';
 import { FileBrowserModal } from '../FileBrowserModal';
+import { ScaleOverridePresets, GroupScales } from '../ScaleOverridePresets';
 
 
 export interface AdapterSlot {
@@ -700,6 +701,23 @@ export const AdaptersAccordion: React.FC<AdaptersAccordionProps> = ({
                                             <p className="text-[10px] text-amber-600 dark:text-amber-400/70 leading-tight mb-2">
                                                 These values override all per-adapter scales. Individual adapter settings are preserved and restored when this is disabled.
                                             </p>
+                                            {/* Scale Override Presets */}
+                                            <ScaleOverridePresets
+                                                currentOverallScale={globalOverallScale ?? 1.0}
+                                                currentGroupScales={{
+                                                    self_attn: globalGroupScales?.self_attn ?? 1.0,
+                                                    cross_attn: globalGroupScales?.cross_attn ?? 1.0,
+                                                    mlp: globalGroupScales?.mlp ?? 1.0,
+                                                    cond_embed: (globalGroupScales as any)?.cond_embed ?? 1.0,
+                                                }}
+                                                onLoad={(overall, groups) => {
+                                                    onGlobalOverallScaleChange?.(overall);
+                                                    onGlobalGroupScaleChange?.('self_attn', groups.self_attn);
+                                                    onGlobalGroupScaleChange?.('cross_attn', groups.cross_attn);
+                                                    onGlobalGroupScaleChange?.('mlp', groups.mlp);
+                                                    onGlobalGroupScaleChange?.('cond_embed', groups.cond_embed);
+                                                }}
+                                            />
                                             <EditableSlider
                                                 label="Overall Scale"
                                                 value={globalOverallScale ?? 1.0}
