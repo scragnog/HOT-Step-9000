@@ -72,6 +72,11 @@ def _extract_json(text: str) -> dict | None:
     # Also handle unclosed <think> tags (model cut off mid-thought)
     if "<think>" in stripped:
         stripped = re.sub(r"<think>.*", "", stripped, flags=re.DOTALL).strip()
+    # Strip LM Studio GGUF channel-based thinking tokens:
+    #   <|channel>thought ... <channel|>
+    stripped = re.sub(r"<\|channel>thought.*?<channel\|>", "", stripped, flags=re.DOTALL).strip()
+    if "<|channel>thought" in stripped:
+        stripped = re.sub(r"<\|channel>thought.*", "", stripped, flags=re.DOTALL).strip()
 
     # Strategy 1: direct parse
     try:

@@ -32,10 +32,15 @@ export const StreamingPanel: React.FC<StreamingPanelProps> = ({
 
   if (!visible) return null;
 
-  // Detect if model is currently inside a <think> block
+  // Detect if model is currently inside a thinking block
+  // Handles both <think>...</think> and LM Studio's <|channel>thought...<channel|>
   const thinkOpens = (streamText.match(/<think>/g) || []).length;
   const thinkCloses = (streamText.match(/<\/think>/g) || []).length;
-  const isThinking = !done && thinkOpens > thinkCloses && !skipRequested;
+  const channelOpens = (streamText.match(/<\|channel>thought/g) || []).length;
+  const channelCloses = (streamText.match(/<channel\|>/g) || []).length;
+  const isThinking = !done && (
+    (thinkOpens > thinkCloses) || (channelOpens > channelCloses)
+  ) && !skipRequested;
 
   const handleSkip = () => {
     setSkipRequested(true);

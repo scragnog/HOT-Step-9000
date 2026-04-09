@@ -81,11 +81,15 @@ def _strip_thinking_blocks(text: str) -> str:
     text = re.sub(r'<reasoning>.*?</reasoning>', '', text, flags=re.DOTALL).strip()
     text = re.sub(r'<reflection>.*?</reflection>', '', text, flags=re.DOTALL).strip()
     text = re.sub(r'<thought>.*?</thought>', '', text, flags=re.DOTALL).strip()
-    # Unclosed thinking tags
+    # LM Studio GGUF channel-based thinking tokens:
+    #   <|channel>thought ... <channel|>
+    text = re.sub(r'<\|channel>thought.*?<channel\|>', '', text, flags=re.DOTALL).strip()
+    # Unclosed thinking tags (any variant)
     text = re.sub(
         r'<(?:think|analysis|reasoning|reflection|thought)>.*$',
         '', text, flags=re.DOTALL,
     ).strip()
+    text = re.sub(r'<\|channel>thought.*$', '', text, flags=re.DOTALL).strip()
     # Plain text CoT (LM Studio GGUF quirks)
     pattern = (
         r'^(?:\s*\*+\s*)?'
@@ -96,6 +100,28 @@ def _strip_thinking_blocks(text: str) -> str:
     if match:
         text = text[match.end():].strip()
     return text
+
+
+def _is_in_thinking_block(text: str) -> bool:
+    """Check if text is currently inside an unclosed thinking block.
+
+    Handles both standard <think>...</think> and LM Studio's
+    <|channel>thought...<channel|> format.
+    """
+    # Standard XML think tags
+    if "<think>" in text and "</think>" not in text:
+        return True
+    # LM Studio channel-based thinking tokens
+    if "<|channel>thought" in text and "<channel|>" not in text:
+        return True
+    return False
+
+
+def _get_thinking_close_tag(text: str) -> str:
+    """Return the appropriate close tag for the thinking block format in use."""
+    if "<|channel>thought" in text:
+        return "<channel|>"
+    return "</think>"
 
 
 # ── Provider base class ──────────────────────────────────────────────────────
@@ -316,8 +342,7 @@ class OllamaProvider(LLMProvider):
                     full_so_far = "".join(chunks)
                     if (
                         _skip_thinking_event.is_set()
-                        and "<think>" in full_so_far
-                        and "</think>" not in full_so_far
+                        and _is_in_thinking_block(full_so_far)
                     ):
                         logger.info("Skip-thinking: aborting Ollama stream after %d tokens", len(chunks))
                         skipped = True
@@ -340,9 +365,10 @@ class OllamaProvider(LLMProvider):
     ) -> str:
         import httpx
         _skip_thinking_event.clear()
-        prefix = thinking_so_far.rstrip() + "\n</think>\n\n"
+        close_tag = _get_thinking_close_tag(thinking_so_far)
+        prefix = thinking_so_far.rstrip() + f"\n{close_tag}\n\n"
         if on_chunk:
-            on_chunk("\n</think>\n\n[Thinking skipped — producing output...]\n\n")
+            on_chunk(f"\n{close_tag}\n\n[Thinking skipped — producing output...]\n\n")
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
@@ -459,8 +485,7 @@ class LMStudioProvider(LLMProvider):
                 full_so_far = "".join(chunks)
                 if (
                     _skip_thinking_event.is_set()
-                    and "<think>" in full_so_far
-                    and "</think>" not in full_so_far
+                    and _is_in_thinking_block(full_so_far)
                 ):
                     logger.info("Skip-thinking: aborting LM Studio stream after %d tokens", len(chunks))
                     skipped = True
@@ -486,9 +511,10 @@ class LMStudioProvider(LLMProvider):
         on_chunk: Optional[Callable[[str], None]],
     ) -> str:
         _skip_thinking_event.clear()
-        prefix = thinking_so_far.rstrip() + "\n</think>\n\n"
+        close_tag = _get_thinking_close_tag(thinking_so_far)
+        prefix = thinking_so_far.rstrip() + f"\n{close_tag}\n\n"
         if on_chunk:
-            on_chunk("\n</think>\n\n[Thinking skipped — producing output...]\n\n")
+            on_chunk(f"\n{close_tag}\n\n[Thinking skipped — producing output...]\n\n")
         messages = [
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},

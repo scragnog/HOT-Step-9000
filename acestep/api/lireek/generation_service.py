@@ -210,7 +210,13 @@ def _strip_thinking_blocks(text: str) -> str:
     text = re.sub(r'<reasoning>.*?</reasoning>', '', text, flags=re.DOTALL).strip()
     text = re.sub(r'<reflection>.*?</reflection>', '', text, flags=re.DOTALL).strip()
     text = re.sub(r'<thought>.*?</thought>', '', text, flags=re.DOTALL).strip()
+    # LM Studio GGUF channel-based thinking tokens:
+    #   <|channel>thought ... <channel|>
+    text = re.sub(r'<\|channel>thought.*?<channel\|>', '', text, flags=re.DOTALL).strip()
+    # Unclosed thinking tags (any variant)
     text = re.sub(r'<(?:think|analysis|reasoning|reflection|thought)>.*$', '', text, flags=re.DOTALL).strip()
+    text = re.sub(r'<\|channel>thought.*$', '', text, flags=re.DOTALL).strip()
+    # Plain text CoT (LM Studio GGUF quirks)
     pattern = r'^(?:\s*\*+\s*)?(?:Thinking Process|Thought Process|Thinking|Reasoning):\s*.*?(?:---|[*]{3,}|={3,})\s*'
     match = re.match(pattern, text, flags=re.DOTALL | re.IGNORECASE)
     if match:
