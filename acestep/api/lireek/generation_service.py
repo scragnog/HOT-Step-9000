@@ -409,6 +409,17 @@ REFINEMENT RULES (ALL MANDATORY):
     - It is OK for ONE section to start with "You/You're" — just not multiple sections, and ideally not the very first verse.
     - This rule applies to line STARTS only — "You" can appear freely elsewhere in any line.
 
+25. DYNAMIC LINE LENGTHS (CRITICAL — BREAK THE MONOTONY)
+    Smaller generation models produce lines that are all roughly the same length — typically 8-10 words each, line after line. Real songs don't work like this. Real artists use rhythm and pacing: short punchy lines for impact, longer flowing lines for narrative, and everything in between.
+    When refining, actively vary the syllable count and word count across lines within each section:
+    - Mix short lines (2-4 words) with medium lines (6-8 words) and longer lines (10+ words).
+    - Use the artist's actual cadence as your guide — if the profile shows high syllable variance, lean into it hard.
+    - Short lines hit harder: "Gone." / "Not anymore." / "Just like that." — use them for emotional punctuation.
+    - Longer lines work for storytelling and building momentum.
+    - A verse where every line is the same length sounds like a shopping list, not a song. Break it up.
+    - Pay attention to how the line lengths create a RHYTHM when read aloud — the variation should feel musical, not random.
+    - This is one of the most impactful refinements you can make. Uniform line length is the #1 tell of machine-generated lyrics.
+
 FORMATTING RULES:
 - The FIRST LINE must be: Title: <song title>
 - Section headers use square brackets: [Verse 1], [Chorus], [Bridge], etc.
