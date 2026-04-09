@@ -62,6 +62,7 @@ export const InlineAudioQueue: React.FC<InlineAudioQueueProps> = ({ onPlaySong, 
       viewCount: 0,
       userId: '',
       creator: item.artistName || '',
+      generationParams: (item as any).generationParams,
     };
 
     onPlaySong(song);
@@ -275,6 +276,7 @@ const QueueAddToPlaylistBtn: React.FC<{ item: AudioQueueItem }> = ({ item }) => 
         artistName: item.artistName || '',
         coverUrl: '',
         duration: 0,
+        generationParams: (item as any).generationParams,
       });
     }
   };

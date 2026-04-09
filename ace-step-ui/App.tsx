@@ -1364,8 +1364,29 @@ function AppContent() {
   }, [normalizeGenerationParams, getAudioUrl]);
 
   const playSong = (song: Song, list?: Song[]) => {
-    const normalizedSong = normalizeSongForState(song);
-    const normalizedList = Array.isArray(list) ? list.map(normalizeSongForState) : undefined;
+    // Enrich song with DB data — Playlist and Queue build minimal Song objects
+    // that lack generationParams (where originalAudioUrl lives for M/O toggle).
+    // Look up the matching DB song by id or audioUrl and merge the missing fields.
+    const enrichFromDb = (s: Song): Song => {
+      if (s.generationParams?.originalAudioUrl) return s; // already has mastering info
+      const dbMatch = songs.find(db =>
+        db.id === s.id || (db.audioUrl && s.audioUrl && db.audioUrl === s.audioUrl)
+      );
+      if (!dbMatch) return s;
+      return {
+        ...s,
+        generationParams: s.generationParams || dbMatch.generationParams,
+        coverUrl: s.coverUrl || dbMatch.coverUrl,
+        creator: s.creator || dbMatch.creator,
+        ditModel: s.ditModel || dbMatch.ditModel,
+      };
+    };
+
+    const enrichedSong = enrichFromDb(song);
+    const enrichedList = Array.isArray(list) ? list.map(enrichFromDb) : undefined;
+
+    const normalizedSong = normalizeSongForState(enrichedSong);
+    const normalizedList = enrichedList ? enrichedList.map(normalizeSongForState) : undefined;
 
     const nextQueue = normalizedList && normalizedList.length > 0
       ? normalizedList

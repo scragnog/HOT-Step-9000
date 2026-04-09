@@ -164,6 +164,7 @@ export const FloatingPlaylist: React.FC<FloatingPlaylistProps> = ({ onPlaySong, 
       viewCount: 0,
       userId: '',
       creator: i.artistName || '',
+      generationParams: i.generationParams,
     }));
 
     const clickedSong = songList.find(s => s.id === item.id);

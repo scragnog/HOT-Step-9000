@@ -445,6 +445,7 @@ const AddToPlaylistButton: React.FC<{ song: Song; artistName?: string }> = ({ so
         coverUrl: song.coverUrl || (song as any).cover_url || '',
         duration: seconds,
         style: song.style || '',
+        generationParams: song.generationParams,
       });
     }
   };

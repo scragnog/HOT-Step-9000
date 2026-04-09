@@ -18,6 +18,8 @@ export interface PlaylistItem {
   coverUrl?: string;
   duration?: number; // seconds
   style?: string;
+  /** Preserved so M/O toggle works when playing from playlist */
+  generationParams?: any;
 }
 
 // ── Storage ──────────────────────────────────────────────────────────────────
