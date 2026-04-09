@@ -34,6 +34,7 @@ import { usePersistedState } from './hooks/usePersistedState';
 import { AudioAnalysisProvider, useAudioAnalysis } from './context/AudioAnalysisContext';
 import { FullscreenVisualizer } from './components/FullscreenVisualizer';
 import { ABCompareModal } from './components/ABCompareModal';
+import { usePlaylist, PlaylistItem } from './components/lyric-studio/v2/playlistStore';
 
 
 type AppErrorBoundaryProps = PropsWithChildren<{}>;
@@ -135,6 +136,7 @@ function AppContent() {
   const [referenceTracks, setReferenceTracks] = useState<ReferenceTrack[]>([]);
   const [playQueue, setPlayQueue] = useState<Song[]>([]);
   const [queueIndex, setQueueIndex] = useState(-1);
+  const playQueueSourceRef = useRef<'playlist' | null>(null);
 
   // Selection State
   const [currentSong, setCurrentSong] = useState<Song | null>(null);
@@ -744,6 +746,52 @@ function AppContent() {
     if (song && songs.some(s => s.id === song.id)) return songs;
     return songs;
   };
+
+  // ── Keep playQueue in sync with live Lyric Studio playlist ────────────────
+  // The playQueue is a snapshot taken when the user clicks play. If they add
+  // songs to the playlist while a song is playing, the queue becomes stale.
+  // This effect watches the playlist store and rebuilds the queue reactively.
+  const lsPlaylist = usePlaylist();
+  useEffect(() => {
+    if (playQueueSourceRef.current !== 'playlist') return;
+    if (playQueue.length === 0) return;
+
+    // Convert PlaylistItems → Song objects (same shape as FloatingPlaylist.handlePlayMain)
+    const buildSong = (i: PlaylistItem): Song => ({
+      id: i.id,
+      title: i.title,
+      lyrics: '',
+      style: i.style || '',
+      audioUrl: i.audioUrl,
+      coverUrl: i.coverUrl || '',
+      duration: i.duration ? `${Math.floor(i.duration / 60)}:${String(Math.floor(i.duration % 60)).padStart(2, '0')}` : '0:00',
+      createdAt: new Date(),
+      tags: [],
+      isPublic: false,
+      likeCount: 0,
+      viewCount: 0,
+      userId: '',
+      creator: i.artistName || '',
+      generationParams: i.generationParams,
+    });
+
+    const newQueue = lsPlaylist.items.map(buildSong).map(normalizeSongForState);
+
+    // Only update if the playlist actually changed (different length or IDs)
+    const oldIds = playQueue.map(s => s.id).join(',');
+    const newIds = newQueue.map(s => s.id).join(',');
+    if (oldIds === newIds) return;
+
+    console.log('[PlaylistSync] Playlist changed, updating playQueue:', playQueue.length, '→', newQueue.length);
+    setPlayQueue(newQueue);
+
+    // Keep queueIndex valid for the current song
+    if (currentSong) {
+      const newIdx = newQueue.findIndex(s => s.id === currentSong.id);
+      if (newIdx >= 0) setQueueIndex(newIdx);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lsPlaylist.items]);
 
   const playNext = useCallback(() => {
     if (!currentSong) { console.warn('[playNext] No currentSong — aborting'); return; }
@@ -1406,6 +1454,9 @@ function AppContent() {
     const nextIndex = nextQueue.findIndex(s => s.id === normalizedSong.id);
     setPlayQueue(nextQueue.map(normalizeSongForState));
     setQueueIndex(nextIndex);
+    // Track whether this queue came from an explicit list (e.g. FloatingPlaylist)
+    // so the playlist sync effect knows to keep it updated
+    playQueueSourceRef.current = (normalizedList && normalizedList.length > 0) ? 'playlist' : null;
 
     if (currentSong?.id !== normalizedSong.id) {
       const updatedSong = { ...normalizedSong, viewCount: (normalizedSong.viewCount || 0) + 1 };
