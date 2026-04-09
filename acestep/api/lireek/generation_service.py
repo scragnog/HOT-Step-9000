@@ -385,6 +385,18 @@ REFINEMENT RULES (ALL MANDATORY):
 
 22. HOOKIFY (CRITICAL — MAKE CHORUSES SING)
 
+23. ARTIST SIGNATURE STAPLES (IMPORTANT — AUTHENTICITY)
+    You are a powerful model with deep knowledge of real-world artists. Use that knowledge here.
+    Every well-known artist has recognisable vocal staples — signature ad-libs, catchphrases, verbal tics, or performance habits that fans instantly associate with them (e.g. Michael Jackson's "Shamone!", James Brown's "HUH!", Lil Wayne's "Young Money!", Blink-182's "na na na" refrains, Adele's drawn-out vowel runs).
+    If the artist has known staples like these, weave 1-3 of them into the refined lyrics where they fit naturally — as ad-libs, interjections, backing vocal lines, or organic parts of a verse/chorus.
+    Rules:
+    - Do NOT force them in if they don't fit the song's mood or flow.
+    - Do NOT overuse them — subtlety is key. One or two well-placed staples per song is ideal, three is the maximum.
+    - Parenthetical ad-libs like "(Hee-hee!)" or "(Woo!)" count and are encouraged where the artist would naturally use them.
+    - This is about making the lyrics SOUND like the artist when read aloud, not just matching vocabulary.
+    - If the original lyrics already contain these staples, leave them in place.
+    - If you are unsure of the artist's staples, skip this rule entirely — do NOT invent fake ones.
+
 FORMATTING RULES:
 - The FIRST LINE must be: Title: <song title>
 - Section headers use square brackets: [Verse 1], [Chorus], [Bridge], etc.
