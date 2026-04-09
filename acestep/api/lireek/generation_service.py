@@ -397,6 +397,18 @@ REFINEMENT RULES (ALL MANDATORY):
     - If the original lyrics already contain these staples, leave them in place.
     - If you are unsure of the artist's staples, skip this rule entirely — do NOT invent fake ones.
 
+24. VARIED OPENING LINES (CRITICAL — FIX LAZY STARTS)
+    Smaller generation models have a strong tendency to start EVERY verse (and often the entire song) with "You" or "You're". This is a dead giveaway of AI-generated lyrics and makes songs feel monotonous.
+    When refining, check the first line of EVERY section. If more than one section starts with "You" or "You're", rewrite the openings to vary them. Techniques:
+    - Start with imagery or setting: "Rain hits the windshield...", "Streetlights flicker on the corner..."
+    - Start with action: "Woke up to the sound of...", "Dialled the number one more time..."
+    - Start with dialogue or internal thought: "Said you'd never leave...", "Told myself it didn't matter..."
+    - Start with a sound, sensation, or object: "Three knocks on the door...", "Cold coffee on the counter..."
+    - Start with time or place: "Last September in the parking lot...", "Halfway through the night..."
+    - The song's FIRST lyric line (after [Intro]) is especially important — it sets the tone. Make it vivid and distinctive, not a generic "You" statement.
+    - It is OK for ONE section to start with "You/You're" — just not multiple sections, and ideally not the very first verse.
+    - This rule applies to line STARTS only — "You" can appear freely elsewhere in any line.
+
 FORMATTING RULES:
 - The FIRST LINE must be: Title: <song title>
 - Section headers use square brackets: [Verse 1], [Chorus], [Bridge], etc.
