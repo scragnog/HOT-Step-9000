@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { Trash2, Pencil, Music2, Wand2, Play, Loader2, ChevronDown, ChevronRight, Send, FileText, Headphones } from 'lucide-react';
+import { Trash2, Pencil, Music2, Wand2, Play, Loader2, ChevronDown, ChevronRight, Send, FileText, Headphones, Sparkles } from 'lucide-react';
 import { lireekApi, Generation, Profile } from '../../../services/lyricStudioApi';
 import {
   useStreamingStore,
   startStreamGenerate,
+  startStreamRefine,
 } from '../../../stores/streamingStore';
 import { StreamingPanel } from '../StreamingPanel';
 
@@ -25,6 +26,7 @@ export const WrittenSongsTab: React.FC<WrittenSongsTabProps> = ({
 }) => {
   const [expandedId, setExpandedId] = useState<number | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [refiningId, setRefiningId] = useState<number | null>(null);
   const [genCount, setGenCount] = useState(1);
   const streaming = useStreamingStore();
 
@@ -54,6 +56,29 @@ export const WrittenSongsTab: React.FC<WrittenSongsTabProps> = ({
       showToast(`Failed: ${err.message}`);
     } finally {
       setGenerating(false);
+    }
+  };
+
+  const handleRefine = async (gen: Generation) => {
+    const { provider, model } = refinementModel;
+    if (!provider) {
+      showToast('Select a refinement model first');
+      return;
+    }
+    setRefiningId(gen.id);
+    try {
+      await startStreamRefine(
+        gen.id,
+        { provider, model },
+        () => {
+          showToast(`Refined: ${gen.title || 'Untitled'}`);
+          onRefresh();
+        },
+      );
+    } catch (err: any) {
+      showToast(`Refinement failed: ${err.message}`);
+    } finally {
+      setRefiningId(null);
     }
   };
 
@@ -166,6 +191,11 @@ export const WrittenSongsTab: React.FC<WrittenSongsTabProps> = ({
                     </p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
+                    {gen.parent_generation_id && (
+                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 flex items-center gap-0.5">
+                        <Sparkles className="w-2.5 h-2.5" /> Refined
+                      </span>
+                    )}
                     <button
                       onClick={(e) => { e.stopPropagation(); onGenerateAudio(gen); }}
                       className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] text-emerald-400 hover:bg-emerald-500/10 transition-colors"
@@ -265,6 +295,15 @@ export const WrittenSongsTab: React.FC<WrittenSongsTabProps> = ({
                         >
                           <Play className="w-3.5 h-3.5" />
                           Generate Audio
+                        </button>
+                        <button
+                          onClick={() => handleRefine(gen)}
+                          disabled={refiningId === gen.id}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/20 text-purple-300 hover:bg-purple-500/30 text-sm font-medium transition-colors disabled:opacity-50"
+                          title="Refine these lyrics using the refinement LLM"
+                        >
+                          {refiningId === gen.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Sparkles className="w-3.5 h-3.5" />}
+                          Refine
                         </button>
                         {onSendToCreate && (
                           <button

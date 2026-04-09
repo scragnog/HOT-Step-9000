@@ -526,12 +526,14 @@ def register_lireek_routes(app: FastAPI) -> None:
             logger.error("Refinement failed: %s", traceback.format_exc())
             raise HTTPException(status_code=500, detail=str(e))
 
+        # Ensure title ends with " - Refined" (strip existing to avoid stacking)
+        refined_title = (result.title or original.get("title", "")).removesuffix(" - Refined") + " - Refined"
         saved = save_generation(
             profile_id=original["profile_id"],
             provider=result.provider,
             model=result.model,
             lyrics=result.lyrics,
-            title=result.title,
+            title=refined_title,
             system_prompt=result.system_prompt,
             user_prompt=result.user_prompt,
             parent_generation_id=generation_id,
@@ -715,12 +717,14 @@ def register_lireek_routes(app: FastAPI) -> None:
                     profile=profile,
                     on_chunk=on_chunk,
                 )
+                # Ensure title ends with " - Refined" (strip existing to avoid stacking)
+                refined_title = (result.title or original.get("title", "")).removesuffix(" - Refined") + " - Refined"
                 saved = save_generation(
                     profile_id=original["profile_id"],
                     provider=result.provider,
                     model=result.model,
                     lyrics=result.lyrics,
-                    title=result.title,
+                    title=refined_title,
                     system_prompt=result.system_prompt,
                     user_prompt=result.user_prompt,
                     parent_generation_id=generation_id,
