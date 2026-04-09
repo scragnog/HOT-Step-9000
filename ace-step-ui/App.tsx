@@ -746,14 +746,19 @@ function AppContent() {
   };
 
   const playNext = useCallback(() => {
-    if (!currentSong) return;
+    if (!currentSong) { console.warn('[playNext] No currentSong — aborting'); return; }
     const queue = getActiveQueue(currentSong);
-    if (queue.length === 0) return;
+    if (queue.length === 0) { console.warn('[playNext] Queue empty — aborting'); return; }
 
     const currentIndex = queueIndex >= 0 && queue[queueIndex]?.id === currentSong.id
       ? queueIndex
       : queue.findIndex(s => s.id === currentSong.id);
-    if (currentIndex === -1) return;
+    if (currentIndex === -1) {
+      console.warn('[playNext] currentSong not found in queue — aborting',
+        { songId: currentSong.id, queueIndex, queueLen: queue.length,
+          queueIds: queue.map(s => s.id).slice(0, 5) });
+      return;
+    }
 
     if (repeatMode === 'one') {
       if (audioRef.current) {
@@ -775,6 +780,7 @@ function AppContent() {
           nextIndex = 0;
         } else {
           // repeatMode === 'none': stop at end of queue
+          console.log('[playNext] End of queue (no repeat) — stopping');
           setIsPlaying(false);
           return;
         }
@@ -782,9 +788,11 @@ function AppContent() {
     }
 
     const nextSong = queue[nextIndex];
+    console.log('[playNext] Advancing to', nextIndex, nextSong?.title);
     setQueueIndex(nextIndex);
     setCurrentSong(nextSong);
     setIsPlaying(true);
+    setPlayingOriginal(false); // Reset M/O toggle for new song
   }, [currentSong, queueIndex, isShuffle, repeatMode, playQueue, songs]);
 
   const playPrevious = useCallback(() => {
@@ -811,6 +819,7 @@ function AppContent() {
     setQueueIndex(prevIndex);
     setCurrentSong(prevSong);
     setIsPlaying(true);
+    setPlayingOriginal(false); // Reset M/O toggle for new song
   }, [currentSong, queueIndex, currentTime, isShuffle, playQueue, songs]);
 
   useEffect(() => {
@@ -861,6 +870,7 @@ function AppContent() {
     };
 
     const onEnded = () => {
+      console.log('[Audio] Song ended — calling playNext');
       playNextRef.current();
     };
 
