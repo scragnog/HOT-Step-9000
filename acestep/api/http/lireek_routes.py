@@ -489,14 +489,13 @@ def register_lireek_routes(app: FastAPI) -> None:
     async def refine_lyrics_endpoint(generation_id: int, req: RefineGenerationRequest):
         """Refine an existing generation."""
         from acestep.api.lireek.lireek_db import (
-            get_generations, get_profile, save_generation,
+            get_generation, get_profile, save_generation,
         )
         from acestep.api.lireek.schemas import LyricsProfile
         from acestep.api.lireek.generation_service import refine_lyrics
 
-        # Find the original generation
-        all_gens = get_generations()
-        original = next((g for g in all_gens if g["id"] == generation_id), None)
+        # Find the original generation (get_generation returns full data incl. lyrics)
+        original = get_generation(generation_id)
         if not original:
             raise HTTPException(status_code=404, detail="Generation not found")
 
@@ -681,13 +680,12 @@ def register_lireek_routes(app: FastAPI) -> None:
     async def refine_stream(generation_id: int, req: RefineGenerationRequest):
         """Refine lyrics with SSE streaming of LLM output."""
         from acestep.api.lireek.lireek_db import (
-            get_generations, get_profile, save_generation,
+            get_generation, get_profile, save_generation,
         )
         from acestep.api.lireek.schemas import LyricsProfile
         from acestep.api.lireek.generation_service import refine_lyrics
 
-        all_gens = get_generations()
-        original = next((g for g in all_gens if g["id"] == generation_id), None)
+        original = get_generation(generation_id)
         if not original:
             raise HTTPException(status_code=404, detail="Generation not found")
 
