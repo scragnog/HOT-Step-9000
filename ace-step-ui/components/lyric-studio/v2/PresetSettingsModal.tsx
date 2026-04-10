@@ -13,7 +13,8 @@ interface PresetForm {
   cross_attn: number;
   mlp: number;
   cond_embed: number;
-  matchering_reference_path: string;
+  reference_track_path: string;
+  audio_cover_strength: number;
 }
 
 const DEFAULT_FORM: PresetForm = {
@@ -23,7 +24,8 @@ const DEFAULT_FORM: PresetForm = {
   cross_attn: 1.0,
   mlp: 1.0,
   cond_embed: 1.0,
-  matchering_reference_path: '',
+  reference_track_path: '',
+  audio_cover_strength: 0.5,
 };
 
 interface PresetSettingsModalProps {
@@ -44,7 +46,7 @@ export const PresetSettingsModal: React.FC<PresetSettingsModalProps> = ({
   const [groupsExpanded, setGroupsExpanded] = useState(false);
   const [detectedType, setDetectedType] = useState<'lokr' | 'lora' | 'unknown' | null>(null);
   const [browserOpen, setBrowserOpen] = useState(false);
-  const [browserTarget, setBrowserTarget] = useState<'adapter' | 'matchering'>('adapter');
+  const [browserTarget, setBrowserTarget] = useState<'adapter' | 'reference'>('adapter');
 
   // Load existing preset
   useEffect(() => {
@@ -60,7 +62,8 @@ export const PresetSettingsModal: React.FC<PresetSettingsModalProps> = ({
             cross_attn: res.preset.adapter_group_scales?.cross_attn ?? 1.0,
             mlp: res.preset.adapter_group_scales?.mlp ?? 1.0,
             cond_embed: res.preset.adapter_group_scales?.cond_embed ?? 1.0,
-            matchering_reference_path: res.preset.matchering_reference_path || '',
+            reference_track_path: res.preset.reference_track_path || '',
+            audio_cover_strength: res.preset.audio_cover_strength ?? 0.5,
           });
         } else {
           setForm(DEFAULT_FORM);
@@ -90,7 +93,8 @@ export const PresetSettingsModal: React.FC<PresetSettingsModalProps> = ({
         adapter_path: form.adapter_path || undefined,
         adapter_scale: form.adapter_scale,
         adapter_group_scales: { self_attn: form.self_attn, cross_attn: form.cross_attn, mlp: form.mlp, cond_embed: form.cond_embed },
-        matchering_reference_path: form.matchering_reference_path || undefined,
+        reference_track_path: form.reference_track_path || undefined,
+        audio_cover_strength: form.audio_cover_strength,
       });
       showToast('Preset saved');
       onClose();
@@ -118,7 +122,7 @@ export const PresetSettingsModal: React.FC<PresetSettingsModalProps> = ({
   if (!isOpen) return null;
 
   const adapterFileName = form.adapter_path ? form.adapter_path.split(/[\\/]/).pop() || '' : '';
-  const matchFileName = form.matchering_reference_path ? form.matchering_reference_path.split(/[\\/]/).pop() || '' : '';
+  const matchFileName = form.reference_track_path ? form.reference_track_path.split(/[\\/]/).pop() || '' : '';
 
   const adapterTag = detectedType === 'lokr' ? 'LOKR' : detectedType === 'lora' ? 'LORA' : detectedType ? '...' : null;
   const adapterTagColor = detectedType === 'lokr' ? 'bg-purple-900/30 text-purple-400' : 'bg-pink-900/30 text-pink-400';
@@ -269,11 +273,11 @@ export const PresetSettingsModal: React.FC<PresetSettingsModalProps> = ({
                 {/* ── Divider ── */}
                 <div className="border-t border-white/5" />
 
-                {/* ── Matchering Section ── */}
+                {/* ── Reference Track Section ── */}
                 <div className="space-y-3">
                   <div className="flex items-center gap-2 text-sm font-semibold text-zinc-300">
                     <Music className="w-4 h-4 text-amber-400" />
-                    Matchering Reference
+                    Reference Track
                   </div>
 
                   <div className="space-y-2">
@@ -281,22 +285,22 @@ export const PresetSettingsModal: React.FC<PresetSettingsModalProps> = ({
                     <div className="flex gap-2">
                       <input
                         type="text"
-                        value={form.matchering_reference_path}
-                        onChange={e => setForm(p => ({ ...p, matchering_reference_path: e.target.value }))}
+                        value={form.reference_track_path}
+                        onChange={e => setForm(p => ({ ...p, reference_track_path: e.target.value }))}
                         placeholder="Path to reference audio (.wav, .mp3, .flac)"
                         className="flex-1 bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-amber-500 transition-colors"
                       />
                       <button
-                        onClick={() => { setBrowserTarget('matchering'); setBrowserOpen(true); }}
+                        onClick={() => { setBrowserTarget('reference'); setBrowserOpen(true); }}
                         title="Browse for reference audio"
                         className="px-3 py-2 rounded-lg text-xs font-semibold bg-amber-900/20 text-amber-400 hover:bg-amber-900/30 transition-colors flex items-center gap-1.5 flex-shrink-0"
                       >
                         <FolderSearch size={14} />
                         Browse
                       </button>
-                      {form.matchering_reference_path && (
+                      {form.reference_track_path && (
                         <button
-                          onClick={() => setForm(p => ({ ...p, matchering_reference_path: '' }))}
+                          onClick={() => setForm(p => ({ ...p, reference_track_path: '' }))}
                           className="px-2 py-2 rounded-lg text-xs text-zinc-400 hover:text-red-400 transition-colors flex-shrink-0"
                           title="Clear"
                         >
@@ -304,18 +308,33 @@ export const PresetSettingsModal: React.FC<PresetSettingsModalProps> = ({
                         </button>
                       )}
                     </div>
-                    {form.matchering_reference_path && (
+                    {form.reference_track_path && (
                       <div className="flex items-center gap-2">
                         <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-900/30 text-amber-400">REF</span>
-                        <span className="text-[10px] text-zinc-500 truncate" title={form.matchering_reference_path}>
+                        <span className="text-[10px] text-zinc-500 truncate" title={form.reference_track_path}>
                           {matchFileName}
                         </span>
                       </div>
                     )}
-                    <p className="text-[10px] text-zinc-600">
-                      Audio file to match EQ and loudness characteristics during mastering
-                    </p>
                   </div>
+
+                  {form.reference_track_path && (
+                    <EditableSlider
+                      label="Reference Strength"
+                      value={form.audio_cover_strength}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      onChange={(v) => setForm(p => ({ ...p, audio_cover_strength: v }))}
+                      formatDisplay={(v) => v.toFixed(2)}
+                      helpText="How strongly the reference track influences generation timbre (0 = none, 1 = maximum)"
+                      tooltip="Controls the ACE-Step timbre encoder's conditioning strength. Lower values give more creative freedom, higher values push output closer to the reference track's acoustic character."
+                    />
+                  )}
+
+                  <p className="text-[10px] text-zinc-600">
+                    Used for both timbre conditioning during generation and matchering in post-processing
+                  </p>
                 </div>
               </>
             )}
@@ -360,13 +379,13 @@ export const PresetSettingsModal: React.FC<PresetSettingsModalProps> = ({
           if (browserTarget === 'adapter') {
             setForm(p => ({ ...p, adapter_path: path }));
           } else {
-            setForm(p => ({ ...p, matchering_reference_path: path }));
+            setForm(p => ({ ...p, reference_track_path: path }));
           }
           setBrowserOpen(false);
         }}
         mode="file"
-        filter={browserTarget === 'matchering' ? 'audio' : 'adapters'}
-        title={browserTarget === 'matchering' ? 'Select Reference Audio' : 'Select Adapter File'}
+        filter={browserTarget === 'reference' ? 'audio' : 'adapters'}
+        title={browserTarget === 'reference' ? 'Select Reference Audio' : 'Select Adapter File'}
       />
     </>
   );

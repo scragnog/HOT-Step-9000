@@ -39,7 +39,7 @@ type PresetStatus = 'complete' | 'partial' | 'missing';
 function getPresetStatus(preset?: AlbumPreset | null): PresetStatus {
   if (!preset) return 'missing';
   const hasAdapter = !!preset.adapter_path;
-  const hasRef = !!preset.matchering_reference_path;
+  const hasRef = !!preset.reference_track_path;
   if (hasAdapter && hasRef) return 'complete';
   if (hasAdapter || hasRef) return 'partial';
   return 'missing';
@@ -214,7 +214,7 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
           params.adapter_group_scales = { self_attn: selfAttn, cross_attn: crossAttn, mlp, cond_embed: condEmbed };
         }
         if (hasRef) {
-          params.matchering_reference_path = matcheringPath.trim();
+          params.reference_track_path = matcheringPath.trim();
         }
 
         // If we have adapter but no explicit scale fields, still send defaults
@@ -401,7 +401,7 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
                   <Music className="w-3.5 h-3.5 text-amber-400" />
-                  Matchering Reference to Apply
+                  Reference Track to Apply
                 </div>
                 <div className="flex gap-2">
                   <input
@@ -529,9 +529,9 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
                               🔌 {preset.adapter_path.split(/[\\/]/).pop()}
                             </span>
                           )}
-                          {preset?.matchering_reference_path && (
-                            <span className="text-[9px] text-zinc-600 truncate max-w-[120px]" title={preset.matchering_reference_path}>
-                              🎵 {preset.matchering_reference_path.split(/[\\/]/).pop()}
+                          {preset?.reference_track_path && (
+                            <span className="text-[9px] text-zinc-600 truncate max-w-[120px]" title={preset.reference_track_path}>
+                              🎵 {preset.reference_track_path.split(/[\\/]/).pop()}
                             </span>
                           )}
                         </div>

@@ -813,7 +813,8 @@ def register_lireek_routes(app: FastAPI) -> None:
             "adapter_path": raw.get("adapter_path"),
             "adapter_scale": scales.get("scale", 1.0),
             "adapter_group_scales": scales.get("group_scales"),
-            "matchering_reference_path": raw.get("matchering_ref_path"),
+            "reference_track_path": raw.get("matchering_ref_path"),
+            "audio_cover_strength": raw.get("audio_cover_strength"),
             "updated_at": raw.get("updated_at", ""),
         }
         return {"preset": preset}
@@ -830,7 +831,8 @@ def register_lireek_routes(app: FastAPI) -> None:
             lyrics_set_id=lyrics_set_id,
             adapter_path=req.adapter_path,
             adapter_scales=adapter_scales,
-            matchering_ref_path=req.matchering_reference_path,
+            matchering_ref_path=req.reference_track_path,
+            audio_cover_strength=req.audio_cover_strength,
         )
         # Map back for response
         scales = raw.get("adapter_scales") or {}
@@ -840,7 +842,8 @@ def register_lireek_routes(app: FastAPI) -> None:
             "adapter_path": raw.get("adapter_path"),
             "adapter_scale": scales.get("scale", 1.0),
             "adapter_group_scales": scales.get("group_scales"),
-            "matchering_reference_path": raw.get("matchering_ref_path"),
+            "reference_track_path": raw.get("matchering_ref_path"),
+            "audio_cover_strength": raw.get("audio_cover_strength"),
             "updated_at": raw.get("updated_at", ""),
         }
         return {"preset": preset}
@@ -868,7 +871,8 @@ def register_lireek_routes(app: FastAPI) -> None:
                 "adapter_path": raw.get("adapter_path"),
                 "adapter_scale": scales.get("scale", 1.0),
                 "adapter_group_scales": scales.get("group_scales"),
-                "matchering_reference_path": raw.get("matchering_ref_path"),
+                "reference_track_path": raw.get("matchering_ref_path"),
+                "audio_cover_strength": raw.get("audio_cover_strength"),
                 "updated_at": raw.get("updated_at", ""),
             })
         return {"presets": mapped}

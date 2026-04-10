@@ -378,10 +378,14 @@ async function _executeItem(item: AudioQueueItem, token: string): Promise<void> 
     applyTriggerWord(params, preset.adapter_path);
   }
 
-  // 4) Matchering
-  if (preset?.matchering_reference_path) {
+  // 4) Reference Track — dual purpose: timbre conditioning + matchering
+  if (preset?.reference_track_path) {
+    // a) ACE-Step timbre conditioning (guides DiT toward target acoustics)
+    params.referenceAudioUrl = preset.reference_track_path;
+    params.audioCoverStrength = preset.audio_cover_strength ?? 0.5;
+    // b) Post-processing matchering (polishes EQ/loudness)
     params.autoMaster = true;
-    params.masteringParams = { mode: 'matchering', reference_file: preset.matchering_reference_path };
+    params.masteringParams = { mode: 'matchering', reference_file: preset.reference_track_path };
   }
 
   // 5) Mark source & artist for download naming

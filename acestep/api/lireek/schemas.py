@@ -174,13 +174,14 @@ class SavedGeneration(BaseModel):
 # ── Album presets (HOT-Step extension) ────────────────────────────────────────
 
 class AlbumPreset(BaseModel):
-    """Persistent adapter + matchering config bound to a lyrics set (album)."""
+    """Persistent adapter + reference track config bound to a lyrics set (album)."""
     id: int
     lyrics_set_id: int
     adapter_path: Optional[str] = None
     adapter_scale: float = 1.0
     adapter_group_scales: Optional[dict] = None
-    matchering_reference_path: Optional[str] = None
+    reference_track_path: Optional[str] = None
+    audio_cover_strength: Optional[float] = None
     created_at: str = ""
     updated_at: str = ""
 
@@ -190,7 +191,8 @@ class AlbumPresetUpdate(BaseModel):
     adapter_path: Optional[str] = None
     adapter_scale: float = 1.0
     adapter_group_scales: Optional[dict] = None
-    matchering_reference_path: Optional[str] = None
+    reference_track_path: Optional[str] = None
+    audio_cover_strength: Optional[float] = None
 
 
 # ── Audio generation mapping (HOT-Step extension) ────────────────────────────

@@ -211,10 +211,14 @@ export function useAudioGeneration({ profiles, showToast, onJobLinked }: UseAudi
         applyTriggerWord(params, preset.adapter_path);
       }
 
-      // 6) Matchering
-      if (preset?.matchering_reference_path) {
+      // 6) Reference Track — dual purpose: timbre conditioning + matchering
+      if (preset?.reference_track_path) {
+        // a) ACE-Step timbre conditioning (guides DiT toward target acoustics)
+        params.referenceAudioUrl = preset.reference_track_path;
+        params.audioCoverStrength = preset.audio_cover_strength ?? 0.5;
+        // b) Post-processing matchering (polishes EQ/loudness)
         params.autoMaster = true;
-        params.masteringParams = { mode: 'matchering', reference_file: preset.matchering_reference_path };
+        params.masteringParams = { mode: 'matchering', reference_file: preset.reference_track_path };
       }
 
       // 7) Mark as Lyric Studio generation
@@ -265,9 +269,9 @@ export function useAudioGeneration({ profiles, showToast, onJobLinked }: UseAudi
       importData.loraPath = preset.adapter_path;
       importData.loraScale = preset.adapter_scale ?? 1.0;
     }
-    if (preset?.matchering_reference_path) {
+    if (preset?.reference_track_path) {
       importData.autoMaster = true;
-      importData.masteringParams = { mode: 'matchering', reference_file: preset.matchering_reference_path };
+      importData.masteringParams = { mode: 'matchering', reference_file: preset.reference_track_path };
     }
 
     localStorage.setItem('hotstep_lireek_import', JSON.stringify(importData));

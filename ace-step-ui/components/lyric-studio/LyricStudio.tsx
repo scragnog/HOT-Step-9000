@@ -111,11 +111,13 @@ export const LyricStudio: React.FC<{ onPlaySong?: (song: Song) => void }> = ({ o
     cross_attn: number;
     mlp: number;
     cond_embed: number;
-    matchering_reference_path: string;
+    reference_track_path: string;
+    audio_cover_strength: number;
   }>({
     adapter_path: '', adapter_scale: 1.0,
     self_attn: 1.0, cross_attn: 1.0, mlp: 1.0, cond_embed: 1.0,
-    matchering_reference_path: '',
+    reference_track_path: '',
+    audio_cover_strength: 0.5,
   });
 
   // ── Load all data ───────────────────────────────────────────────────────
@@ -343,10 +345,11 @@ export const LyricStudio: React.FC<{ onPlaySong?: (song: Song) => void }> = ({ o
           cross_attn: res.preset.adapter_group_scales?.cross_attn ?? 1.0,
           mlp: res.preset.adapter_group_scales?.mlp ?? 1.0,
           cond_embed: res.preset.adapter_group_scales?.cond_embed ?? 1.0,
-          matchering_reference_path: res.preset.matchering_reference_path || '',
+          reference_track_path: res.preset.reference_track_path || '',
+          audio_cover_strength: res.preset.audio_cover_strength ?? 0.5,
         });
       } else {
-        setPresetForm({ adapter_path: '', adapter_scale: 1.0, self_attn: 1.0, cross_attn: 1.0, mlp: 1.0, cond_embed: 1.0, matchering_reference_path: '' });
+        setPresetForm({ adapter_path: '', adapter_scale: 1.0, self_attn: 1.0, cross_attn: 1.0, mlp: 1.0, cond_embed: 1.0, reference_track_path: '', audio_cover_strength: 0.5 });
       }
     } catch (err) {
       showToast(`Failed to load preset: ${(err as Error).message}`);
@@ -362,7 +365,8 @@ export const LyricStudio: React.FC<{ onPlaySong?: (song: Song) => void }> = ({ o
         adapter_path: presetForm.adapter_path || undefined,
         adapter_scale: presetForm.adapter_scale,
         adapter_group_scales: { self_attn: presetForm.self_attn, cross_attn: presetForm.cross_attn, mlp: presetForm.mlp, cond_embed: presetForm.cond_embed },
-        matchering_reference_path: presetForm.matchering_reference_path || undefined,
+        reference_track_path: presetForm.reference_track_path || undefined,
+        audio_cover_strength: presetForm.audio_cover_strength,
       });
       showToast('Preset saved');
       await loadPreset(lyricsSetId);
@@ -561,10 +565,14 @@ export const LyricStudio: React.FC<{ onPlaySong?: (song: Song) => void }> = ({ o
           }
         }
       }
-      // ── Matchering from album preset ──
-      if (preset?.matchering_reference_path) {
+      // ── Reference Track — dual purpose: timbre conditioning + matchering ──
+      if (preset?.reference_track_path) {
+        // ACE-Step timbre conditioning
+        params.referenceAudioUrl = preset.reference_track_path;
+        params.audioCoverStrength = preset.audio_cover_strength ?? 0.5;
+        // Post-processing matchering
         params.autoMaster = true;
-        params.masteringParams = { mode: 'matchering', reference_file: preset.matchering_reference_path };
+        params.masteringParams = { mode: 'matchering', reference_file: preset.reference_track_path };
       }
 
       const res = await generateApi.startGeneration(params, token);
@@ -615,9 +623,9 @@ export const LyricStudio: React.FC<{ onPlaySong?: (song: Song) => void }> = ({ o
       // NOTE: Do NOT include loraLoaded/advancedAdapters/adapterSlots here.
       // CreatePanel would try to auto-load them, corrupting tensors mid-generation.
     }
-    if (preset?.matchering_reference_path) {
+    if (preset?.reference_track_path) {
       importData.autoMaster = true;
-      importData.masteringParams = { mode: 'matchering', reference_file: preset.matchering_reference_path };
+      importData.masteringParams = { mode: 'matchering', reference_file: preset.reference_track_path };
     }
 
     // Store in localStorage for CreatePanel to pick up
@@ -1119,14 +1127,14 @@ export const LyricStudio: React.FC<{ onPlaySong?: (song: Song) => void }> = ({ o
                     )}
                   </div>
 
-                  {/* ── Matchering Reference ── */}
+                  {/* ── Reference Track ── */}
                   <div className="space-y-2 pt-2 border-t border-white/5">
-                    <label className="text-xs font-medium text-zinc-400">Matchering Reference</label>
+                    <label className="text-xs font-medium text-zinc-400">Reference Track</label>
                     <div className="flex gap-2">
                       <input
                         type="text"
-                        value={presetForm.matchering_reference_path}
-                        onChange={e => setPresetForm(p => ({ ...p, matchering_reference_path: e.target.value }))}
+                        value={presetForm.reference_track_path}
+                        onChange={e => setPresetForm(p => ({ ...p, reference_track_path: e.target.value }))}
                         placeholder="Path to reference audio (.wav, .mp3, .flac)"
                         className="flex-1 bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-pink-500"
                       />
@@ -1138,9 +1146,9 @@ export const LyricStudio: React.FC<{ onPlaySong?: (song: Song) => void }> = ({ o
                         <FolderSearch size={14} />
                         Browse
                       </button>
-                      {presetForm.matchering_reference_path && (
+                      {presetForm.reference_track_path && (
                         <button
-                          onClick={() => setPresetForm(p => ({ ...p, matchering_reference_path: '' }))}
+                          onClick={() => setPresetForm(p => ({ ...p, reference_track_path: '' }))}
                           className="px-2 py-2 rounded-lg text-xs text-zinc-400 hover:text-red-400 transition-colors flex-shrink-0"
                           title="Clear selection"
                         >
@@ -1148,17 +1156,17 @@ export const LyricStudio: React.FC<{ onPlaySong?: (song: Song) => void }> = ({ o
                         </button>
                       )}
                     </div>
-                    {presetForm.matchering_reference_path && (() => {
-                      const refName = presetForm.matchering_reference_path.split(/[\\/]/).pop() || '';
+                    {presetForm.reference_track_path && (() => {
+                      const refName = presetForm.reference_track_path.split(/[\\/]/).pop() || '';
                       return (
                         <div className="flex items-center gap-2">
                           <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-900/30 text-amber-400">REF</span>
-                          <span className="text-[10px] text-zinc-500 truncate" title={presetForm.matchering_reference_path}>{refName}</span>
+                          <span className="text-[10px] text-zinc-500 truncate" title={presetForm.reference_track_path}>{refName}</span>
                         </div>
                       );
                     })()}
                     <p className="text-[10px] text-zinc-600">
-                      Audio file to match EQ and loudness characteristics during mastering
+                      Used for both timbre conditioning during generation and matchering in post-processing
                     </p>
                   </div>
 
@@ -1577,7 +1585,7 @@ export const LyricStudio: React.FC<{ onPlaySong?: (song: Song) => void }> = ({ o
           if (presetBrowserTarget === 'adapter') {
             setPresetForm(p => ({ ...p, adapter_path: path }));
           } else {
-            setPresetForm(p => ({ ...p, matchering_reference_path: path }));
+            setPresetForm(p => ({ ...p, reference_track_path: path }));
           }
           setPresetBrowserOpen(false);
         }}

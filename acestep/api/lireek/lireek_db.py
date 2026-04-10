@@ -151,6 +151,12 @@ _MIGRATIONS = [
             "ALTER TABLE audio_generations ADD COLUMN cover_url TEXT",
         ],
     ),
+    (
+        "SELECT audio_cover_strength FROM album_presets LIMIT 0",
+        [
+            "ALTER TABLE album_presets ADD COLUMN audio_cover_strength REAL",
+        ],
+    ),
 ]
 
 
@@ -752,6 +758,7 @@ def upsert_album_preset(
     adapter_path: Optional[str] = None,
     adapter_scales: Optional[dict] = None,
     matchering_ref_path: Optional[str] = None,
+    audio_cover_strength: Optional[float] = None,
 ) -> dict[str, Any]:
     """Create or update the album preset for a lyrics set.
 
@@ -774,9 +781,9 @@ def upsert_album_preset(
             # Fresh INSERT — write everything (None columns stay NULL)
             conn.execute(
                 "INSERT INTO album_presets "
-                "(lyrics_set_id, adapter_path, adapter_scales, matchering_ref_path, updated_at) "
-                "VALUES (?, ?, ?, ?, ?)",
-                (lyrics_set_id, adapter_path, scales_json, matchering_ref_path, now),
+                "(lyrics_set_id, adapter_path, adapter_scales, matchering_ref_path, audio_cover_strength, updated_at) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                (lyrics_set_id, adapter_path, scales_json, matchering_ref_path, audio_cover_strength, now),
             )
         else:
             # Partial UPDATE — only overwrite columns that were explicitly given
@@ -792,6 +799,9 @@ def upsert_album_preset(
             if matchering_ref_path is not None:
                 updates.append("matchering_ref_path = ?")
                 values.append(matchering_ref_path)
+            if audio_cover_strength is not None:
+                updates.append("audio_cover_strength = ?")
+                values.append(audio_cover_strength)
 
             values.append(lyrics_set_id)
             conn.execute(
