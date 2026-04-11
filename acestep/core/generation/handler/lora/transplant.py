@@ -552,6 +552,7 @@ def transplant_lokr_to_dense_delta(
     # Step 3: Transplant each delta
     transplanted: Dict[str, Tensor] = {}
     stats = {"exact": 0, "transplanted": 0, "skipped_no_match": 0}
+    compensation_ratios: List[float] = []
 
     for key, source_delta in source_deltas.items():
         if key not in decoder_shapes:
@@ -567,16 +568,42 @@ def transplant_lokr_to_dense_delta(
         else:
             # Overlap-copy: pad or crop
             template = torch.zeros(target_shape, dtype=source_delta.dtype)
-            transplanted[key] = _copy_overlap_into_template(source_delta, template)
+            transplanted_delta = _copy_overlap_into_template(source_delta, template)
+
+            # Dimension-ratio compensation: when a 2B delta (e.g. 2048x2048)
+            # is placed in an XL template (e.g. 4096x2560), the delta only
+            # covers the overlapping subregion.  Without scaling, the adapter's
+            # contribution to the output is diluted because the modified rows
+            # make up a smaller fraction of the total matrix.  To preserve the
+            # adapter's relative influence, scale by the ratio of dimension
+            # sizes so the modified portion has proportionally equivalent
+            # magnitude.  We use the geometric mean of per-dim ratios to avoid
+            # amplifying asymmetric padding excessively.
+            source_elements = 1
+            target_elements = 1
+            for sd, td in zip(source_delta.shape, target_shape):
+                source_elements *= sd
+                target_elements *= td
+
+            if target_elements > source_elements and source_elements > 0:
+                # sqrt ratio preserves the Frobenius norm proportion:
+                #   ||delta||_F / ||weight||_F ≈ constant across architectures
+                ratio = (target_elements / source_elements) ** 0.5
+                transplanted_delta = transplanted_delta * ratio
+                compensation_ratios.append(ratio)
+
+            transplanted[key] = transplanted_delta
             stats["transplanted"] += 1
             logger.debug(
                 f"  Transplant: {key} {tuple(source_delta.shape)} → {target_shape}"
             )
 
+    avg_comp = sum(compensation_ratios) / max(len(compensation_ratios), 1) if compensation_ratios else 1.0
     logger.info(
         f"LoKR transplant complete: {stats['exact']} exact, "
         f"{stats['transplanted']} padded/cropped, "
-        f"{stats['skipped_no_match']} skipped (module not in decoder)"
+        f"{stats['skipped_no_match']} skipped (module not in decoder), "
+        f"avg dimension compensation: {avg_comp:.2f}x"
     )
 
     return transplanted
