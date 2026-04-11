@@ -297,6 +297,15 @@ class ServiceGenerateExecuteMixin:
                         )
                     # ==========================================================
 
+                    # Safety net: verify decoder is clean and GPU-resident
+                    # before generation starts. This catches any device
+                    # mismatch or stale LyCORIS hooks that survived post-merge.
+                    if hasattr(self, '_adapter_slots') and self._adapter_slots:
+                        from acestep.core.generation.handler.lora.advanced_adapter_mixin import (
+                            _verify_decoder_ready,
+                        )
+                        _verify_decoder_ready(self, label="pre-generation")
+
                     outputs = self.model.generate_audio(**generate_kwargs)
 
         return outputs, encoder_hidden_states, encoder_attention_mask, context_latents

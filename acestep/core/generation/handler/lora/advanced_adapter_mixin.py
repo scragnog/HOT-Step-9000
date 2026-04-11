@@ -487,6 +487,123 @@ def _apply_merged_weights(self) -> None:
     logger.info(f"Merged {len(active_slots)} adapter(s) in {elapsed:.1f}s: {slot_desc}")
     self._merged_dirty = False
 
+    # Post-merge safety: ensure no LyCORIS hooks remain and all params are on device
+    _verify_decoder_ready(self, label="post-merge")
+
+
+def _verify_decoder_ready(self, *, label: str = "") -> dict:
+    """Verify decoder state is clean and GPU-resident. Fix any issues found.
+
+    Acts as both a diagnostic probe (logs exactly what's wrong) and a
+    safety net (fixes whatever it finds) so generation never hits a device
+    mismatch RuntimeError.
+
+    Returns a dict with diagnostic counts for test introspection.
+    """
+    decoder = getattr(getattr(self, "model", None), "decoder", None)
+    if decoder is None:
+        return {}
+
+    target_device = getattr(self, "device", "cuda")
+    target_dtype = getattr(self, "dtype", torch.bfloat16)
+    prefix = f"[_verify_decoder_ready/{label}]" if label else "[_verify_decoder_ready]"
+
+    # -- 1) Detect & remove stale LyCORIS forward wrappers --
+    lycoris_hooks_found = 0
+    lycoris_forward_replaced = 0
+    for name, mod in decoder.named_modules():
+        # Check for _lycoris_wrappers attribute (set by LyCORIS apply_to)
+        wrappers = getattr(mod, "_lycoris_wrappers", None)
+        if wrappers:
+            orig_fwd = getattr(mod, "_lycoris_original_forward", None)
+            if orig_fwd is not None:
+                mod.forward = orig_fwd
+                lycoris_forward_replaced += 1
+            mod.__dict__.pop("_lycoris_wrappers", None)
+            mod.__dict__.pop("_lycoris_original_forward", None)
+            lycoris_hooks_found += 1
+
+        # Also check if the forward method itself is from a LyCORIS module
+        # (safety net in case _lycoris_wrappers was somehow cleared but
+        # forward was not restored)
+        fwd = getattr(mod, "forward", None)
+        if fwd is not None:
+            fwd_self = getattr(fwd, "__self__", None)
+            if fwd_self is not None and fwd_self is not mod:
+                fwd_class = type(fwd_self).__name__
+                if "Module" in fwd_class and fwd_class != type(mod).__name__:
+                    # This module's forward is bound to a DIFFERENT object
+                    # (likely a LokrModule/LoConModule/etc.)
+                    orig_fwd = getattr(mod, "_lycoris_original_forward", None)
+                    if orig_fwd is None:
+                        # Last resort: use the class's original forward
+                        orig_fwd = type(mod).forward
+                    if orig_fwd is not None:
+                        mod.forward = orig_fwd if not isinstance(orig_fwd, type) else orig_fwd.__get__(mod, type(mod))
+                        lycoris_forward_replaced += 1
+                    logger.warning(
+                        f"{prefix} Module '{name}' had forward bound to "
+                        f"{fwd_class} — restored to original"
+                    )
+
+    if lycoris_hooks_found > 0:
+        logger.warning(
+            f"{prefix} Found and removed {lycoris_hooks_found} stale LyCORIS "
+            f"wrapper(s), restored {lycoris_forward_replaced} forward method(s)"
+        )
+
+    # -- 2) Find parameters on wrong device and move them --
+    cpu_params = 0
+    total_params = 0
+    sample_cpu_names = []
+    for pname, param in decoder.named_parameters():
+        total_params += 1
+        if param.device.type != str(target_device).split(":")[0]:
+            cpu_params += 1
+            if len(sample_cpu_names) < 5:
+                sample_cpu_names.append(f"{pname}({param.device})")
+
+    if cpu_params > 0:
+        logger.warning(
+            f"{prefix} {cpu_params}/{total_params} parameters on wrong device! "
+            f"Samples: {sample_cpu_names}. Moving decoder to {target_device}."
+        )
+        decoder.to(target_device)
+        decoder.to(target_dtype)
+        decoder.eval()
+
+        # Verify the move worked
+        still_bad = sum(
+            1 for _, p in decoder.named_parameters()
+            if p.device.type != str(target_device).split(":")[0]
+        )
+        if still_bad > 0:
+            logger.error(
+                f"{prefix} FAILED to move {still_bad} parameters to {target_device} "
+                f"— generation will likely fail!"
+            )
+        else:
+            logger.info(f"{prefix} Successfully moved all parameters to {target_device}")
+
+    # -- 3) Also check _lycoris_net lingering on decoder --
+    if hasattr(decoder, "_lycoris_net") and decoder._lycoris_net is not None:
+        logger.warning(f"{prefix} Stale _lycoris_net found on decoder — removing")
+        try:
+            decoder._lycoris_net.restore()
+        except Exception:
+            pass
+        decoder._lycoris_net = None
+
+    if lycoris_hooks_found == 0 and cpu_params == 0:
+        logger.debug(f"{prefix} Decoder OK ({total_params} params on {target_device})")
+
+    return {
+        "lycoris_hooks_found": lycoris_hooks_found,
+        "lycoris_forward_replaced": lycoris_forward_replaced,
+        "cpu_params": cpu_params,
+        "total_params": total_params,
+    }
+
 
 def _apply_merged_weights_with_groups(self) -> None:
     """Like _apply_merged_weights but applies per-group scaling."""
@@ -560,6 +677,9 @@ def _apply_merged_weights_with_groups(self) -> None:
     elapsed = time.time() - t0
     logger.info(f"Merged {len(active_slots)} adapter(s) with group scales in {elapsed:.1f}s")
     self._merged_dirty = False
+
+    # Post-merge safety (group-scaled path)
+    _verify_decoder_ready(self, label="post-group-merge")
 
 
 # ------------------------------------------------------------------
