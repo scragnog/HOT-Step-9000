@@ -242,9 +242,26 @@ def _extract_adapter_delta(self, lora_path: str) -> dict:
     self.model.decoder.eval()
 
     adapter_type = None
+    _transplant_peft_tmp_dir = None  # Track transplant temp dir for cleanup
 
     if is_peft:
         from peft import PeftModel
+
+        # --- Transplant detection: PEFT LoRA ---
+        try:
+            from acestep.core.generation.handler.lora.transplant import detect_and_prepare_transplant
+            mismatch, _, transplant_dir = detect_and_prepare_transplant(
+                self.model.decoder, lora_path, is_lokr=False,
+            )
+            if mismatch is not None and transplant_dir is not None:
+                logger.warning(
+                    f"Transplanting PEFT LoRA: {mismatch.adapter_arch} adapter on "
+                    f"{mismatch.model_arch} model ({mismatch.mismatched_keys} mismatched tensors)"
+                )
+                _transplant_peft_tmp_dir = transplant_dir
+                lora_path = transplant_dir
+        except Exception as exc:
+            logger.debug(f"Transplant detection skipped (PEFT): {exc}")
 
         # Move to CPU for PEFT loading — same CUDA graph guard as LoKR below
         original_device = self.device
@@ -262,91 +279,113 @@ def _extract_adapter_delta(self, lora_path: str) -> dict:
 
         from acestep.core.generation.handler.lora.lokr_config import LoKRConfig
 
+        # --- Transplant detection: LoKR ---
+        # Check for architecture mismatch BEFORE attempting LyCORIS injection.
+        # If mismatched, bypass LyCORIS entirely and use transplanted dense deltas.
+        _lokr_transplanted = False
         try:
-            from lycoris import LycorisNetwork
-        except ImportError:
-            raise ImportError("LyCORIS library not installed")
+            from acestep.core.generation.handler.lora.transplant import detect_and_prepare_transplant
+            mismatch, transplant_deltas, _ = detect_and_prepare_transplant(
+                self.model.decoder, lora_path, is_lokr=True, weights_path=lokr_weights_path,
+            )
+            if mismatch is not None and transplant_deltas is not None:
+                logger.warning(
+                    f"Transplanting LoKR: {mismatch.adapter_arch} adapter on "
+                    f"{mismatch.model_arch} model ({mismatch.detail})"
+                )
+                adapted_sd = transplant_deltas
+                _lokr_transplanted = True
+                adapter_type = "lycoris_lokr"
+        except Exception as exc:
+            logger.debug(f"Transplant detection skipped (LoKR): {exc}")
 
-        # Move model to CPU for lycoris injection
-        original_device = self.device
-        self.model.decoder = self.model.decoder.cpu()
+        if not _lokr_transplanted:
+            # Normal LoKR path: use LyCORIS to load and compute deltas
+            try:
+                from lycoris import LycorisNetwork
+            except ImportError:
+                raise ImportError("LyCORIS library not installed")
 
-        from acestep.core.generation.handler.lora.lifecycle import _load_lokr_adapter
-        lycoris_net = _load_lokr_adapter(self.model.decoder, lokr_weights_path)
+            # Move model to CPU for lycoris injection
+            original_device = self.device
+            self.model.decoder = self.model.decoder.cpu()
 
-        # === Compute deltas directly from LoKR factor matrices ===
-        # We intentionally bypass lycoris_net.merge_to() because LyCORIS has
-        # a double-scaling bug: get_diff_weight() calls get_weight() which
-        # already applies self.scale via make_kron(), then multiplies by
-        # self.scale again.  When scale=1.0 (alpha==dim) this is invisible,
-        # but for alpha!=dim the delta is scaled by scale² instead of scale.
-        #
-        # Instead we compute the delta using the same formula as LyCORIS's
-        # training forward() path: get_weight(shape) * scalar.
-        # This matches what the model actually saw during training.
+            from acestep.core.generation.handler.lora.lifecycle import _load_lokr_adapter
+            lycoris_net = _load_lokr_adapter(self.model.decoder, lokr_weights_path)
 
-        # Build a map from decoder parameter data_ptr → state dict key
-        param_to_key = {}
-        for key, param in self.model.decoder.named_parameters():
-            param_to_key[param.data_ptr()] = key
+            # === Compute deltas directly from LoKR factor matrices ===
+            # We intentionally bypass lycoris_net.merge_to() because LyCORIS has
+            # a double-scaling bug: get_diff_weight() calls get_weight() which
+            # already applies self.scale via make_kron(), then multiplies by
+            # self.scale again.  When scale=1.0 (alpha==dim) this is invisible,
+            # but for alpha!=dim the delta is scaled by scale² instead of scale.
+            #
+            # Instead we compute the delta using the same formula as LyCORIS's
+            # training forward() path: get_weight(shape) * scalar.
+            # This matches what the model actually saw during training.
 
-        adapted_sd = {}  # will hold only the delta keys for LoKR
-        lokr_delta_keys = set()
-        for lora_mod in lycoris_net.loras:
-            org_module = lora_mod.org_module[0]
-            weight_ptr = org_module.weight.data_ptr()
-            sd_key = param_to_key.get(weight_ptr)
-            if sd_key is None:
-                continue
-            # get_weight includes self.scale once via make_kron — correct
-            # scalar is 1.0 for standard adapters (non-use_scalar)
-            diff = lora_mod.get_weight(org_module.weight.shape)
-            scalar_val = lora_mod.scalar
-            if scalar_val is not None:
-                diff = diff.float() * scalar_val.float()
-            else:
-                diff = diff.float()
-            if diff.abs().max().item() > 1e-8:
-                adapted_sd[sd_key] = diff.detach().cpu()
-                lokr_delta_keys.add(sd_key)
+            # Build a map from decoder parameter data_ptr → state dict key
+            param_to_key = {}
+            for key, param in self.model.decoder.named_parameters():
+                param_to_key[param.data_ptr()] = key
 
-        logger.info(
-            f"LoKr direct delta: {len(lokr_delta_keys)} keys computed from "
-            f"{len(lycoris_net.loras)} modules (scale={getattr(lycoris_net.loras[0], 'scale', '?') if lycoris_net.loras else 'N/A'})"
-        )
+            adapted_sd = {}  # will hold only the delta keys for LoKR
+            lokr_delta_keys = set()
+            for lora_mod in lycoris_net.loras:
+                org_module = lora_mod.org_module[0]
+                weight_ptr = org_module.weight.data_ptr()
+                sd_key = param_to_key.get(weight_ptr)
+                if sd_key is None:
+                    continue
+                # get_weight includes self.scale once via make_kron — correct
+                # scalar is 1.0 for standard adapters (non-use_scalar)
+                diff = lora_mod.get_weight(org_module.weight.shape)
+                scalar_val = lora_mod.scalar
+                if scalar_val is not None:
+                    diff = diff.float() * scalar_val.float()
+                else:
+                    diff = diff.float()
+                if diff.abs().max().item() > 1e-8:
+                    adapted_sd[sd_key] = diff.detach().cpu()
+                    lokr_delta_keys.add(sd_key)
 
-        # === Cleanup: restore decoder and remove LyCORIS hooks/wrappers ===
-        try:
-            lycoris_net.restore()
-        except Exception:
-            pass
+            logger.info(
+                f"LoKr direct delta: {len(lokr_delta_keys)} keys computed from "
+                f"{len(lycoris_net.loras)} modules (scale={getattr(lycoris_net.loras[0], 'scale', '?') if lycoris_net.loras else 'N/A'})"
+            )
 
-        # Remove forward wrappers left by apply_to().  LyCORIS restore() only
-        # un-bakes merge_to() weight changes but does NOT remove the forward
-        # monkey-patches.  Clean up via the _lycoris_wrappers list if present,
-        # otherwise fall back to _lycoris_original_forward.
-        cleaned = 0
-        for _name, mod in self.model.decoder.named_modules():
-            wrappers = getattr(mod, '_lycoris_wrappers', None)
-            if wrappers:
-                orig_fwd = getattr(mod, '_lycoris_original_forward', None)
-                if orig_fwd is not None:
-                    mod.forward = orig_fwd
-                mod.__dict__.pop('_lycoris_wrappers', None)
-                mod.__dict__.pop('_lycoris_original_forward', None)
-                cleaned += 1
+            # === Cleanup: restore decoder and remove LyCORIS hooks/wrappers ===
+            try:
+                lycoris_net.restore()
+            except Exception:
+                pass
 
-        if cleaned:
-            logger.info(f"Cleaned {cleaned} LyCORIS forward wrappers from decoder")
+            # Remove forward wrappers left by apply_to().  LyCORIS restore() only
+            # un-bakes merge_to() weight changes but does NOT remove the forward
+            # monkey-patches.  Clean up via the _lycoris_wrappers list if present,
+            # otherwise fall back to _lycoris_original_forward.
+            cleaned = 0
+            for _name, mod in self.model.decoder.named_modules():
+                wrappers = getattr(mod, '_lycoris_wrappers', None)
+                if wrappers:
+                    orig_fwd = getattr(mod, '_lycoris_original_forward', None)
+                    if orig_fwd is not None:
+                        mod.forward = orig_fwd
+                    mod.__dict__.pop('_lycoris_wrappers', None)
+                    mod.__dict__.pop('_lycoris_original_forward', None)
+                    cleaned += 1
 
-        try:
-            if hasattr(self.model.decoder, '_lycoris_net'):
-                delattr(self.model.decoder, '_lycoris_net')
-        except Exception:
-            pass
+            if cleaned:
+                logger.info(f"Cleaned {cleaned} LyCORIS forward wrappers from decoder")
 
-        del lycoris_net
-        adapter_type = "lycoris_lokr"
+            try:
+                if hasattr(self.model.decoder, '_lycoris_net'):
+                    delattr(self.model.decoder, '_lycoris_net')
+            except Exception:
+                pass
+
+            del lycoris_net
+            adapter_type = "lycoris_lokr"
     else:
         raise ValueError(
             "Invalid adapter path. Expected PEFT dir (adapter_config.json) "
@@ -382,13 +421,14 @@ def _extract_adapter_delta(self, lora_path: str) -> dict:
     delta_mb = sum(v.numel() * 4 for v in delta.values()) / (1024**2)
     logger.info(f"Extracted adapter delta: {len(delta)} keys, {delta_mb:.1f}MB (fp32 on CPU)")
 
-    # Clean up temporary PEFT directory created for bare safetensors
-    if _bare_peft_tmp_dir and os.path.isdir(_bare_peft_tmp_dir):
-        try:
-            import shutil
-            shutil.rmtree(_bare_peft_tmp_dir, ignore_errors=True)
-        except Exception:
-            pass
+    # Clean up temporary directories created during loading
+    for tmp_dir in (_bare_peft_tmp_dir, _transplant_peft_tmp_dir):
+        if tmp_dir and os.path.isdir(tmp_dir):
+            try:
+                import shutil
+                shutil.rmtree(tmp_dir, ignore_errors=True)
+            except Exception:
+                pass
 
     return {"delta": delta, "type": adapter_type, "safetensors_file": lokr_weights_path}
 
