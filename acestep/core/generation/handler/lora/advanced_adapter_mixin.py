@@ -799,6 +799,31 @@ def load_lora_slot(self, lora_path: str, slot: Optional[int] = None) -> str:
 
     except Exception as e:
         logger.exception("Failed to load adapter")
+
+        # ── RECOVERY: restore decoder to a usable state ──
+        # _extract_adapter_delta moves the decoder to CPU and may inject
+        # LyCORIS forward hooks before the error.  Without recovery, the
+        # decoder is left on CPU with stale hooks and every subsequent
+        # generation hits "mat1 is on cuda:0 ... other tensors on cpu".
+        try:
+            if self._base_decoder is not None:
+                logger.info("[load_lora_slot] Recovering decoder from base backup after failed adapter load")
+                torch._dynamo.reset()
+                self.model.decoder.load_state_dict(self._base_decoder, strict=False, assign=True)
+                self.model.decoder = self.model.decoder.to(self.device).to(self.dtype)
+                self.model.decoder.eval()
+            elif hasattr(self.model, "decoder"):
+                # No backup yet — just ensure the decoder is on the right device
+                self.model.decoder = self.model.decoder.to(self.device).to(self.dtype)
+                self.model.decoder.eval()
+            # Clean up any LyCORIS hooks that were injected before the failure
+            _verify_decoder_ready(self, label="recovery-after-failed-load")
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except Exception as recovery_err:
+            logger.error(f"[load_lora_slot] Recovery also failed: {recovery_err}")
+
         return f"❌ Failed to load adapter: {str(e)}"
 
 

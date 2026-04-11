@@ -414,8 +414,8 @@ def _load_lokr_adapter(decoder: Any, weights_path: str) -> Any:
         except Exception as exc:
             logger.warning(f"DoRA mode not supported in current LyCORIS build: {exc}")
 
-    lycoris_net.apply_to()
-    decoder._lycoris_net = lycoris_net
+    # Load weights BEFORE apply_to() — if loading fails (e.g. architecture
+    # mismatch), we must NOT leave forward hooks injected on the decoder.
     load_result = lycoris_net.load_weights(weights_path)
     if isinstance(load_result, dict):
         missing = load_result.get("missing keys") or load_result.get("missing_keys") or []
@@ -424,6 +424,9 @@ def _load_lokr_adapter(decoder: Any, weights_path: str) -> Any:
             logger.warning(f"LoKr load_weights missing keys ({len(missing)}): {missing[:5]}")
         if unexpected:
             logger.warning(f"LoKr load_weights unexpected keys ({len(unexpected)}): {unexpected[:5]}")
+
+    lycoris_net.apply_to()
+    decoder._lycoris_net = lycoris_net
     _loras = getattr(lycoris_net, "loras", None)
     n_fallback = len(_loras) if isinstance(_loras, (list, tuple)) else 0
     logger.info(f"LoKr adapter loaded via fallback config path ({n_fallback} modules)")
