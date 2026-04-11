@@ -386,6 +386,14 @@
                 <select id="modelSelect"></select>
             </div>
             <div class="model-row">
+                <label>VAE Decoder</label>
+                <select id="vaeModelSelect">
+                    <option value="stock">Stock (original ACE-Step 1.5)</option>
+                    <option value="scragvae">ScragVAE (fine-tuned for rock/metal) ⭐</option>
+                </select>
+                <div id="vaeDownloadHint" style="font-size:.62rem;color:#e8a;margin-top:.2rem;display:none">⬇ Will download on first launch (~645 MB)</div>
+            </div>
+            <div class="model-row">
                 <label>Language Model (5Hz LM)</label>
                 <select id="lmModelSelect"></select>
             </div>
@@ -534,6 +542,8 @@
         if (typeof CURRENT_LM_GPU_LAYERS === 'undefined') var CURRENT_LM_GPU_LAYERS = '-1';
         if (typeof CURRENT_GGUF_QUANT === 'undefined') var CURRENT_GGUF_QUANT = 'auto';
         if (typeof CURRENT_ADAPTER_MERGE_MODE === 'undefined') var CURRENT_ADAPTER_MERGE_MODE = 'false';
+        if (typeof CURRENT_VAE_MODEL === 'undefined') var CURRENT_VAE_MODEL = 'stock';
+        if (typeof SCRAGVAE_AVAILABLE === 'undefined') var SCRAGVAE_AVAILABLE = 'false';
 
         document.getElementById('frontend-port').textContent = `(port ${VITE_PORT})`;
 
@@ -566,6 +576,17 @@
         // Set LM Backend dropdown to saved value
         const lmBackendSelect = document.getElementById('lmBackendSelect');
         lmBackendSelect.value = CURRENT_LM_BACKEND;
+
+        // Set VAE Model dropdown to saved value
+        const vaeModelSelect = document.getElementById('vaeModelSelect');
+        const vaeDownloadHint = document.getElementById('vaeDownloadHint');
+        vaeModelSelect.value = CURRENT_VAE_MODEL;
+        function updateVaeHint() {
+            const needsDownload = vaeModelSelect.value === 'scragvae' && SCRAGVAE_AVAILABLE !== 'true';
+            vaeDownloadHint.style.display = needsDownload ? 'block' : 'none';
+        }
+        updateVaeHint();
+        vaeModelSelect.addEventListener('change', updateVaeHint);
 
         // Set Quantization dropdown to saved value
         const quantizationSelect = document.getElementById('quantizationSelect');
@@ -769,6 +790,7 @@
                             ACESTEP_LM_GPU_LAYERS: gpuLayersSlider.value,
                             ACESTEP_GGUF_QUANT: ggufQuantSelect.value,
                             ACESTEP_ADAPTER_MERGE_MODE: mergeModeToggle.checked ? 'true' : 'false',
+                            ACESTEP_VAE_MODEL: vaeModelSelect.value,
                         }),
                     });
                     if (resp.ok) return true;

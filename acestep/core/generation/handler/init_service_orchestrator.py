@@ -229,6 +229,7 @@ class InitServiceOrchestratorMixin:
         quantization: Optional[str] = None,
         prefer_source: Optional[str] = None,
         use_mlx_dit: bool = True,
+        vae_model: str = "stock",
     ) -> Tuple[str, bool]:
         """Initialize model artifacts and runtime backends for generation.
 
@@ -302,6 +303,7 @@ class InitServiceOrchestratorMixin:
                 checkpoint_dir=checkpoint_dir,
                 device=resolved_device,
                 compile_model=normalized_compile,
+                vae_model=vae_model,
             )
             text_encoder_path = self._load_text_encoder_and_tokenizer(
                 checkpoint_dir=checkpoint_dir,
@@ -340,6 +342,7 @@ class InitServiceOrchestratorMixin:
                 "quantization": self.quantization,
                 "use_mlx_dit": use_mlx_dit,
                 "prefer_source": prefer_source,
+                "vae_model": vae_model,
             }
 
             return status_msg, True

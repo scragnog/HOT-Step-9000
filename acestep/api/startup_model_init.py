@@ -96,6 +96,37 @@ def initialize_models_at_startup(
     except Exception as exc:
         print(f"[API Server] Warning: Failed to download VAE model: {exc}")
 
+    # Read VAE model preference from env: 'stock' (default) or 'scragvae'
+    vae_model = os.getenv("ACESTEP_VAE_MODEL", "stock").strip().lower()
+    if vae_model not in ("stock", "scragvae"):
+        print(f"[API Server] Warning: Unknown ACESTEP_VAE_MODEL='{vae_model}', defaulting to stock")
+        vae_model = "stock"
+
+    if vae_model == "scragvae":
+        scragvae_path = os.path.join(checkpoint_dir, "scragvae")
+        scragvae_weights = os.path.join(scragvae_path, "diffusion_pytorch_model.safetensors")
+        if not os.path.exists(scragvae_weights):
+            print("[API Server] ScragVAE selected but not found on disk — downloading...")
+            print("[API Server]   Source: scragnog/Ace-Step-1.5-ScragVAE")
+            try:
+                from huggingface_hub import snapshot_download
+                os.makedirs(scragvae_path, exist_ok=True)
+                snapshot_download(
+                    "scragnog/Ace-Step-1.5-ScragVAE",
+                    local_dir=scragvae_path,
+                )
+                if os.path.exists(scragvae_weights):
+                    print("[API Server] ScragVAE downloaded successfully.")
+                else:
+                    print("[API Server] Warning: ScragVAE download completed but weights not found, falling back to stock")
+                    vae_model = "stock"
+            except Exception as exc:
+                print(f"[API Server] Warning: ScragVAE download failed: {exc}")
+                print("[API Server]   Falling back to stock VAE")
+                vae_model = "stock"
+        else:
+            print("[API Server] ScragVAE found on disk.")
+
     # Read quantization preference from env: "auto", "int8_weight_only",
     # "int4_weight_only", "nf4", or "none".  "auto" (or unset) uses the GPU tier
     # default; "none" explicitly disables quantization.
@@ -118,7 +149,7 @@ def initialize_models_at_startup(
     if quantization:
         print(f"[API Server] DiT quantization: {quantization}")
 
-    print(f"[API Server] Loading primary DiT model: {config_path}")
+    print(f"[API Server] Loading primary DiT model: {config_path} (VAE: {vae_model})")
     status_msg, ok = handler.initialize_service(
         project_root=project_root,
         config_path=config_path,
@@ -128,6 +159,7 @@ def initialize_models_at_startup(
         offload_to_cpu=offload_to_cpu,
         offload_dit_to_cpu=offload_dit_to_cpu,
         quantization=quantization,
+        vae_model=vae_model,
     )
     if not ok:
         app.state._init_error = status_msg

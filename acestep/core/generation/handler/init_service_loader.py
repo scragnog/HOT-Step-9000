@@ -247,11 +247,19 @@ class InitServiceLoaderMixin:
         self.silence_latent = self.silence_latent.to(device).to(self.dtype)
         return attn_implementation
 
-    def _load_vae_model(self, *, checkpoint_dir: str, device: str, compile_model: bool) -> str:
-        """Load and optionally compile the VAE module."""
+    def _load_vae_model(self, *, checkpoint_dir: str, device: str, compile_model: bool, vae_model: str = "stock") -> str:
+        """Load and optionally compile the VAE module.
+
+        Args:
+            vae_model: Which VAE to load — 'stock' (original) or 'scragvae' (fine-tuned).
+        """
         from diffusers.models import AutoencoderOobleck
 
-        vae_checkpoint_path = os.path.join(checkpoint_dir, "vae")
+        if vae_model == "scragvae":
+            vae_checkpoint_path = os.path.join(checkpoint_dir, "scragvae")
+            logger.info("[_load_vae_model] Using ScragVAE (fine-tuned decoder)")
+        else:
+            vae_checkpoint_path = os.path.join(checkpoint_dir, "vae")
         if not os.path.exists(vae_checkpoint_path):
             raise FileNotFoundError(f"VAE checkpoint not found at {vae_checkpoint_path}")
 

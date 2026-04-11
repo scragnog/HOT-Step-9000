@@ -54,15 +54,21 @@ REM Read Redmond Mode settings from .env
 set "CURRENT_REDMOND_MODE=false"
 set "CURRENT_REDMOND_SCALE=0.7"
 set "CURRENT_ADAPTER_MERGE_MODE=false"
+set "CURRENT_VAE_MODEL=stock"
 if exist ".env" (
     for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_REDMOND_MODE=" ".env"') do set "CURRENT_REDMOND_MODE=%%b"
     for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_REDMOND_SCALE=" ".env"') do set "CURRENT_REDMOND_SCALE=%%b"
     for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_ADAPTER_MERGE_MODE=" ".env"') do set "CURRENT_ADAPTER_MERGE_MODE=%%b"
+    for /f "tokens=1,* delims==" %%a in ('findstr /b "ACESTEP_VAE_MODEL=" ".env"') do set "CURRENT_VAE_MODEL=%%b"
 )
 
 REM Check if Redmond adapter is available on disk
 set "REDMOND_AVAILABLE=false"
 if exist "checkpoints\redmond-refine\standard\adapter_config.json" set "REDMOND_AVAILABLE=true"
+
+REM Check if ScragVAE is available on disk
+set "SCRAGVAE_AVAILABLE=false"
+if exist "checkpoints\scragvae\diffusion_pytorch_model.safetensors" set "SCRAGVAE_AVAILABLE=true"
 
 REM Scan checkpoints/ for available ACE-Step models (acestep-v15-*)
 set "MODEL_LIST="
@@ -110,6 +116,8 @@ echo var CURRENT_QUANTIZATION = '%CURRENT_QUANTIZATION%';
 echo var CURRENT_LM_GPU_LAYERS = '%CURRENT_LM_GPU_LAYERS%';
 echo var CURRENT_GGUF_QUANT = '%CURRENT_GGUF_QUANT%';
 echo var CURRENT_ADAPTER_MERGE_MODE = '%CURRENT_ADAPTER_MERGE_MODE%';
+echo var CURRENT_VAE_MODEL = '%CURRENT_VAE_MODEL%';
+echo var SCRAGVAE_AVAILABLE = '%SCRAGVAE_AVAILABLE%';
 ) > "%~dp0loading-config.js"
 
 if "%IS_RESTART%"=="0" (

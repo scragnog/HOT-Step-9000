@@ -128,8 +128,8 @@ router.post('/lm/backend', authMiddleware, async (req: AuthenticatedRequest, res
 // No auth required — only called during startup before app is fully loaded
 router.post('/update-env', async (req: any, res: Response) => {
     try {
-        const { ACESTEP_CONFIG_PATH, ACESTEP_LM_MODEL_PATH, ACESTEP_LM_BACKEND, ACESTEP_REDMOND_MODE, ACESTEP_REDMOND_SCALE, ACESTEP_NO_INIT, ACESTEP_QUANTIZATION, ACESTEP_LM_GPU_LAYERS, ACESTEP_GGUF_QUANT, ACESTEP_ADAPTER_MERGE_MODE } = req.body;
-        if (!ACESTEP_CONFIG_PATH && !ACESTEP_LM_MODEL_PATH && !ACESTEP_LM_BACKEND && ACESTEP_REDMOND_MODE === undefined && !ACESTEP_REDMOND_SCALE && ACESTEP_NO_INIT === undefined && ACESTEP_QUANTIZATION === undefined && ACESTEP_LM_GPU_LAYERS === undefined && ACESTEP_GGUF_QUANT === undefined && ACESTEP_ADAPTER_MERGE_MODE === undefined) {
+        const { ACESTEP_CONFIG_PATH, ACESTEP_LM_MODEL_PATH, ACESTEP_LM_BACKEND, ACESTEP_REDMOND_MODE, ACESTEP_REDMOND_SCALE, ACESTEP_NO_INIT, ACESTEP_QUANTIZATION, ACESTEP_LM_GPU_LAYERS, ACESTEP_GGUF_QUANT, ACESTEP_ADAPTER_MERGE_MODE, ACESTEP_VAE_MODEL } = req.body;
+        if (!ACESTEP_CONFIG_PATH && !ACESTEP_LM_MODEL_PATH && !ACESTEP_LM_BACKEND && ACESTEP_REDMOND_MODE === undefined && !ACESTEP_REDMOND_SCALE && ACESTEP_NO_INIT === undefined && ACESTEP_QUANTIZATION === undefined && ACESTEP_LM_GPU_LAYERS === undefined && ACESTEP_GGUF_QUANT === undefined && ACESTEP_ADAPTER_MERGE_MODE === undefined && !ACESTEP_VAE_MODEL) {
             res.status(400).json({ error: 'At least one setting required' });
             return;
         }
@@ -266,8 +266,20 @@ router.post('/update-env', async (req: any, res: Response) => {
             }
         }
 
+        // VAE model selection
+        if (ACESTEP_VAE_MODEL) {
+            if (/^ACESTEP_VAE_MODEL=.*/m.test(envContent)) {
+                envContent = envContent.replace(
+                    /^ACESTEP_VAE_MODEL=.*/m,
+                    `ACESTEP_VAE_MODEL=${ACESTEP_VAE_MODEL}`
+                );
+            } else {
+                envContent = envContent.trimEnd() + `\nACESTEP_VAE_MODEL=${ACESTEP_VAE_MODEL}\n`;
+            }
+        }
+
         fs.writeFileSync(envPath, envContent, 'utf-8');
-        console.log(`[Models] .env updated: CONFIG_PATH=${ACESTEP_CONFIG_PATH || '(unchanged)'}, LM_MODEL_PATH=${ACESTEP_LM_MODEL_PATH || '(unchanged)'}, LM_BACKEND=${ACESTEP_LM_BACKEND || '(unchanged)'}, REDMOND_MODE=${ACESTEP_REDMOND_MODE ?? '(unchanged)'}, NO_INIT=${ACESTEP_NO_INIT ?? '(unchanged)'}, QUANTIZATION=${ACESTEP_QUANTIZATION ?? '(unchanged)'}, LM_GPU_LAYERS=${ACESTEP_LM_GPU_LAYERS ?? '(unchanged)'}, GGUF_QUANT=${ACESTEP_GGUF_QUANT ?? '(unchanged)'}, ADAPTER_MERGE_MODE=${ACESTEP_ADAPTER_MERGE_MODE ?? '(unchanged)'}`);
+        console.log(`[Models] .env updated: CONFIG_PATH=${ACESTEP_CONFIG_PATH || '(unchanged)'}, LM_MODEL_PATH=${ACESTEP_LM_MODEL_PATH || '(unchanged)'}, LM_BACKEND=${ACESTEP_LM_BACKEND || '(unchanged)'}, REDMOND_MODE=${ACESTEP_REDMOND_MODE ?? '(unchanged)'}, NO_INIT=${ACESTEP_NO_INIT ?? '(unchanged)'}, QUANTIZATION=${ACESTEP_QUANTIZATION ?? '(unchanged)'}, LM_GPU_LAYERS=${ACESTEP_LM_GPU_LAYERS ?? '(unchanged)'}, GGUF_QUANT=${ACESTEP_GGUF_QUANT ?? '(unchanged)'}, ADAPTER_MERGE_MODE=${ACESTEP_ADAPTER_MERGE_MODE ?? '(unchanged)'}, VAE_MODEL=${ACESTEP_VAE_MODEL || '(unchanged)'}`);
         res.json({ success: true });
     } catch (error: any) {
         console.error('[Models] Failed to update .env:', error);
@@ -309,7 +321,17 @@ router.get('/env-config', async (_req: any, res: Response) => {
             const matchAm = amContent.match(/^ACESTEP_ADAPTER_MERGE_MODE=(.*)$/m);
             if (matchAm) adapterMergeMode = matchAm[1].trim().toLowerCase();
         }
-        res.json({ lmBackend, redmondMode, redmondScale, redmondAvailable, quantization, adapterMergeMode });
+        // Read VAE model setting
+        let vaeModel = 'stock';
+        if (fs.existsSync(envPath)) {
+            const vmContent = fs.readFileSync(envPath, 'utf-8');
+            const matchVm = vmContent.match(/^ACESTEP_VAE_MODEL=(.*)$/m);
+            if (matchVm) vaeModel = matchVm[1].trim().toLowerCase();
+        }
+        // Check if ScragVAE is available on disk
+        const scragvaePath = path.join(PROJECT_ROOT, 'checkpoints', 'scragvae', 'diffusion_pytorch_model.safetensors');
+        const scragvaeAvailable = fs.existsSync(scragvaePath);
+        res.json({ lmBackend, redmondMode, redmondScale, redmondAvailable, quantization, adapterMergeMode, vaeModel, scragvaeAvailable });
     } catch (error: any) {
         res.status(500).json({ error: error.message });
     }

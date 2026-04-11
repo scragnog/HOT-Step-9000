@@ -427,6 +427,46 @@ if /i "!REDMOND_CHOICE!"=="Y" (
 echo.
 
 :: -------------------------------------------------------------------
+:: 5f. Optional: Download ScragVAE (Fine-Tuned VAE Decoder)
+:: -------------------------------------------------------------------
+echo.
+echo  ============================================================
+echo    Optional: ScragVAE (Fine-Tuned VAE Decoder)
+echo  ============================================================
+echo.
+echo    The ScragVAE is a fine-tuned VAE decoder trained for improved
+echo    high-frequency fidelity, especially in rock, metal, and punk.
+echo    Size: ~645 MB
+echo.
+
+if exist "checkpoints\scragvae\diffusion_pytorch_model.safetensors" (
+    echo  ScragVAE already installed. Skipping.
+) else (
+    set /p SCRAGVAE_CHOICE="  Download ScragVAE? [Y/n] (default=n): "
+    if "!SCRAGVAE_CHOICE!"=="" set SCRAGVAE_CHOICE=n
+    if /i "!SCRAGVAE_CHOICE!"=="Y" (
+        echo.
+        echo  Downloading ScragVAE from HuggingFace...
+        if not exist "checkpoints\scragvae" mkdir "checkpoints\scragvae"
+        curl -L -o "checkpoints\scragvae\config.json" "https://huggingface.co/scragnog/Ace-Step-1.5-ScragVAE/resolve/main/config.json"
+        if errorlevel 1 (
+            echo  WARNING: Failed to download config.json
+        )
+        curl -L -o "checkpoints\scragvae\diffusion_pytorch_model.safetensors" "https://huggingface.co/scragnog/Ace-Step-1.5-ScragVAE/resolve/main/diffusion_pytorch_model.safetensors"
+        if errorlevel 1 (
+            echo  WARNING: Failed to download ScragVAE weights
+        ) else (
+            echo  ScragVAE downloaded successfully.
+            echo  Select it in the loading screen or set ACESTEP_VAE_MODEL=scragvae in .env
+        )
+    ) else (
+        echo  Skipping ScragVAE download. You can download later by re-running
+        echo  install.bat or from: https://huggingface.co/scragnog/Ace-Step-1.5-ScragVAE
+    )
+)
+echo.
+
+:: -------------------------------------------------------------------
 :: 6. Install UI dependencies (Node.js / npm)
 :: -------------------------------------------------------------------
 echo  [6/6] Setting up React UI...
