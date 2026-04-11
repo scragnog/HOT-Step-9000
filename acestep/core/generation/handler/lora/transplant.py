@@ -179,12 +179,12 @@ def _peft_key_to_module_path(peft_key: str) -> Optional[str]:
 # ---------------------------------------------------------------------------
 
 def _get_decoder_linear_shapes(decoder) -> Dict[str, Tuple[int, ...]]:
-    """Return {module_path: weight.shape} for all Linear layers in the decoder."""
+    """Return {module_path.weight: weight.shape} for all Linear layers in the decoder."""
     import torch.nn as nn
     shapes = {}
     for name, mod in decoder.named_modules():
         if isinstance(mod, nn.Linear):
-            shapes[name] = tuple(mod.weight.shape)
+            shapes[name + ".weight"] = tuple(mod.weight.shape)
     return shapes
 
 
