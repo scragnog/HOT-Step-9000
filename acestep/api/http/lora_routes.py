@@ -115,6 +115,29 @@ def _is_success_message(result: str, allow_warning: bool = False) -> bool:
     return allow_warning and result.startswith(_WARNING_PREFIX)
 
 
+def _wait_for_idle_generation(app: FastAPI, timeout: float = 30.0) -> None:
+    """Block until no generation is actively running on the GPU.
+
+    Generation jobs run in a ThreadPoolExecutor, so the asyncio event loop
+    is free to process REST requests while the GPU thread is mid-inference.
+    Modifying adapter weights (load/unload) at that point causes device
+    mismatch errors (cuda:0 vs cpu).  This guard waits for the
+    ``generation_idle`` threading.Event before proceeding.
+    """
+    generation_idle = getattr(app.state, "generation_idle", None)
+    if generation_idle is None:
+        return  # event not initialised — skip guard gracefully
+    if generation_idle.is_set():
+        return  # already idle — fast path, no log spam
+    logger.info("[LoRA] Waiting for active generation to finish before modifying adapters…")
+    if not generation_idle.wait(timeout=timeout):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Cannot modify adapters: a generation is still running after {timeout}s timeout",
+        )
+    logger.info("[LoRA] Generation idle, proceeding with adapter modification")
+
+
 # ── Route registration ─────────────────────────────────────────────────
 
 def register_lora_routes(
@@ -130,6 +153,7 @@ def register_lora_routes(
     @app.post("/v1/lora/load")
     async def load_lora_endpoint(request: LoadLoRARequest, _: None = Depends(verify_api_key)):
         """Load LoRA adapter into the primary model."""
+        _wait_for_idle_generation(app)
         handler = _require_initialized_handler(app)
         try:
             # Advanced mode: slot-based loading
@@ -190,6 +214,7 @@ def register_lora_routes(
     @app.post("/v1/lora/unload")
     async def unload_lora_endpoint(request: Request, _: None = Depends(verify_api_key)):
         """Unload LoRA adapter and restore base model."""
+        _wait_for_idle_generation(app)
         handler = _require_initialized_handler(app)
         try:
             # Check for slot param in body (advanced mode)

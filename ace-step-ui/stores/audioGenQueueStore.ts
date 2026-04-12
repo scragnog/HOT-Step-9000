@@ -236,7 +236,12 @@ export function clearFinishedFromAudioQueue(): void {
 /**
  * Resume the queue after a page reload.
  * - In-flight jobs (status 'generating' with a jobId) → resume polling
- * - Pending jobs → restart the queue runner
+ * - Pending jobs → restart the queue runner AFTER in-flight jobs finish
+ *
+ * IMPORTANT: We must await ALL in-flight polling before starting the queue
+ * runner for pending items. Otherwise the queue runner may load a different
+ * adapter while an in-flight job is still using the GPU → device mismatch.
+ *
  * Called by the useAudioGenQueue hook on mount.
  */
 export function resumeQueue(token: string): void {
@@ -246,16 +251,22 @@ export function resumeQueue(token: string): void {
   const hasPending = _state.items.some(i => i.status === 'pending');
   const inFlight = _state.items.filter(i => i.status === 'generating' && i.jobId);
 
-  // Resume polling for in-flight jobs
+  // Resume polling for in-flight jobs — collect promises so we can await them
+  const resumePromises: Promise<void>[] = [];
   for (const item of inFlight) {
     if (_resumedJobIds.has(item.jobId!)) continue;
     _resumedJobIds.add(item.jobId!);
-    _resumePolling(item, token);
+    resumePromises.push(_resumePolling(item, token));
   }
 
-  // Restart queue runner for pending items
+  // Only start the queue runner for pending items AFTER all in-flight jobs finish
   if (hasPending) {
-    _processQueue(token);
+    if (resumePromises.length > 0) {
+      // Wait for in-flight jobs to complete, then start queue runner
+      Promise.all(resumePromises).then(() => _processQueue(token));
+    } else {
+      _processQueue(token);
+    }
   }
 }
 
