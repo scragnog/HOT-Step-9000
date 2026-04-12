@@ -258,6 +258,27 @@ def register_lireek_routes(app: FastAPI) -> None:
             raise HTTPException(status_code=404, detail="Lyrics set not found")
         return {"deleted": True}
 
+    @app.get("/api/lireek/lyrics-sets/{ls_id}/full-detail")
+    async def get_album_full_detail(ls_id: int):
+        """Return everything for the album detail page in a single call.
+
+        Combines: lyrics set (with songs), profiles, and generations.
+        One request → one response → no race conditions, no N+1.
+        """
+        from acestep.api.lireek.lireek_db import (
+            get_lyrics_set, get_profiles, get_generations,
+        )
+        ls = get_lyrics_set(ls_id)
+        if not ls:
+            raise HTTPException(status_code=404, detail="Lyrics set not found")
+        profiles = get_profiles(ls_id, include_full=True)
+        generations = get_generations(lyrics_set_id=ls_id, include_full=True)
+        return {
+            "lyrics_set": ls,
+            "profiles": profiles,
+            "generations": generations,
+        }
+
     @app.delete("/api/lireek/lyrics-sets/{lyrics_set_id}/songs/{song_index}")
     async def remove_song(lyrics_set_id: int, song_index: int):
         from acestep.api.lireek.lireek_db import remove_song_from_set

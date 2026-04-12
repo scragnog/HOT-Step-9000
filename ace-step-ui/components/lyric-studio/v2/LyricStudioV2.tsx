@@ -253,23 +253,19 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
     const t0 = performance.now();
     console.log(`[loadAlbumData] START albumId=${albumId}`);
     try {
-      // Fetch album details, profiles, AND generations all in parallel
-      // (generations use lyrics_set_id JOIN — single call replaces N per-profile calls)
-      const [fullAlbum, profileRes, genRes] = await Promise.all([
-        lireekApi.getLyricsSet(albumId),
-        lireekApi.listProfiles(albumId, true),
-        lireekApi.listGenerations(undefined, albumId, true),
-      ]);
+      // Single call returns lyrics set, profiles, AND generations
+      const { lyrics_set, profiles: p, generations: g } =
+        await lireekApi.getAlbumFullDetail(albumId);
 
       if (loadId !== albumDataLoadIdRef.current) {
         console.log(`[loadAlbumData] STALE (loadId=${loadId}, current=${albumDataLoadIdRef.current}) — discarding`);
         return;
       }
 
-      console.log(`[loadAlbumData] DONE in ${(performance.now() - t0).toFixed(0)}ms — ${profileRes.profiles.length} profiles, ${genRes.generations.length} generations`);
-      setNav(prev => ({ ...prev, selectedAlbum: fullAlbum }));
-      setProfiles(profileRes.profiles);
-      setGenerations(genRes.generations);
+      console.log(`[loadAlbumData] DONE in ${(performance.now() - t0).toFixed(0)}ms — ${p.length} profiles, ${g.length} generations`);
+      setNav(prev => ({ ...prev, selectedAlbum: lyrics_set }));
+      setProfiles(p);
+      setGenerations(g);
     } catch (err) {
       if (loadId !== albumDataLoadIdRef.current) return; // stale — don't retry
       console.warn(`[loadAlbumData] FAILED after ${(performance.now() - t0).toFixed(0)}ms (retries left: ${retries}):`, err);

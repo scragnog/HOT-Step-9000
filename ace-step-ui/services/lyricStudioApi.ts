@@ -137,6 +137,13 @@ export const lireekApi = {
   getLyricsSet: (id: number): Promise<LyricsSet> =>
     api(`/api/lireek/lyrics-sets/${id}`),
 
+  /** Fetch everything for the album detail page in a single call. */
+  getAlbumFullDetail: (lyricsSetId: number): Promise<{
+    lyrics_set: LyricsSet;
+    profiles: Profile[];
+    generations: Generation[];
+  }> => api(`/api/lireek/lyrics-sets/${lyricsSetId}/full-detail`),
+
   deleteLyricsSet: (id: number): Promise<{ deleted: boolean }> =>
     api(`/api/lireek/lyrics-sets/${id}`, { method: 'DELETE' }),
 
