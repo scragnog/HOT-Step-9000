@@ -180,9 +180,10 @@ export const lireekApi = {
   }): Promise<Profile> =>
     api(`/api/lireek/lyrics-sets/${lyricsSetId}/build-profile`, { method: 'POST', body: params, timeoutMs: 300_000 }),
 
-  listGenerations: (profileId?: number, includeFull?: boolean): Promise<{ generations: Generation[] }> => {
+  listGenerations: (profileId?: number, lyricsSetId?: number, includeFull?: boolean): Promise<{ generations: Generation[] }> => {
     const params = new URLSearchParams();
     if (profileId != null) params.set('profile_id', String(profileId));
+    if (lyricsSetId != null) params.set('lyrics_set_id', String(lyricsSetId));
     if (includeFull) params.set('include_full', 'true');
     const qs = params.toString();
     return api(`/api/lireek/generations${qs ? `?${qs}` : ''}`);

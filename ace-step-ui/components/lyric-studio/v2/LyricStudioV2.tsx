@@ -94,6 +94,10 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
   const [artistsLoading, setArtistsLoading] = useState(true);
   const [albumsLoading, setAlbumsLoading] = useState(false);
 
+  // ── Request versioning — prevents race conditions when user switches quickly ──
+  const albumLoadIdRef = useRef(0);
+  const albumDataLoadIdRef = useRef(0);
+
   // ── Tabs ──
   const [activeTab, setActiveTab] = useState<TabId>('source-lyrics');
   const [recordingsFilter, setRecordingsFilter] = useState<number | null>(null);
@@ -209,16 +213,18 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
 
   // ── Load albums for selected artist ──
   const loadAlbums = useCallback(async (artistId: number) => {
+    const loadId = ++albumLoadIdRef.current;
     setAlbumsLoading(true);
     let albumsList: typeof albums = [];
     try {
       const res = await lireekApi.listLyricsSets(artistId);
+      if (loadId !== albumLoadIdRef.current) return; // stale — user switched artist
       albumsList = res.lyrics_sets;
       setAlbums(res.lyrics_sets);
     } catch (err) {
       console.error('[LyricStudioV2] Failed to load albums:', err);
     } finally {
-      setAlbumsLoading(false);
+      if (loadId === albumLoadIdRef.current) setAlbumsLoading(false);
     }
 
     // Fire-and-forget: fetch missing album cover art one at a time
@@ -226,9 +232,10 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
     if (missing.length > 0) {
       console.log(`[LyricStudioV2] Background: fetching cover art for ${missing.length} albums...`);
       const fetchNext = (idx: number) => {
-        if (idx >= missing.length) return;
+        if (idx >= missing.length || loadId !== albumLoadIdRef.current) return;
         lireekApi.refreshAlbumImage(missing[idx].id)
           .then(result => {
+            if (loadId !== albumLoadIdRef.current) return;
             if (result.image_url) {
               setAlbums(prev => prev.map(a => a.id === missing[idx].id ? { ...a, image_url: result.image_url } : a));
             }
@@ -242,31 +249,29 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
 
   // ── Load album detail data ──
   const loadAlbumData = useCallback(async (albumId: number, retries = 2) => {
+    const loadId = ++albumDataLoadIdRef.current;
     const t0 = performance.now();
     console.log(`[loadAlbumData] START albumId=${albumId}`);
     try {
-      // Fetch album details and profiles in parallel
-      const [fullAlbum, profileRes] = await Promise.all([
+      // Fetch album details, profiles, AND generations all in parallel
+      // (generations use lyrics_set_id JOIN — single call replaces N per-profile calls)
+      const [fullAlbum, profileRes, genRes] = await Promise.all([
         lireekApi.getLyricsSet(albumId),
         lireekApi.listProfiles(albumId, true),
+        lireekApi.listGenerations(undefined, albumId, true),
       ]);
-      console.log(`[loadAlbumData] albums+profiles fetched in ${(performance.now() - t0).toFixed(0)}ms — ${profileRes.profiles.length} profiles`);
+
+      if (loadId !== albumDataLoadIdRef.current) {
+        console.log(`[loadAlbumData] STALE (loadId=${loadId}, current=${albumDataLoadIdRef.current}) — discarding`);
+        return;
+      }
+
+      console.log(`[loadAlbumData] DONE in ${(performance.now() - t0).toFixed(0)}ms — ${profileRes.profiles.length} profiles, ${genRes.generations.length} generations`);
       setNav(prev => ({ ...prev, selectedAlbum: fullAlbum }));
       setProfiles(profileRes.profiles);
-
-      // Load all profile generations in parallel
-      const genResults = await Promise.allSettled(
-        profileRes.profiles.map(p => lireekApi.listGenerations(p.id, true))
-      );
-      const allGens: Generation[] = [];
-      for (const result of genResults) {
-        if (result.status === 'fulfilled') {
-          allGens.push(...result.value.generations);
-        }
-      }
-      setGenerations(allGens);
-      console.log(`[loadAlbumData] DONE in ${(performance.now() - t0).toFixed(0)}ms — ${allGens.length} generations`);
+      setGenerations(genRes.generations);
     } catch (err) {
+      if (loadId !== albumDataLoadIdRef.current) return; // stale — don't retry
       console.warn(`[loadAlbumData] FAILED after ${(performance.now() - t0).toFixed(0)}ms (retries left: ${retries}):`, err);
       if (retries > 0) {
         // Wait briefly then retry — backend may have been busy with a blocking request
@@ -287,6 +292,11 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
   }, []);
 
   const handleSelectArtist = useCallback((artist: Artist) => {
+    // Clear stale data immediately so old artist's content doesn't flash
+    setAlbums([]);
+    setProfiles([]);
+    setGenerations([]);
+    setSongCount(0);
     setNav({ level: 'albums', selectedArtist: artist, selectedAlbum: null });
     loadAlbums(artist.id);
     pushUrl(artist.id);

@@ -406,9 +406,9 @@ def register_lireek_routes(app: FastAPI) -> None:
     # ── Generations ───────────────────────────────────────────────────────
 
     @app.get("/api/lireek/generations")
-    async def list_generations(profile_id: Optional[int] = None, include_full: bool = False):
+    async def list_generations(profile_id: Optional[int] = None, lyrics_set_id: Optional[int] = None, include_full: bool = False):
         from acestep.api.lireek.lireek_db import get_generations
-        return {"generations": get_generations(profile_id=profile_id, include_full=include_full)}
+        return {"generations": get_generations(profile_id=profile_id, lyrics_set_id=lyrics_set_id, include_full=include_full)}
 
     @app.get("/api/lireek/generations/all")
     async def list_all_generations():
