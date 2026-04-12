@@ -27,6 +27,7 @@ from typing import Any, Callable, Dict, Optional, Tuple
 
 from acestep.core.generation.jkass_solvers import jkass_quality_step, jkass_fast_step
 from acestep.core.generation.stork_solver import stork2_step, stork4_step
+from acestep.core.generation.dopri_solvers import rk5_step, dopri5_step, dop853_step
 
 Tensor = torch.Tensor
 State = Dict[str, Any]
@@ -184,6 +185,50 @@ def rk4_step(
     return xt_next, state
 
 
+def dpm_pp_2m_ada_step(
+    xt: Tensor, vt: Tensor, t_curr: float, t_prev: float,
+    state: State, model_fn: Optional[ModelFn] = None,
+) -> Tuple[Tensor, State]:
+    """DPM++ 2M with step-ratio-corrected Adams-Bashforth coefficients.
+
+    The standard DPM++ 2M uses fixed AB2 coefficients (3/2, −1/2) which
+    are optimal for uniform timestep spacing.  With non-uniform schedules
+    (Karras, beta57, cosine, etc.) these become suboptimal.
+
+    This variant dynamically computes the AB2 weights from the ratio of
+    current to previous step size::
+
+        r  = dt_curr / dt_prev
+        c₁ = 1 + r/2
+        c₀ = r/2
+        v_eff = c₁ · v_n − c₀ · v_{n-1}
+
+    For uniform steps (r = 1) this reduces to the standard formula.
+    Still only 1 NFE per step.
+    """
+    dt = t_curr - t_prev
+    bsz = xt.shape[0]
+    dt_tensor = dt * torch.ones((bsz,), device=xt.device, dtype=xt.dtype).unsqueeze(-1).unsqueeze(-1)
+
+    prev_vt = state.get("prev_vt")
+    prev_dt = state.get("prev_dt")
+
+    if prev_vt is not None and prev_dt is not None and prev_dt > 0:
+        # Step-ratio-corrected AB2
+        r = dt / prev_dt
+        c1 = 1.0 + r / 2.0   # weight for current velocity
+        c0 = r / 2.0          # weight for previous velocity (subtracted)
+        vt_corrected = c1 * vt - c0 * prev_vt
+    else:
+        # First step: plain Euler
+        vt_corrected = vt
+
+    state["prev_vt"] = vt.clone()
+    state["prev_dt"] = dt
+    xt_next = xt - vt_corrected * dt_tensor
+    return xt_next, state
+
+
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
@@ -193,8 +238,12 @@ SOLVERS = {
     "ode": euler_step,       # alias for backward compatibility
     "heun": heun_step,
     "dpm2m": dpm_pp_2m_step,
+    "dpm2m_ada": dpm_pp_2m_ada_step,
     "dpm3m": dpm_pp_3m_step,
     "rk4": rk4_step,
+    "rk5": rk5_step,
+    "dopri5": dopri5_step,
+    "dop853": dop853_step,
     "jkass_quality": jkass_quality_step,
     "jkass_fast": jkass_fast_step,
     "stork2": stork2_step,
@@ -203,16 +252,20 @@ SOLVERS = {
 
 # Metadata for each solver
 SOLVER_INFO = {
-    "euler": {"name": "Euler",       "order": 1, "nfe": 1, "needs_model_fn": False},
-    "ode":   {"name": "Euler (ODE)", "order": 1, "nfe": 1, "needs_model_fn": False},
-    "heun":  {"name": "Heun",        "order": 2, "nfe": 2, "needs_model_fn": True},
-    "dpm2m": {"name": "DPM++ 2M",    "order": 2, "nfe": 1, "needs_model_fn": False},
-    "dpm3m": {"name": "DPM++ 3M",    "order": 3, "nfe": 1, "needs_model_fn": False},
-    "rk4":   {"name": "RK4",         "order": 4, "nfe": 4, "needs_model_fn": True},
+    "euler":   {"name": "Euler",       "order": 1, "nfe": 1,  "needs_model_fn": False},
+    "ode":     {"name": "Euler (ODE)", "order": 1, "nfe": 1,  "needs_model_fn": False},
+    "heun":    {"name": "Heun",        "order": 2, "nfe": 2,  "needs_model_fn": True},
+    "dpm2m":   {"name": "DPM++ 2M",    "order": 2, "nfe": 1,  "needs_model_fn": False},
+    "dpm2m_ada": {"name": "DPM++ 2M Adaptive", "order": 2, "nfe": 1, "needs_model_fn": False},
+    "dpm3m":   {"name": "DPM++ 3M",    "order": 3, "nfe": 1,  "needs_model_fn": False},
+    "rk4":     {"name": "RK4",         "order": 4, "nfe": 4,  "needs_model_fn": True},
+    "rk5":     {"name": "RK5 (DOPRI5)", "order": 5, "nfe": 6, "needs_model_fn": True},
+    "dopri5":  {"name": "DOPRI5 Adaptive", "order": 5, "nfe": 7, "needs_model_fn": True},
+    "dop853":  {"name": "DOP853",      "order": 8, "nfe": 13, "needs_model_fn": True},
     "jkass_quality": {"name": "JKASS Quality", "order": 2, "nfe": 2, "needs_model_fn": True},
     "jkass_fast":    {"name": "JKASS Fast",    "order": 1, "nfe": 1, "needs_model_fn": False},
-    "stork2": {"name": "STORK 2",    "order": 2, "nfe": 1, "needs_model_fn": False},
-    "stork4": {"name": "STORK 4",    "order": 4, "nfe": 1, "needs_model_fn": False},
+    "stork2":  {"name": "STORK 2",    "order": 2, "nfe": 1,  "needs_model_fn": False},
+    "stork4":  {"name": "STORK 4",    "order": 4, "nfe": 1,  "needs_model_fn": False},
 }
 
 # All valid solver names (for validation)

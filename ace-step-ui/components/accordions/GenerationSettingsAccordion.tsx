@@ -30,8 +30,8 @@ interface GenerationSettingsAccordionProps {
     // Inference
     inferenceSteps: number;
     onInferenceStepsChange: (val: number) => void;
-    inferMethod: 'ode' | 'euler' | 'heun' | 'dpm2m' | 'dpm3m' | 'rk4' | 'jkass_quality' | 'jkass_fast' | 'stork2' | 'stork4';
-    onInferMethodChange: (val: 'ode' | 'euler' | 'heun' | 'dpm2m' | 'dpm3m' | 'rk4' | 'jkass_quality' | 'jkass_fast' | 'stork2' | 'stork4') => void;
+    inferMethod: 'ode' | 'euler' | 'heun' | 'dpm2m' | 'dpm2m_ada' | 'dpm3m' | 'rk4' | 'rk5' | 'dopri5' | 'dop853' | 'jkass_quality' | 'jkass_fast' | 'stork2' | 'stork4';
+    onInferMethodChange: (val: 'ode' | 'euler' | 'heun' | 'dpm2m' | 'dpm2m_ada' | 'dpm3m' | 'rk4' | 'rk5' | 'dopri5' | 'dop853' | 'jkass_quality' | 'jkass_fast' | 'stork2' | 'stork4') => void;
     scheduler: string;
     onSchedulerChange: (val: string) => void;
     // Audio Format
@@ -318,15 +318,19 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
                                             <option value="ode" title={t('solverEulerDesc')}>{t('solverEuler')}</option>
                                             <option value="heun" title={t('solverHeunDesc')}>{t('solverHeun')}</option>
                                             <option value="dpm2m" title={t('solverDpm2mDesc')}>{t('solverDpm2m')}</option>
+                                            <option value="dpm2m_ada" title="DPM++ 2M with step-ratio-corrected coefficients for non-uniform schedules (1 NFE)">DPM++ 2M Adaptive</option>
                                             <option value="dpm3m" title={t('solverDpm3mDesc')}>{t('solverDpm3m')}</option>
                                             <option value="rk4" title={t('solverRk4Desc')}>{t('solverRk4')}</option>
+                                            <option value="rk5" title="Dormand-Prince 5th order — higher accuracy than RK4 at +50% cost (6 NFE)">RK5 (DOPRI5)</option>
+                                            <option value="dopri5" title="Adaptive DOPRI5(4) — error-driven sub-stepping for maximum precision (7+ NFE)">DOPRI5 Adaptive</option>
+                                            <option value="dop853" title="Dormand-Prince 8th order — maximum precision, very expensive (13 NFE). Use with few steps.">DOP853</option>
                                             <option value="jkass_quality" title="JKASS Quality: Heun with derivative averaging (2 NFE)">JKASS Quality</option>
                                             <option value="jkass_fast" title="JKASS Fast: Euler with momentum, frequency damping, and temporal smoothing (1 NFE)">JKASS Fast</option>
                                             <option value="stork2" title="STORK 2: 2nd-order stabilized Runge-Kutta-Gegenbauer with Taylor velocity (1 NFE)">STORK 2</option>
                                             <option value="stork4" title="STORK 4: 4th-order ROCK4 with precomputed Chebyshev coefficients (1 NFE)">STORK 4</option>
                                         </select>
                                         <p className="text-[10px] leading-tight text-zinc-500 dark:text-zinc-500">
-                                            {({ ode: t('solverEulerDesc'), euler: t('solverEulerDesc'), heun: t('solverHeunDesc'), dpm2m: t('solverDpm2mDesc'), dpm3m: t('solverDpm3mDesc'), rk4: t('solverRk4Desc'), jkass_quality: 'Heun with derivative averaging — smooth, high-accuracy results (2× cost)', jkass_fast: 'Euler with beat stability, frequency damping & temporal smoothing', stork2: 'Stabilized 2nd-order ODE solver for stiff flow matching (1 NFE)', stork4: 'Stabilized 4th-order ODE solver with ROCK4 sub-stepping (1 NFE)' } as Record<string, string>)[props.inferMethod] || ''}
+                                            {({ ode: t('solverEulerDesc'), euler: t('solverEulerDesc'), heun: t('solverHeunDesc'), dpm2m: t('solverDpm2mDesc'), dpm2m_ada: 'Step-ratio-corrected AB2 coefficients — optimal with non-uniform schedules (1 NFE)', dpm3m: t('solverDpm3mDesc'), rk4: t('solverRk4Desc'), rk5: 'Dormand-Prince 5th order. Best accuracy-vs-cost trade-off (6 NFE)', dopri5: 'Adaptive DOPRI5(4) with error-driven sub-stepping. Auto-refines large steps (7+ NFE)', dop853: 'Dormand-Prince 8th order — maximum precision, 13 NFE/step. Use ≤10 steps', jkass_quality: 'Heun with derivative averaging — smooth, high-accuracy results (2× cost)', jkass_fast: 'Euler with beat stability, frequency damping & temporal smoothing', stork2: 'Stabilized 2nd-order ODE solver for stiff flow matching (1 NFE)', stork4: 'Stabilized 4th-order ODE solver with ROCK4 sub-stepping (1 NFE)' } as Record<string, string>)[props.inferMethod] || ''}
                                         </p>
                                     </div>
                                 </div>
