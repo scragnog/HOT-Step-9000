@@ -1425,19 +1425,48 @@ function AppContent() {
     // Enrich song with DB data — Playlist and Queue build minimal Song objects
     // that lack generationParams (where originalAudioUrl lives for M/O toggle).
     // Look up the matching DB song by id or audioUrl and merge the missing fields.
+    // NOTE: Lyric Studio songs are source='lyric-studio' and filtered OUT of
+    // getMySongs (source='create'), so they won't be in the `songs` state.
+    // We also check `playQueue` as a fallback since it may contain enriched items.
     const enrichFromDb = (s: Song): Song => {
       if (s.generationParams?.originalAudioUrl) return s; // already has mastering info
+      // 1. Check main songs list (covers Create-tab songs)
       const dbMatch = songs.find(db =>
         db.id === s.id || (db.audioUrl && s.audioUrl && db.audioUrl === s.audioUrl)
       );
-      if (!dbMatch) return s;
-      return {
-        ...s,
-        generationParams: s.generationParams || dbMatch.generationParams,
-        coverUrl: s.coverUrl || dbMatch.coverUrl,
-        creator: s.creator || dbMatch.creator,
-        ditModel: s.ditModel || dbMatch.ditModel,
-      };
+      if (dbMatch?.generationParams?.originalAudioUrl) {
+        return {
+          ...s,
+          generationParams: dbMatch.generationParams,
+          coverUrl: s.coverUrl || dbMatch.coverUrl,
+          creator: s.creator || dbMatch.creator,
+          ditModel: s.ditModel || dbMatch.ditModel,
+        };
+      }
+      // 2. Fallback: check playQueue (may have enriched LS songs from playlist sync)
+      const queueMatch = playQueue.find(q =>
+        q.id === s.id || (q.audioUrl && s.audioUrl && q.audioUrl === s.audioUrl)
+      );
+      if (queueMatch?.generationParams?.originalAudioUrl) {
+        return {
+          ...s,
+          generationParams: queueMatch.generationParams,
+          coverUrl: s.coverUrl || queueMatch.coverUrl,
+          creator: s.creator || queueMatch.creator,
+          ditModel: s.ditModel || queueMatch.ditModel,
+        };
+      }
+      // 3. If dbMatch exists but lacks originalAudioUrl, still merge what we can
+      if (dbMatch) {
+        return {
+          ...s,
+          generationParams: s.generationParams || dbMatch.generationParams,
+          coverUrl: s.coverUrl || dbMatch.coverUrl,
+          creator: s.creator || dbMatch.creator,
+          ditModel: s.ditModel || dbMatch.ditModel,
+        };
+      }
+      return s;
     };
 
     const enrichedSong = enrichFromDb(song);
@@ -1474,6 +1503,43 @@ function AppContent() {
     }
     setShowRightSidebar(true);
   };
+
+  // ── Async enrichment: fetch originalAudioUrl from DB for songs that lack it ──
+  // This handles stale playlist items and Lyric Studio songs (source='lyric-studio')
+  // that aren't in the `songs` state. When currentSong changes and doesn't have
+  // originalAudioUrl, we query the Express DB by audioUrl and patch currentSong.
+  useEffect(() => {
+    if (!currentSong?.audioUrl || !token) return;
+    if (currentSong.generationParams?.originalAudioUrl) return; // already have it
+
+    let cancelled = false;
+    const enrichAsync = async () => {
+      try {
+        const { songs: dbSongs } = await songsApi.getSongsByUrls([currentSong.audioUrl], token);
+        if (cancelled || dbSongs.length === 0) return;
+        const db = dbSongs[0];
+        const gp = typeof db.generationParams === 'string'
+          ? JSON.parse(db.generationParams as unknown as string)
+          : db.generationParams;
+        if (!gp?.originalAudioUrl) return;
+        console.log('[AsyncEnrich] Patching currentSong with originalAudioUrl from DB');
+        setCurrentSong(prev => {
+          if (!prev || prev.audioUrl !== currentSong.audioUrl) return prev;
+          return { ...prev, generationParams: { ...prev.generationParams, ...gp } };
+        });
+        // Also patch the playQueue so Next/Previous inherit the enriched data
+        setPlayQueue(prev => prev.map(s =>
+          s.audioUrl === currentSong.audioUrl && !s.generationParams?.originalAudioUrl
+            ? { ...s, generationParams: { ...s.generationParams, ...gp } }
+            : s
+        ));
+      } catch (err) {
+        console.warn('[AsyncEnrich] Failed to enrich currentSong:', err);
+      }
+    };
+    enrichAsync();
+    return () => { cancelled = true; };
+  }, [currentSong?.id, currentSong?.audioUrl, token]);
 
   const handleSeek = (time: number) => {
     const audio = audioRef.current;
