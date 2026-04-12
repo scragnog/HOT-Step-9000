@@ -415,14 +415,27 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
                                 <div className="col-span-2 grid grid-cols-2 gap-3">
                                     <div className="space-y-1.5">
                                         <label className="text-xs font-medium text-zinc-600 dark:text-zinc-400">{t('scheduler')}</label>
-                                        <select value={props.scheduler.startsWith('composite') ? 'composite' : props.scheduler} onChange={(e) => {
+                                        <select value={
+                                            props.scheduler.startsWith('composite') ? 'composite'
+                                            : props.scheduler.startsWith('beta:') ? 'beta'
+                                            : props.scheduler.startsWith('power:') ? 'power'
+                                            : props.scheduler
+                                        } onChange={(e) => {
                                             if (e.target.value === 'composite') {
                                                 props.onSchedulerChange('composite:bong_tangent+linear:0.5:0.5');
+                                            } else if (e.target.value === 'beta') {
+                                                props.onSchedulerChange('beta:0.50:0.70');
+                                            } else if (e.target.value === 'power') {
+                                                props.onSchedulerChange('power:2.00');
                                             } else {
                                                 props.onSchedulerChange(e.target.value);
                                             }
                                         }} className={selectClass}>
                                             <option value="linear" title={t('schedulerLinearDesc')}>Linear</option>
+                                            <option value="beta57" title={t('schedulerBeta57Desc')}>Beta 57</option>
+                                            <option value="beta" title={t('schedulerBetaDesc')}>Beta (Custom)</option>
+                                            <option value="cosine" title={t('schedulerCosineDesc')}>Cosine</option>
+                                            <option value="power" title={t('schedulerPowerDesc')}>Power</option>
                                             <option value="ddim_uniform" title={t('schedulerDdimDesc')}>DDIM Uniform</option>
                                             <option value="sgm_uniform" title={t('schedulerSgmDesc')}>SGM-Uniform (Karras)</option>
                                             <option value="bong_tangent" title={t('schedulerBongDesc')}>Bong Tangent</option>
@@ -430,10 +443,83 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
                                             <option value="composite" title={t('schedulerCompositeDesc')}>Composite (2-Stage)</option>
                                         </select>
                                         <p className="text-[10px] leading-tight text-zinc-500 dark:text-zinc-500">
-                                            {props.scheduler.startsWith('composite') ? t('schedulerCompositeDesc') : t(({ linear: 'schedulerLinearDesc', ddim_uniform: 'schedulerDdimDesc', sgm_uniform: 'schedulerSgmDesc', bong_tangent: 'schedulerBongDesc', linear_quadratic: 'schedulerLinQuadDesc' } as Record<string, string>)[props.scheduler] || 'schedulerLinearDesc')}
+                                            {props.scheduler.startsWith('composite') ? t('schedulerCompositeDesc')
+                                            : props.scheduler.startsWith('beta:') ? t('schedulerBetaDesc')
+                                            : props.scheduler.startsWith('power:') ? t('schedulerPowerDesc')
+                                            : t(({ linear: 'schedulerLinearDesc', beta57: 'schedulerBeta57Desc', cosine: 'schedulerCosineDesc', ddim_uniform: 'schedulerDdimDesc', sgm_uniform: 'schedulerSgmDesc', bong_tangent: 'schedulerBongDesc', linear_quadratic: 'schedulerLinQuadDesc' } as Record<string, string>)[props.scheduler] || 'schedulerLinearDesc')}
                                         </p>
                                     </div>
                                 </div>
+                                {/* Beta (Custom) Sub-Controls */}
+                                {props.scheduler.startsWith('beta:') && (() => {
+                                    const parts = props.scheduler.split(':');
+                                    const alpha = parseFloat(parts[1] || '0.5');
+                                    const betaParam = parseFloat(parts[2] || '0.7');
+                                    const updateBeta = (a: number, b: number) => {
+                                        props.onSchedulerChange(`beta:${a.toFixed(2)}:${b.toFixed(2)}`);
+                                    };
+                                    return (
+                                        <div className="col-span-2 rounded-lg border border-teal-500/20 bg-teal-500/5 p-3 space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-[10px] font-semibold text-teal-400 uppercase tracking-wider">Beta Distribution</p>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => updateBeta(0.5, 0.7)}
+                                                    className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-teal-400 hover:text-teal-300 hover:bg-teal-500/20 transition-colors"
+                                                    title="Reset to Beta 57 defaults (α=0.5, β=0.7)"
+                                                >
+                                                    <RotateCcw className="w-3 h-3" />
+                                                    Reset
+                                                </button>
+                                            </div>
+                                            <EditableSlider
+                                                label="Alpha (α)"
+                                                value={alpha}
+                                                min={0.1} max={2.0} step={0.05}
+                                                onChange={(v) => updateBeta(v, betaParam)}
+                                                formatDisplay={(v) => v.toFixed(2)}
+                                                helpText="Shape parameter. Lower = more density at edges, higher = more density in middle."
+                                            />
+                                            <EditableSlider
+                                                label="Beta (β)"
+                                                value={betaParam}
+                                                min={0.1} max={2.0} step={0.05}
+                                                onChange={(v) => updateBeta(alpha, v)}
+                                                formatDisplay={(v) => v.toFixed(2)}
+                                                helpText="Shape parameter. Lower = front-loaded (structure), higher = back-loaded (detail)."
+                                            />
+                                        </div>
+                                    );
+                                })()}
+                                {/* Power Sub-Controls */}
+                                {props.scheduler.startsWith('power:') && (() => {
+                                    const parts = props.scheduler.split(':');
+                                    const exponent = parseFloat(parts[1] || '2.0');
+                                    return (
+                                        <div className="col-span-2 rounded-lg border border-orange-500/20 bg-orange-500/5 p-3 space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <p className="text-[10px] font-semibold text-orange-400 uppercase tracking-wider">Power Law</p>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => props.onSchedulerChange('power:2.00')}
+                                                    className="flex items-center gap-1 px-2 py-0.5 rounded text-[10px] text-orange-400 hover:text-orange-300 hover:bg-orange-500/20 transition-colors"
+                                                    title="Reset exponent to default (2.0)"
+                                                >
+                                                    <RotateCcw className="w-3 h-3" />
+                                                    Reset
+                                                </button>
+                                            </div>
+                                            <EditableSlider
+                                                label="Exponent"
+                                                value={exponent}
+                                                min={0.25} max={4.0} step={0.05}
+                                                onChange={(v) => props.onSchedulerChange(`power:${v.toFixed(2)}`)}
+                                                formatDisplay={(v) => v.toFixed(2)}
+                                                helpText="p>1 = front-loaded (structural focus), p=1 = linear, p<1 = back-loaded (detail focus)."
+                                            />
+                                        </div>
+                                    );
+                                })()}
                                 {/* Composite Scheduler Sub-Controls */}
                                 {props.scheduler.startsWith('composite') && (() => {
                                     const parts = props.scheduler.split(':');
@@ -453,6 +539,8 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
                                                     <label className="text-[10px] font-medium text-purple-400">{t('compositeStageA')}</label>
                                                     <select value={stageA} onChange={(e) => updateComposite(e.target.value, stageB, crossover, split)} className={stageSelectClass}>
                                                         <option value="linear">Linear</option>
+                                                        <option value="beta57">Beta 57</option>
+                                                        <option value="cosine">Cosine</option>
                                                         <option value="ddim_uniform">DDIM Uniform</option>
                                                         <option value="sgm_uniform">SGM Uniform</option>
                                                         <option value="bong_tangent">Bong Tangent</option>
@@ -463,6 +551,8 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
                                                     <label className="text-[10px] font-medium text-purple-400">{t('compositeStageB')}</label>
                                                     <select value={stageB} onChange={(e) => updateComposite(stageA, e.target.value, crossover, split)} className={stageSelectClass}>
                                                         <option value="linear">Linear</option>
+                                                        <option value="beta57">Beta 57</option>
+                                                        <option value="cosine">Cosine</option>
                                                         <option value="ddim_uniform">DDIM Uniform</option>
                                                         <option value="sgm_uniform">SGM Uniform</option>
                                                         <option value="bong_tangent">Bong Tangent</option>

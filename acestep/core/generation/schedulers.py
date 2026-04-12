@@ -22,7 +22,7 @@ To add a new scheduler:
 """
 
 import math
-from typing import List
+from typing import List, Optional
 
 
 # ---------------------------------------------------------------------------
@@ -271,6 +271,99 @@ def composite_schedule(
     return _apply_shift(raw, shift)
 
 
+def beta57_schedule(num_steps: int, shift: float = 1.0) -> List[float]:
+    """Beta distribution schedule with α=0.5, β=0.7 (aka "beta57").
+
+    Popularised by the RES4LYF project for ComfyUI.  Uses the inverse CDF
+    (percent-point function) of a Beta(0.5, 0.7) distribution to redistribute
+    uniformly-spaced steps into a smooth S-curve that concentrates effort in
+    the high-noise structural region while maintaining a moderate detail tail.
+
+    Community consensus is that this schedule produces more coherent musical
+    structure with ACE-Step than plain linear spacing.
+    """
+    return beta_schedule(num_steps, shift, alpha=0.5, beta_param=0.7)
+
+
+def beta_schedule(
+    num_steps: int,
+    shift: float = 1.0,
+    alpha: float = 0.5,
+    beta_param: float = 0.7,
+) -> List[float]:
+    """Generalised beta distribution schedule.
+
+    Maps N uniformly-spaced quantiles through the inverse CDF of
+    Beta(alpha, beta_param).  The result is reversed so that timesteps
+    descend from ~1.0 toward 0.
+
+    Args:
+        alpha:      Beta distribution α parameter (>0).  Lower values
+                    push density toward the edges.
+        beta_param: Beta distribution β parameter (>0).  When β < α,
+                    density is shifted toward 1.0 (front-loaded).
+    """
+    from scipy.stats import beta as beta_dist
+
+    raw = []
+    for i in range(num_steps):
+        # Uniform quantile in (0, 1), avoiding exact 0 and 1
+        u = (i + 0.5) / num_steps
+        # Inverse CDF maps uniform → beta-distributed
+        t = 1.0 - beta_dist.ppf(u, alpha, beta_param)
+        raw.append(t)
+
+    # Ensure descending order and clamp
+    raw = sorted(raw, reverse=True)
+    raw = [max(min(t, 1.0), 1e-6) for t in raw]
+    return _apply_shift(raw, shift)
+
+
+def cosine_schedule(num_steps: int, shift: float = 1.0) -> List[float]:
+    """Cosine annealing schedule.
+
+    Uses a half-cosine curve to distribute steps, providing a smooth
+    S-shaped density with gentle transitions at both extremes.  This
+    is the schedule family used in DDPM/IDDPM research (Nichol & Dhariwal).
+
+    Density is highest in the mid-range and tapers at the ends, giving
+    balanced coverage of both structural and detail phases.
+    """
+    raw = []
+    for i in range(num_steps):
+        frac = i / num_steps
+        # Cosine maps [0, 1] -> [1, 0] with S-shaped transition
+        t = 0.5 * (1.0 + math.cos(math.pi * frac))
+        raw.append(t)
+
+    raw = [max(min(t, 1.0), 1e-6) for t in raw]
+    return _apply_shift(raw, shift)
+
+
+def power_schedule(
+    num_steps: int,
+    shift: float = 1.0,
+    exponent: float = 2.0,
+) -> List[float]:
+    """Power-law schedule: t = (1 - i/N)^p.
+
+    The exponent controls the curvature:
+        p > 1:  Front-loaded — more steps for structure (default p=2).
+        p = 1:  Identical to linear.
+        p < 1:  Back-loaded — more steps for fine detail.
+
+    A simple, interpretable schedule with a single tuning knob.
+    """
+    raw = []
+    for i in range(num_steps):
+        frac = i / num_steps  # 0 → nearly 1
+        t = (1.0 - frac) ** exponent
+        raw.append(t)
+
+    raw = [max(min(t, 1.0), 1e-6) for t in raw]
+    return _apply_shift(raw, shift)
+
+
 # ---------------------------------------------------------------------------
 # Registry
 # ---------------------------------------------------------------------------
@@ -282,6 +375,10 @@ SCHEDULERS = {
     "karras": sgm_uniform_schedule,      # alias — same Karras σ-ramp
     "bong_tangent": bong_tangent_schedule,
     "linear_quadratic": linear_quadratic_schedule,
+    "beta57": beta57_schedule,
+    "beta": beta_schedule,
+    "cosine": cosine_schedule,
+    "power": power_schedule,
     "composite": composite_schedule,
 }
 
@@ -292,6 +389,10 @@ SCHEDULER_INFO = {
     "karras":           {"name": "SGM-Uniform (Karras)", "description": "Karras σ-ramp (ρ=7). Alias for SGM Uniform."},
     "bong_tangent":     {"name": "Tangent",              "description": "Front-loaded (structural focus)"},
     "linear_quadratic": {"name": "Linear-Quadratic",     "description": "Linear start, quadratic finish"},
+    "beta57":           {"name": "Beta 57",              "description": "Beta(0.5, 0.7) — smooth S-curve, structural focus. From RES4LYF."},
+    "beta":             {"name": "Beta",                 "description": "Configurable beta distribution schedule."},
+    "cosine":           {"name": "Cosine",               "description": "Cosine annealing — balanced S-curve."},
+    "power":            {"name": "Power",                "description": "Power-law t^p. p>1 = structural, p<1 = detail."},
     "composite":        {"name": "Composite",            "description": "Two-stage: different schedulers for structure vs detail"},
 }
 
@@ -303,24 +404,20 @@ VALID_SCHEDULERS = set(SCHEDULERS.keys())
 
 
 def get_schedule(name: str, num_steps: int, shift: float = 1.0) -> List[float]:
-    """Get a timestep schedule by name, supporting composite syntax.
+    """Get a timestep schedule by name, supporting parameterized syntax.
 
     Simple schedulers::
 
         get_schedule("linear", 50, 5.0)
         get_schedule("bong_tangent", 50, 5.0)
 
-    Composite (2-stage) scheduler — encode config in the name string::
+    Parameterized schedulers — encode config in the name string::
 
+        get_schedule("beta:0.5:0.7", 50, 5.0)        # beta with α=0.5, β=0.7
+        get_schedule("power:2.0", 50, 5.0)            # power with exponent=2.0
         get_schedule("composite:bong_tangent+linear_quadratic:0.5:0.6", 50, 5.0)
-        #            ^type     ^stageA     ^stageB             ^cross ^split
 
-    Format: ``composite:<scheduler_a>+<scheduler_b>:<crossover>:<split>``
-
-    - scheduler_a: structural phase (high noise). Default: bong_tangent
-    - scheduler_b: detail phase (low noise). Default: linear
-    - crossover:   timestep (0–1) separating phases. Default: 0.5
-    - split:       fraction of steps for phase A. Default: 0.5
+    Composite format: ``composite:<scheduler_a>+<scheduler_b>:<crossover>:<split>``
 
     Returns:
         List of float timestep values, descending, in (0, 1].
@@ -346,6 +443,21 @@ def get_schedule(name: str, num_steps: int, shift: float = 1.0) -> List[float]:
             split=split_frac,
         )
 
+    # ── Parameterized beta schedule ──────────────────────────────
+    if name.startswith("beta:"):
+        # Parse: "beta:alpha:beta_param"
+        parts = name.split(":")
+        alpha = float(parts[1]) if len(parts) > 1 else 0.5
+        beta_p = float(parts[2]) if len(parts) > 2 else 0.7
+        return beta_schedule(num_steps, shift, alpha=alpha, beta_param=beta_p)
+
+    # ── Parameterized power schedule ─────────────────────────────
+    if name.startswith("power:"):
+        # Parse: "power:exponent"
+        parts = name.split(":")
+        exponent = float(parts[1]) if len(parts) > 1 else 2.0
+        return power_schedule(num_steps, shift, exponent=exponent)
+
     # ── Simple scheduler ─────────────────────────────────────────
     if name not in SCHEDULERS:
         valid = ", ".join(sorted(VALID_SCHEDULERS))
@@ -356,9 +468,9 @@ def get_schedule(name: str, num_steps: int, shift: float = 1.0) -> List[float]:
 def get_scheduler(name: str):
     """Get a scheduler function by name (legacy API).
 
-    For composite schedulers, returns a wrapper that parses the
-    composite string.  For simple schedulers, returns the function
-    directly.
+    For parameterized schedulers (composite, beta:α:β, power:exp),
+    returns a wrapper that parses the name string.  For simple
+    schedulers, returns the function directly.
 
     Returns:
         schedule_fn: Callable[[int, float], List[float]]
@@ -367,11 +479,12 @@ def get_scheduler(name: str):
         ValueError if the scheduler name is not recognized.
     """
     clean = name.lower().strip()
-    if clean.startswith("composite"):
-        # Return a closure that delegates to get_schedule
-        def _composite_wrapper(num_steps: int, shift: float = 1.0) -> List[float]:
+
+    # Parameterized schedulers — return closures that delegate to get_schedule
+    if clean.startswith(("composite", "beta:", "power:")):
+        def _parameterized_wrapper(num_steps: int, shift: float = 1.0) -> List[float]:
             return get_schedule(name, num_steps, shift)
-        return _composite_wrapper
+        return _parameterized_wrapper
 
     if clean not in SCHEDULERS:
         valid = ", ".join(sorted(VALID_SCHEDULERS))
