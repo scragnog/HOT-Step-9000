@@ -141,7 +141,7 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
   }, []);
 
   // ── Load artists ──
-  const loadArtists = useCallback(async (): Promise<Artist[]> => {
+  const loadArtists = useCallback(async (retries = 5): Promise<Artist[]> => {
     setArtistsLoading(true);
     let artistsList: typeof artists = [];
     try {
@@ -149,7 +149,13 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
       artistsList = res.artists;
       setArtists(res.artists);
     } catch (err) {
-      console.error('[LyricStudioV2] Failed to load artists:', err);
+      console.warn(`[LyricStudioV2] Failed to load artists (retries left: ${retries}):`, err);
+      if (retries > 0) {
+        // Python API may still be starting — wait and retry
+        await new Promise(r => setTimeout(r, 2000));
+        return loadArtists(retries - 1);
+      }
+      console.error('[LyricStudioV2] Exhausted retries loading artists');
     } finally {
       setArtistsLoading(false);
     }
