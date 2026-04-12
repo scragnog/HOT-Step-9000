@@ -295,7 +295,7 @@ if "%COVERART_CHOICE%"=="" set COVERART_CHOICE=n
 if /i "!COVERART_CHOICE!"=="Y" (
     echo.
     echo  Downloading SDXL Turbo from HuggingFace...
-    python -c "from huggingface_hub import snapshot_download; snapshot_download('stabilityai/sdxl-turbo', variant='fp16')"
+    python -c "from huggingface_hub import snapshot_download; snapshot_download^('stabilityai/sdxl-turbo', variant='fp16'^)"
     if errorlevel 1 (
         echo  WARNING: Failed to download SDXL Turbo model.
         echo  It will be downloaded automatically on first use.
@@ -331,66 +331,79 @@ echo.
 set /p XL_CHOICE="  Your choice [1/2/3/4] (default=4): "
 if "%XL_CHOICE%"=="" set XL_CHOICE=4
 
-if "%XL_CHOICE%"=="1" (
-    echo.
-    echo  Downloading XL Turbo model...
-    python -m acestep.model_downloader --model acestep-v15-xl-turbo --skip-main
-    if errorlevel 1 (
-        echo  WARNING: XL Turbo download had errors. You can retry later with:
-        echo    python -m acestep.model_downloader --model acestep-v15-xl-turbo --skip-main
-    ) else (
-        echo  XL Turbo model downloaded successfully.
-    )
-) else if "%XL_CHOICE%"=="2" (
-    echo.
-    echo  Downloading all XL models...
-    echo.
-    echo  [1/3] XL Base...
-    python -m acestep.model_downloader --model acestep-v15-xl-base --skip-main
-    if errorlevel 1 (
-        echo  WARNING: XL Base download had errors.
-    )
-    echo.
-    echo  [2/3] XL SFT...
+REM Use goto dispatch instead of nested if/else if chains — deep nesting
+REM with parenthesized blocks causes cmd.exe parsing errors on some systems.
+if "%XL_CHOICE%"=="1" goto :xl_turbo_only
+if "%XL_CHOICE%"=="2" goto :xl_all
+if "%XL_CHOICE%"=="3" goto :xl_merge
+goto :xl_skip
+
+:xl_turbo_only
+echo.
+echo  Downloading XL Turbo model...
+python -m acestep.model_downloader --model acestep-v15-xl-turbo --skip-main
+if errorlevel 1 (
+    echo  WARNING: XL Turbo download had errors. You can retry later with:
+    echo    python -m acestep.model_downloader --model acestep-v15-xl-turbo --skip-main
+) else (
+    echo  XL Turbo model downloaded successfully.
+)
+goto :xl_done
+
+:xl_all
+echo.
+echo  Downloading all XL models...
+echo.
+echo  [1/3] XL Base...
+python -m acestep.model_downloader --model acestep-v15-xl-base --skip-main
+if errorlevel 1 (
+    echo  WARNING: XL Base download had errors.
+)
+echo.
+echo  [2/3] XL SFT...
+python -m acestep.model_downloader --model acestep-v15-xl-sft --skip-main
+if errorlevel 1 (
+    echo  WARNING: XL SFT download had errors.
+)
+echo.
+echo  [3/3] XL Turbo...
+python -m acestep.model_downloader --model acestep-v15-xl-turbo --skip-main
+if errorlevel 1 (
+    echo  WARNING: XL Turbo download had errors.
+)
+echo.
+echo  XL model downloads complete.
+goto :xl_done
+
+:xl_merge
+echo.
+echo  The merge model needs supporting files from XL SFT.
+echo  Checking if XL SFT is available...
+if not exist "checkpoints\acestep-v15-xl-sft\config.json" (
+    echo  XL SFT not found. Downloading donor checkpoint first...
     python -m acestep.model_downloader --model acestep-v15-xl-sft --skip-main
     if errorlevel 1 (
-        echo  WARNING: XL SFT download had errors.
-    )
-    echo.
-    echo  [3/3] XL Turbo...
-    python -m acestep.model_downloader --model acestep-v15-xl-turbo --skip-main
-    if errorlevel 1 (
-        echo  WARNING: XL Turbo download had errors.
-    )
-    echo.
-    echo  XL model downloads complete.
-) else if "%XL_CHOICE%"=="3" (
-    echo.
-    echo  The merge model needs supporting files from XL SFT.
-    echo  Checking if XL SFT is available...
-    if not exist "checkpoints\acestep-v15-xl-sft\config.json" (
-        echo  XL SFT not found. Downloading donor checkpoint first...
-        python -m acestep.model_downloader --model acestep-v15-xl-sft --skip-main
-        if errorlevel 1 (
-            echo  WARNING: XL SFT download had errors. Merge setup may be incomplete.
-        )
-    ) else (
-        echo  XL SFT found.
-    )
-    echo.
-    echo  Downloading XL SFT+Turbo Merge model (~20 GB)...
-    python -m acestep.model_downloader --model acestep-v15-merge-sft-turbo-xl-ta-0.5 --skip-main
-    if errorlevel 1 (
-        echo  WARNING: Merge model download had errors. You can retry later with:
-        echo    python -m acestep.model_downloader --model acestep-v15-merge-sft-turbo-xl-ta-0.5 --skip-main
-    ) else (
-        echo  XL SFT+Turbo Merge model downloaded successfully.
+        echo  WARNING: XL SFT download had errors. Merge setup may be incomplete.
     )
 ) else (
-    echo  Skipping XL models. They will auto-download on first use if selected,
-    echo  or you can download later with:
-    echo    python -m acestep.model_downloader --model acestep-v15-xl-turbo --skip-main
+    echo  XL SFT found.
 )
+echo.
+echo  Downloading XL SFT+Turbo Merge model (~20 GB)...
+python -m acestep.model_downloader --model acestep-v15-merge-sft-turbo-xl-ta-0.5 --skip-main
+if errorlevel 1 (
+    echo  WARNING: Merge model download had errors. You can retry later with:
+    echo    python -m acestep.model_downloader --model acestep-v15-merge-sft-turbo-xl-ta-0.5 --skip-main
+) else (
+    echo  XL SFT+Turbo Merge model downloaded successfully.
+)
+goto :xl_done
+
+:xl_skip
+echo  Skipping XL models. You can download later with:
+echo    python -m acestep.model_downloader --model acestep-v15-xl-turbo --skip-main
+
+:xl_done
 echo.
 
 :: -------------------------------------------------------------------
@@ -412,7 +425,7 @@ if /i "!REDMOND_CHOICE!"=="Y" (
     echo.
     echo  Downloading AceStep_Refine_Redmond from HuggingFace...
     if not exist "checkpoints\redmond-refine" mkdir "checkpoints\redmond-refine"
-    python -c "from huggingface_hub import snapshot_download; snapshot_download('artificialguybr/AceStep_Refine_Redmond', allow_patterns='standard/*', local_dir='checkpoints/redmond-refine')"
+    python -c "from huggingface_hub import snapshot_download; snapshot_download^('artificialguybr/AceStep_Refine_Redmond', allow_patterns='standard/*', local_dir='checkpoints/redmond-refine'^)"
     if errorlevel 1 (
         echo  WARNING: Failed to download Redmond adapter.
         echo  You can download manually from: https://huggingface.co/artificialguybr/AceStep_Refine_Redmond

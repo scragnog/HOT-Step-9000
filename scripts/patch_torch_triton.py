@@ -21,6 +21,7 @@ Usage:
 """
 
 import argparse
+import importlib.util
 import os
 import shutil
 import sys
@@ -34,14 +35,28 @@ PATTERN_FIXED  = b"KiiiiisOK"
 
 
 def find_torch_dll() -> str:
-    """Locate torch_python.dll from the current Python environment."""
+    """Locate torch_python.dll from the current Python environment.
+
+    Uses importlib.util.find_spec() instead of ``import torch`` so that
+    the DLL is never loaded into memory.  Loading torch locks the file
+    on Windows, which prevents us from writing the patched bytes back.
+    """
+    # --- Method 1: importlib (no import, no DLL lock) ---
     try:
-        import torch
-        dll_path = os.path.join(os.path.dirname(torch.__file__), "lib", "torch_python.dll")
-        if os.path.exists(dll_path):
-            return dll_path
-    except ImportError:
+        spec = importlib.util.find_spec("torch")
+        if spec and spec.origin:
+            torch_dir = os.path.dirname(spec.origin)
+            dll_path = os.path.join(torch_dir, "lib", "torch_python.dll")
+            if os.path.exists(dll_path):
+                return dll_path
+    except (ModuleNotFoundError, ValueError):
         pass
+
+    # --- Method 2: walk site-packages (fallback) ---
+    for path in sys.path:
+        candidate = os.path.join(path, "torch", "lib", "torch_python.dll")
+        if os.path.exists(candidate):
+            return candidate
 
     raise FileNotFoundError(
         "Could not find torch_python.dll. Is PyTorch installed in this Python environment?"
