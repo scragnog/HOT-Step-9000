@@ -4,7 +4,6 @@ import { useI18n } from '../../context/I18nContext';
 import { usePersistedState } from '../../hooks/usePersistedState';
 import { EditableSlider } from '../EditableSlider';
 import GuidanceSettingsAccordion from './GuidanceSettingsAccordion';
-import LmCotAccordion from './LmCotAccordion';
 import ExpertControlsAccordion from './ExpertControlsAccordion';
 
 type GuidanceMode = 'apg' | 'adg' | 'pag' | 'cfg_pp' | 'dynamic_cfg' | 'rescaled_cfg';
@@ -56,41 +55,6 @@ interface GenerationSettingsAccordionProps {
     onGuidanceIntervalDecayChange?: (val: number) => void;
     minGuidanceScale?: number;
     onMinGuidanceScaleChange?: (val: number) => void;
-    // LM / CoT
-    thinking: boolean;
-    onThinkingToggle: () => void;
-    loraLoaded: boolean;
-    lmBackend: 'pt' | 'vllm' | 'custom-vllm';
-    onLmBackendChange: (val: 'pt' | 'vllm' | 'custom-vllm') => void;
-    lmModel: string;
-    onLmModelChange: (val: string) => void;
-    isLmSwitching?: boolean;
-    lmTemperature: number;
-    onLmTemperatureChange: (val: number) => void;
-    lmCfgScale: number;
-    onLmCfgScaleChange: (val: number) => void;
-    lmTopK: number;
-    onLmTopKChange: (val: number) => void;
-    lmTopP: number;
-    onLmTopPChange: (val: number) => void;
-    lmRepetitionPenalty: number;
-    onLmRepetitionPenaltyChange: (val: number) => void;
-    lmNegativePrompt: string;
-    onLmNegativePromptChange: (val: string) => void;
-    allowLmBatch: boolean;
-    onAllowLmBatchToggle: () => void;
-    useCotMetas: boolean;
-    onUseCotMetasToggle: () => void;
-    useCotCaption: boolean;
-    onUseCotCaptionToggle: () => void;
-    useCotLanguage: boolean;
-    onUseCotLanguageToggle: () => void;
-    lmBatchChunkSize: number;
-    onLmBatchChunkSizeChange: (val: number) => void;
-    constrainedDecodingDebug: boolean;
-    onConstrainedDecodingDebugToggle: () => void;
-    isFormatCaption: boolean;
-    onIsFormatCaptionToggle: () => void;
 
     // Expert Controls
     uploadError: string | null;
@@ -147,8 +111,6 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
 
     const [showInferenceSettings, setShowInferenceSettings] = usePersistedState('acestep-showInferenceSettings', false);
     const [showGuidancePanel, setShowGuidancePanel] = usePersistedState('acestep-showGuidancePanel', false);
-    const [showLmCot, setShowLmCot] = usePersistedState('ace-showCotSection', false);
-    const [showLmParams, setShowLmParams] = usePersistedState('acestep-showLmParams', false);
     const [showExpert, setShowExpert] = usePersistedState('acestep-showExpertPanel', false);
 
     const selectClass = "w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-xl px-2 py-1.5 text-xs text-zinc-900 dark:text-white focus:outline-none focus:border-pink-500 dark:focus:border-pink-500 transition-colors cursor-pointer [&>option]:bg-white [&>option]:dark:bg-zinc-800 [&>option]:text-zinc-900 [&>option]:dark:text-white";
@@ -609,49 +571,6 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
                         onOmegaScaleChange={props.onOmegaScaleChange}
                         ergScale={props.ergScale}
                         onErgScaleChange={props.onErgScaleChange}
-                    />
-
-                    {/* LM / CoT Settings */}
-                    <LmCotAccordion
-                        isOpen={showLmCot}
-                        onToggle={() => setShowLmCot(!showLmCot)}
-                        thinking={props.thinking}
-                        onThinkingToggle={props.onThinkingToggle}
-                        loraLoaded={props.loraLoaded}
-                        lmBackend={props.lmBackend}
-                        onLmBackendChange={props.onLmBackendChange}
-                        lmModel={props.lmModel}
-                        onLmModelChange={props.onLmModelChange}
-                        isLmSwitching={props.isLmSwitching}
-                        showLmParams={showLmParams}
-                        onToggleLmParams={() => setShowLmParams(!showLmParams)}
-                        lmTemperature={props.lmTemperature}
-                        onLmTemperatureChange={props.onLmTemperatureChange}
-                        lmCfgScale={props.lmCfgScale}
-                        onLmCfgScaleChange={props.onLmCfgScaleChange}
-                        lmTopK={props.lmTopK}
-                        onLmTopKChange={props.onLmTopKChange}
-                        lmTopP={props.lmTopP}
-                        onLmTopPChange={props.onLmTopPChange}
-                        lmRepetitionPenalty={props.lmRepetitionPenalty}
-                        onLmRepetitionPenaltyChange={props.onLmRepetitionPenaltyChange}
-                        lmNegativePrompt={props.lmNegativePrompt}
-                        onLmNegativePromptChange={props.onLmNegativePromptChange}
-                        allowLmBatch={props.allowLmBatch}
-                        onAllowLmBatchToggle={props.onAllowLmBatchToggle}
-                        useCotMetas={props.useCotMetas}
-                        onUseCotMetasToggle={props.onUseCotMetasToggle}
-                        useCotCaption={props.useCotCaption}
-                        onUseCotCaptionToggle={props.onUseCotCaptionToggle}
-                        useCotLanguage={props.useCotLanguage}
-                        onUseCotLanguageToggle={props.onUseCotLanguageToggle}
-                        lmBatchChunkSize={props.lmBatchChunkSize}
-                        onLmBatchChunkSizeChange={props.onLmBatchChunkSizeChange}
-                        constrainedDecodingDebug={props.constrainedDecodingDebug}
-                        onConstrainedDecodingDebugToggle={props.onConstrainedDecodingDebugToggle}
-                        isFormatCaption={props.isFormatCaption}
-                        onIsFormatCaptionToggle={props.onIsFormatCaptionToggle}
-
                     />
 
                     {/* Expert Controls */}

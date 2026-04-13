@@ -14,6 +14,8 @@ interface DrawerCardProps {
   onClick: () => void;
   /** When true, the card is completely hidden */
   hidden?: boolean;
+  /** Optional element rendered between summary and chevron (e.g. toggle switch) */
+  rightElement?: React.ReactNode;
 }
 
 /**
@@ -28,6 +30,7 @@ export const DrawerCard: React.FC<DrawerCardProps> = ({
   summary,
   onClick,
   hidden = false,
+  rightElement,
 }) => {
   if (hidden) return null;
 
@@ -52,6 +55,11 @@ export const DrawerCard: React.FC<DrawerCardProps> = ({
           <span className="ml-auto flex-shrink-0 text-[10px] font-mono font-medium px-1.5 py-0.5 rounded bg-zinc-200/60 dark:bg-zinc-700/60 text-zinc-500 dark:text-zinc-400 truncate max-w-[45%]">
             {summary}
           </span>
+        )}
+
+        {/* Optional right element (e.g. toggle) */}
+        {rightElement && (
+          <span className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>{rightElement}</span>
         )}
 
         {/* Chevron */}

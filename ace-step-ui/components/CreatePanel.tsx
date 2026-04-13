@@ -11,6 +11,7 @@ import { getModelDisplayName, isTurboModel, isBaseModel, isBaseOnlyTask, isXlMod
 import { getAudioLabel, formatTime, computeEffectiveBpm, computeEffectiveKeyScale } from '../utils/audioUtils';
 import { EditableSlider } from './EditableSlider';
 import GenerationSettingsAccordion from './accordions/GenerationSettingsAccordion';
+import LmCotAccordion from './accordions/LmCotAccordion';
 import { AudioSelectionSection } from './sections/AudioSelectionSection';
 import { LyricsSection } from './sections/LyricsSection';
 import { StyleSection } from './sections/StyleSection';
@@ -149,6 +150,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [lmTopP, setLmTopP] = usePersistedState('ace-lmTopP', 0.92);
   const [lmRepetitionPenalty, setLmRepetitionPenalty] = usePersistedState('ace-lmRepetitionPenalty', 1.0);
   const [lmNegativePrompt, setLmNegativePrompt] = usePersistedState('ace-lmNegativePrompt', 'NO USER INPUT');
+  const [lmCodesScale, setLmCodesScale] = usePersistedState('ace-lmCodesScale', 1.0);
+  const [showLmParams, setShowLmParams] = usePersistedState('acestep-showLmParams', false);
 
   // Expert Parameters — audio state
   const [referenceAudioUrl, setReferenceAudioUrl] = useState('');
@@ -2369,6 +2372,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
           lmTopP,
           lmRepetitionPenalty,
           lmNegativePrompt,
+          lmCodesScale: thinking ? lmCodesScale : undefined,
           steeringEnabled,
           steeringLoaded,
           steeringAlphas,
@@ -3209,40 +3213,6 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                 onCfgIntervalStartChange={setCfgIntervalStart}
                 cfgIntervalEnd={cfgIntervalEnd}
                 onCfgIntervalEndChange={setCfgIntervalEnd}
-                thinking={thinking}
-                onThinkingToggle={() => setThinking(!thinking)}
-                loraLoaded={loraLoaded}
-                lmBackend={lmBackend}
-                onLmBackendChange={handleLmBackendChange}
-                lmModel={lmModel}
-                onLmModelChange={handleLmModelChange}
-                isLmSwitching={isLmSwitching}
-                lmTemperature={lmTemperature}
-                onLmTemperatureChange={setLmTemperature}
-                lmCfgScale={lmCfgScale}
-                onLmCfgScaleChange={setLmCfgScale}
-                lmTopK={lmTopK}
-                onLmTopKChange={setLmTopK}
-                lmTopP={lmTopP}
-                onLmTopPChange={setLmTopP}
-                lmRepetitionPenalty={lmRepetitionPenalty}
-                onLmRepetitionPenaltyChange={setLmRepetitionPenalty}
-                lmNegativePrompt={lmNegativePrompt}
-                onLmNegativePromptChange={setLmNegativePrompt}
-                allowLmBatch={allowLmBatch}
-                onAllowLmBatchToggle={() => setAllowLmBatch(!allowLmBatch)}
-                useCotMetas={useCotMetas}
-                onUseCotMetasToggle={() => setUseCotMetas(!useCotMetas)}
-                useCotCaption={useCotCaption}
-                onUseCotCaptionToggle={() => setUseCotCaption(!useCotCaption)}
-                useCotLanguage={useCotLanguage}
-                onUseCotLanguageToggle={() => setUseCotLanguage(!useCotLanguage)}
-                lmBatchChunkSize={lmBatchChunkSize}
-                onLmBatchChunkSizeChange={setLmBatchChunkSize}
-                constrainedDecodingDebug={constrainedDecodingDebug}
-                onConstrainedDecodingDebugToggle={() => setConstrainedDecodingDebug(!constrainedDecodingDebug)}
-                isFormatCaption={isFormatCaption}
-                onIsFormatCaptionToggle={() => setIsFormatCaption(!isFormatCaption)}
                 uploadError={uploadError}
                 audioCodes={audioCodes}
                 onAudioCodesChange={setAudioCodes}
@@ -3280,6 +3250,74 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                 onOmegaScaleChange={setOmegaScale}
                 ergScale={ergScale}
                 onErgScaleChange={setErgScale}
+              />
+            </DrawerContainer>
+
+            {/* ── LM / Thinking ── */}
+            <DrawerCard
+              icon="🧠"
+              title="LM / Thinking"
+              description="Chain-of-thought reasoning and LM settings"
+              summary={lmSummary}
+              onClick={() => setActiveDrawer(activeDrawer === 'lm' ? null : 'lm')}
+              hidden={activeDrawer === 'lm'}
+              rightElement={
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); setThinking(!thinking); }}
+                  className={`w-10 h-5 rounded-full flex items-center transition-colors duration-200 px-0.5 border border-zinc-200 dark:border-white/5 ${thinking ? 'bg-pink-600' : 'bg-zinc-300 dark:bg-black/40'} cursor-pointer`}
+                >
+                  <div className={`w-4 h-4 rounded-full bg-white transform transition-transform duration-200 shadow-sm ${thinking ? 'translate-x-5' : 'translate-x-0'}`} />
+                </button>
+              }
+            />
+            <DrawerContainer
+              isOpen={activeDrawer === 'lm'}
+              title="LM / Thinking"
+              onClose={() => setActiveDrawer(null)}
+            >
+              <LmCotAccordion
+                embedded
+                isOpen={true}
+                onToggle={() => {}}
+                thinking={thinking}
+                onThinkingToggle={() => setThinking(!thinking)}
+                loraLoaded={loraLoaded}
+                lmBackend={lmBackend}
+                onLmBackendChange={handleLmBackendChange}
+                lmModel={lmModel}
+                onLmModelChange={handleLmModelChange}
+                isLmSwitching={isLmSwitching}
+                showLmParams={showLmParams}
+                onToggleLmParams={() => setShowLmParams(!showLmParams)}
+                lmTemperature={lmTemperature}
+                onLmTemperatureChange={setLmTemperature}
+                lmCfgScale={lmCfgScale}
+                onLmCfgScaleChange={setLmCfgScale}
+                lmTopK={lmTopK}
+                onLmTopKChange={setLmTopK}
+                lmTopP={lmTopP}
+                onLmTopPChange={setLmTopP}
+                lmRepetitionPenalty={lmRepetitionPenalty}
+                onLmRepetitionPenaltyChange={setLmRepetitionPenalty}
+                lmNegativePrompt={lmNegativePrompt}
+                onLmNegativePromptChange={setLmNegativePrompt}
+                allowLmBatch={allowLmBatch}
+                onAllowLmBatchToggle={() => setAllowLmBatch(!allowLmBatch)}
+                useCotMetas={useCotMetas}
+                onUseCotMetasToggle={() => setUseCotMetas(!useCotMetas)}
+                useCotCaption={useCotCaption}
+                onUseCotCaptionToggle={() => setUseCotCaption(!useCotCaption)}
+                useCotLanguage={useCotLanguage}
+                onUseCotLanguageToggle={() => setUseCotLanguage(!useCotLanguage)}
+                lmBatchChunkSize={lmBatchChunkSize}
+                onLmBatchChunkSizeChange={setLmBatchChunkSize}
+                constrainedDecodingDebug={constrainedDecodingDebug}
+                onConstrainedDecodingDebugToggle={() => setConstrainedDecodingDebug(!constrainedDecodingDebug)}
+                isFormatCaption={isFormatCaption}
+                onIsFormatCaptionToggle={() => setIsFormatCaption(!isFormatCaption)}
+                lmCodesScale={lmCodesScale}
+                onLmCodesScaleChange={setLmCodesScale}
               />
             </DrawerContainer>
 

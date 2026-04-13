@@ -1674,6 +1674,7 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         is_covers: torch.Tensor,
         precomputed_lm_hints_25Hz: Optional[torch.FloatTensor] = None,
         audio_codes: torch.FloatTensor = None,
+        lm_codes_scale: float = 1.0,
     ):
         
         dtype = hidden_states.dtype
@@ -1700,6 +1701,9 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
             lm_hints_25Hz = self.detokenize(lm_hints_5Hz)
             # Crop lm_hints_25Hz to match src_latents length (tokenize may have added padding)
             lm_hints_25Hz = lm_hints_25Hz[:, :src_latents.shape[1], :]
+        # Apply lm_codes_scale blending: interpolate between original src_latents and LM hints
+        if lm_codes_scale < 1.0:
+            lm_hints_25Hz = lm_codes_scale * lm_hints_25Hz + (1.0 - lm_codes_scale) * src_latents
         src_latents = torch.where(is_covers.unsqueeze(-1).unsqueeze(-1) > 0, lm_hints_25Hz, src_latents)
         # Concatenate source latents with chunk masks as context
         context_latents = torch.cat([src_latents, chunk_masks.to(dtype)], dim=-1)
@@ -1868,6 +1872,8 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         velocity_ema_factor: float = 0.0,
         **kwargs,
     ):
+        # Extract lm_codes_scale from kwargs (xl_turbo receives it via kwargs)
+        lm_codes_scale = kwargs.pop('lm_codes_scale', 1.0)
         # Valid shifts: only discrete values 1, 2, 3 are supported
         VALID_SHIFTS = [1.0, 2.0, 3.0]
         
@@ -1950,6 +1956,7 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
             is_covers=is_covers,
             precomputed_lm_hints_25Hz=precomputed_lm_hints_25Hz,
             audio_codes=audio_codes,
+            lm_codes_scale=lm_codes_scale,
         )
         
         encoder_hidden_states_non_cover, encoder_attention_mask_non_cover, context_latents_non_cover = None, None, None

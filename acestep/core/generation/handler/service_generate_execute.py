@@ -94,6 +94,8 @@ class ServiceGenerateExecuteMixin:
         temporal_smoothing: float = 0.0,
         # STORK solver parameters
         stork_substeps: int = 10,
+        # LM Codes Scale
+        lm_codes_scale: float = 1.0,
     ) -> Dict[str, Any]:
         """Build kwargs passed to model generation backends."""
         kwargs = {
@@ -141,6 +143,8 @@ class ServiceGenerateExecuteMixin:
             "temporal_smoothing": temporal_smoothing,
             # STORK solver parameters
             "stork_substeps": stork_substeps,
+            # LM Codes Scale
+            "lm_codes_scale": lm_codes_scale,
         }
         if timesteps is not None:
             kwargs["timesteps"] = torch.tensor(timesteps, dtype=torch.float32, device=self.device)
@@ -204,6 +208,7 @@ class ServiceGenerateExecuteMixin:
                     chunk_masks=payload["chunk_mask"],
                     is_covers=payload["is_covers"],
                     precomputed_lm_hints_25Hz=payload["precomputed_lm_hints_25Hz"],
+                    lm_codes_scale=generate_kwargs.get("lm_codes_scale", 1.0),
                 )
 
                 if self.use_mlx_dit and self.mlx_decoder is not None:

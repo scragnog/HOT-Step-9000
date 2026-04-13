@@ -184,6 +184,7 @@ class GenerationParams:
     lm_top_p: float = 0.9
     lm_negative_prompt: str = "NO USER INPUT"
     lm_repetition_penalty: float = 1.0
+    lm_codes_scale: float = 1.0  # Scale LM audio code influence (0.0=ignore, 1.0=full replacement)
     use_cot_metas: bool = True
     use_cot_caption: bool = True
     use_cot_lyrics: bool = False  # TODO: not used yet
@@ -1134,6 +1135,7 @@ def generate_music(
             apg_norm_threshold=params.apg_norm_threshold,
             omega_scale=params.omega_scale,
             erg_scale=params.erg_scale,
+            lm_codes_scale=params.lm_codes_scale,
             progress=progress,
         )
 

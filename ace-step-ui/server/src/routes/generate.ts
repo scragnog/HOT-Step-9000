@@ -118,6 +118,7 @@ interface GenerateBody {
   lmBackend?: 'pt' | 'vllm';
   lmModel?: string;
   lmRepetitionPenalty?: number;
+  lmCodesScale?: number;  // Scale influence of LM audio codes (0.0-1.0)
 
   // Expert Parameters
   referenceAudioUrl?: string;
@@ -400,6 +401,7 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
           lm_top_k: params.lmTopK,
           lm_top_p: params.lmTopP,
           lm_negative_prompt: params.lmNegativePrompt,
+          lm_codes_scale: params.lmCodesScale ?? 1.0,
         } : {}),
       }),
     });

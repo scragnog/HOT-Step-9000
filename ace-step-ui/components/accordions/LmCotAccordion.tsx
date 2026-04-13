@@ -51,6 +51,11 @@ interface LmCotAccordionProps {
     // Format Caption
     isFormatCaption: boolean;
     onIsFormatCaptionToggle: () => void;
+    // LM Codes Scale (blending strength of LM audio codes)
+    lmCodesScale?: number;
+    onLmCodesScaleChange?: (val: number) => void;
+    /** When true, skip the accordion header — used inside DrawerContainers */
+    embedded?: boolean;
 }
 
 const Toggle: React.FC<{ on: boolean; onClick: () => void; disabled?: boolean }> = ({ on, onClick, disabled }) => (
@@ -83,29 +88,16 @@ export const LmCotAccordion: React.FC<LmCotAccordionProps> = ({
     lmBatchChunkSize, onLmBatchChunkSizeChange,
     constrainedDecodingDebug, onConstrainedDecodingDebugToggle,
     isFormatCaption, onIsFormatCaptionToggle,
-
+    lmCodesScale, onLmCodesScaleChange,
+    embedded,
 }) => {
     const { t } = useI18n();
 
 
     const selectClass = "w-full bg-zinc-50 dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-xl px-2 py-1.5 text-xs text-zinc-900 dark:text-white focus:outline-none focus:border-pink-500 dark:focus:border-pink-500 transition-colors cursor-pointer [&>option]:bg-white [&>option]:dark:bg-zinc-800 [&>option]:text-zinc-900 [&>option]:dark:text-white";
 
-    return (
-        <div>
-            <button
-                type="button"
-                onClick={onToggle}
-                className={`w-full flex items-center justify-between px-4 py-3 bg-white dark:bg-suno-card border border-zinc-200 dark:border-white/5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors ${isOpen ? 'rounded-t-xl rounded-b-none border-b-0' : 'rounded-xl'}`}
-            >
-                <div className="flex items-center gap-2">
-                    <Brain size={16} className="text-zinc-500" />
-                    <span>{t('lmCotSettings')}</span>
-                </div>
-                <ChevronDown size={18} className={`text-pink-500 chevron-icon ${isOpen ? 'rotated' : ''}`} />
-            </button>
-
-            {isOpen && (
-                <div className="bg-white dark:bg-suno-card rounded-b-xl rounded-t-none border border-t-0 border-zinc-200 dark:border-white/5 p-4 space-y-4">
+    const content = (
+                <div className={embedded ? "space-y-4" : "bg-white dark:bg-suno-card rounded-b-xl rounded-t-none border border-t-0 border-zinc-200 dark:border-white/5 p-4 space-y-4"}>
                     {/* Thinking Toggle */}
                     <div className="flex items-center justify-between py-1">
                         <div>
@@ -203,6 +195,20 @@ export const LmCotAccordion: React.FC<LmCotAccordionProps> = ({
                                     <Toggle on={value} onClick={tog} />
                                 </div>
                             ))}
+                            {/* LM Codes Scale — only when thinking */}
+                            {onLmCodesScaleChange && (
+                                <EditableSlider
+                                    label="LM Codes Scale"
+                                    value={lmCodesScale ?? 1.0}
+                                    min={0}
+                                    max={1}
+                                    step={0.05}
+                                    onChange={onLmCodesScaleChange}
+                                    formatDisplay={(val) => val.toFixed(2)}
+                                    helpText="How strongly the LM's audio codes influence diffusion. 1.0 = full, 0.5 = blended, 0 = off"
+                                    title="Blends LM-generated latent hints with the original source latents before diffusion"
+                                />
+                            )}
                         </div>
                     )}
 
@@ -227,7 +233,24 @@ export const LmCotAccordion: React.FC<LmCotAccordionProps> = ({
                         <Toggle on={isFormatCaption} onClick={onIsFormatCaptionToggle} />
                     </div>
                 </div>
-            )}
+    );
+
+    if (embedded) return content;
+
+    return (
+        <div>
+            <button
+                type="button"
+                onClick={onToggle}
+                className={`w-full flex items-center justify-between px-4 py-3 bg-white dark:bg-suno-card border border-zinc-200 dark:border-white/5 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors ${isOpen ? 'rounded-t-xl rounded-b-none border-b-0' : 'rounded-xl'}`}
+            >
+                <div className="flex items-center gap-2">
+                    <Brain size={16} className="text-zinc-500" />
+                    <span>{t('lmCotSettings')}</span>
+                </div>
+                <ChevronDown size={18} className={`text-pink-500 chevron-icon ${isOpen ? 'rotated' : ''}`} />
+            </button>
+            {isOpen && content}
         </div>
     );
 };

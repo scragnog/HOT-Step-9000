@@ -157,6 +157,8 @@ class GenerateMusicMixin:
         apg_norm_threshold: float = 0.0,
         omega_scale: float = 1.0,
         erg_scale: float = 1.0,
+        # LM Codes Scale
+        lm_codes_scale: float = 1.0,
         progress=None,
     ) -> Dict[str, Any]:
         """Generate audio from text/reference inputs and return response payload.
@@ -356,6 +358,7 @@ class GenerateMusicMixin:
                 frequency_damping=frequency_damping,
                 temporal_smoothing=temporal_smoothing,
                 stork_substeps=stork_substeps,
+                lm_codes_scale=lm_codes_scale,
             )
             outputs = service_run["outputs"]
             infer_steps_for_progress = service_run["infer_steps_for_progress"]

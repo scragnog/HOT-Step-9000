@@ -92,6 +92,7 @@ export interface GenerationParams {
   lmRepetitionPenalty?: number;
   lmBackend?: 'pt' | 'vllm' | 'custom-vllm';
   lmModel?: string;
+  lmCodesScale?: number;  // Scale influence of LM-generated audio codes (0.0-1.0, default 1.0)
 
   // Expert Parameters
   referenceAudioUrl?: string;
