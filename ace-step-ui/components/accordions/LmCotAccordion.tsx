@@ -195,21 +195,22 @@ export const LmCotAccordion: React.FC<LmCotAccordionProps> = ({
                                     <Toggle on={value} onClick={tog} />
                                 </div>
                             ))}
-                            {/* LM Codes Scale — only when thinking */}
-                            {onLmCodesScaleChange && (
-                                <EditableSlider
-                                    label="LM Codes Scale"
-                                    value={lmCodesScale ?? 1.0}
-                                    min={0}
-                                    max={1}
-                                    step={0.05}
-                                    onChange={onLmCodesScaleChange}
-                                    formatDisplay={(val) => val.toFixed(2)}
-                                    helpText="How strongly the LM's audio codes influence diffusion. 1.0 = full, 0.5 = blended, 0 = off"
-                                    title="Blends LM-generated latent hints with the original source latents before diffusion"
-                                />
-                            )}
                         </div>
+                    )}
+
+                    {/* LM Codes Scale — always visible when LM drawer is open */}
+                    {onLmCodesScaleChange && (
+                        <EditableSlider
+                            label="LM Codes Scale"
+                            value={lmCodesScale ?? 1.0}
+                            min={0}
+                            max={1}
+                            step={0.05}
+                            onChange={onLmCodesScaleChange}
+                            formatDisplay={(val) => val.toFixed(2)}
+                            helpText="How strongly the LM's audio codes influence diffusion. 1.0 = full, 0.5 = blended, 0 = off"
+                            title="Blends LM-generated latent hints with the original source latents before diffusion"
+                        />
                     )}
 
                     {/* LM Batch Chunk Size */}
