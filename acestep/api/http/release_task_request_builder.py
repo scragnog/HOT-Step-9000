@@ -128,6 +128,7 @@ def build_generate_music_request(
         lm_top_p=parser.float("lm_top_p", lm_default_top_p),
         lm_repetition_penalty=parser.float("lm_repetition_penalty", 1.0),
         lm_negative_prompt=parser.str("lm_negative_prompt", "NO USER INPUT"),
+        lm_codes_scale=parser.float("lm_codes_scale", 1.0),
         constrained_decoding=parser.bool("constrained_decoding", True),
         constrained_decoding_debug=parser.bool("constrained_decoding_debug"),
         use_cot_caption=parser.bool("use_cot_caption", True),

@@ -215,6 +215,7 @@ def build_generation_setup(
         use_cot_caption=use_cot_caption,
         use_cot_language=use_cot_language,
         use_constrained_decoding=True,
+        lm_codes_scale=getattr(req, "lm_codes_scale", 1.0),
     )
 
     batch_size = req.batch_size if req.batch_size is not None else 2

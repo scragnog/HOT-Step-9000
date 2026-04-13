@@ -147,6 +147,7 @@ class GenerateMusicRequest(BaseModel):
     lm_top_p: Optional[float] = 0.9
     lm_repetition_penalty: float = 1.0
     lm_negative_prompt: str = "NO USER INPUT"
+    lm_codes_scale: float = Field(default=1.0, description="Scale LM audio code influence on diffusion (0.0=ignore, 1.0=full replacement)")
 
     # ── Scoring & LRC output ──────────────────────────────────────
     get_lrc: bool = Field(default=False, description="Return LRC (timed lyrics) in response")

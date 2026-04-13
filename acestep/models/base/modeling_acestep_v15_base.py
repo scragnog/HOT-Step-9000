@@ -1679,6 +1679,8 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
             lm_hints_25Hz = lm_hints_25Hz[:, :src_latents.shape[1], :]
         # Apply lm_codes_scale blending: interpolate between original src_latents and LM hints
         if lm_codes_scale < 1.0:
+            from loguru import logger as _scale_log
+            _scale_log.info(f"[prepare_condition] Applying lm_codes_scale={lm_codes_scale:.3f} blending")
             lm_hints_25Hz = lm_codes_scale * lm_hints_25Hz + (1.0 - lm_codes_scale) * src_latents
         src_latents = torch.where(is_covers.unsqueeze(-1).unsqueeze(-1) > 0, lm_hints_25Hz, src_latents)
         # Concatenate source latents with chunk masks as context
