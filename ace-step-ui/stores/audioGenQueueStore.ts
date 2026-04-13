@@ -137,8 +137,12 @@ function _restore(): AudioGenQueueState {
     if (!raw) return { items: [], completionCounter: 0 };
     const parsed = JSON.parse(raw);
     const items: AudioQueueItem[] = (parsed.items || []).map((item: AudioQueueItem) => {
-      // Items that were mid-load when the page died → reset to pending
-      if (item.status === 'loading-adapter') {
+      // Items that were mid-load or submitted-but-not-yet-tracked when the page died → reset to pending.
+      // 'loading-adapter': adapter load was interrupted
+      // 'generating' without jobId: startGeneration hadn't returned yet, so the backend
+      //   never received the request (or we lost the reference). Safe to re-submit.
+      if (item.status === 'loading-adapter' ||
+          (item.status === 'generating' && !item.jobId)) {
         return { ...item, status: 'pending' as AudioQueueStatus, stage: undefined, progress: undefined };
       }
       return item;
@@ -247,6 +251,19 @@ export function clearFinishedFromAudioQueue(): void {
 export function resumeQueue(token: string): void {
   if (_resumeCalled) return;
   _resumeCalled = true;
+
+  // Defensive: reset any 'generating' items that have no jobId back to pending.
+  // These were submitted-but-not-tracked and can never be resumed by polling.
+  let didFix = false;
+  for (const item of _state.items) {
+    if (item.status === 'generating' && !item.jobId) {
+      item.status = 'pending';
+      item.stage = undefined;
+      item.progress = undefined;
+      didFix = true;
+    }
+  }
+  if (didFix) _emit();
 
   const hasPending = _state.items.some(i => i.status === 'pending');
   const inFlight = _state.items.filter(i => i.status === 'generating' && i.jobId);
