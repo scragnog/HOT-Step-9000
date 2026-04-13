@@ -1016,6 +1016,15 @@ function AppContent() {
         altAudio.removeAttribute('src');
       }
 
+      console.log('[M/O NewSong]', {
+        title: currentSong.title,
+        masteredUrl,
+        originalUrl,
+        hasOriginal: !!originalUrl,
+        sameUrl: masteredUrl === originalUrl,
+        genParams: currentSong.generationParams,
+      });
+
       // Set volumes: mastered audible, original silent (playingOriginal is reset on new song)
       audio.volume = volume;
       altAudio.volume = 0;
@@ -1042,6 +1051,16 @@ function AppContent() {
     } else {
       // --- SAME SONG: M/O toggle or play/pause ---
       // Swap volumes for instant M/O switching (no src change!)
+      console.log('[M/O Toggle]', {
+        playingOriginal,
+        originalUrl,
+        masteredUrl,
+        altSrc: altAudio.src,
+        altReadyState: altAudio.readyState,
+        altPaused: altAudio.paused,
+        sameFile: altAudio.src === audio.src,
+        hasAltSrc: !!altAudio.src,
+      });
       if (playingOriginal && originalUrl) {
         audio.volume = 0;
         altAudio.volume = volume;
