@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   X, Loader2, CheckCircle, AlertCircle, ListOrdered, Sparkles,
   Wand2, Settings2, FolderSearch, ChevronDown, ChevronRight,
-  RefreshCw, Zap, Music,
+  RefreshCw, Zap, Music, Search,
 } from 'lucide-react';
 import {
   useStreamingStore,
@@ -77,6 +77,9 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
   const [mlp, setMlp] = useState(1.0);
   const [condEmbed, setCondEmbed] = useState(1.0);
   const [groupsExpanded, setGroupsExpanded] = useState(false);
+
+  // Preset filter
+  const [presetFilter, setPresetFilter] = useState('');
 
   // File browser
   const [browserOpen, setBrowserOpen] = useState(false);
@@ -316,6 +319,26 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
                 <span className="text-red-400">{presetStats.missing} ✕ missing</span>
               </div>
 
+              {/* Filter */}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500 pointer-events-none" />
+                <input
+                  type="text"
+                  value={presetFilter}
+                  onChange={e => setPresetFilter(e.target.value)}
+                  placeholder="Filter by artist or album…"
+                  className="w-full bg-black/20 border border-white/10 rounded-lg pl-8 pr-3 py-1.5 text-xs text-white placeholder-zinc-600 focus:outline-none focus:border-pink-500/50 transition-colors"
+                />
+                {presetFilter && (
+                  <button
+                    onClick={() => setPresetFilter('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-white/10 text-zinc-500 hover:text-white transition-colors"
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
+
               {/* Adapter path */}
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2 text-xs font-semibold text-zinc-300">
@@ -497,49 +520,70 @@ export const QueuePanel: React.FC<QueuePanelProps> = ({
                 </div>
               ) : lyricsSets.length === 0 ? (
                 <p className="text-zinc-500 text-sm text-center py-4">No albums available</p>
-              ) : (
-                lyricsSets.map(ls => {
-                  const preset = presetMap.get(ls.id);
-                  const status = getPresetStatus(preset);
-                  const badge = STATUS_BADGE[status];
-                  return (
-                    <label
-                      key={ls.id}
-                      className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
-                        selected.has(ls.id) ? 'bg-pink-500/10 border border-pink-500/20' : 'bg-white/5 border border-transparent hover:bg-white/10'
-                      }`}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selected.has(ls.id)}
-                        onChange={() => toggleItem(ls.id)}
-                        className="accent-pink-500"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-white truncate">{ls.album || 'Top Songs'}</span>
-                          <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded ${badge.color}`}>
-                            {badge.icon} {badge.label}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-2 mt-0.5">
-                          <span className="text-[10px] text-zinc-500">{ls.artist_name}</span>
-                          {preset?.adapter_path && (
-                            <span className="text-[9px] text-zinc-600 truncate max-w-[120px]" title={preset.adapter_path}>
-                              🔌 {preset.adapter_path.split(/[\\/]/).pop()}
+              ) : (() => {
+                // Filter + sort: artist alphabetically, then album alphabetically
+                const needle = presetFilter.toLowerCase().trim();
+                const filtered = lyricsSets
+                  .filter(ls => {
+                    if (!needle) return true;
+                    const artist = (ls.artist_name || '').toLowerCase();
+                    const album = (ls.album || '').toLowerCase();
+                    return artist.includes(needle) || album.includes(needle);
+                  })
+                  .slice()
+                  .sort((a, b) => {
+                    const artistCmp = (a.artist_name || '').localeCompare(b.artist_name || '', undefined, { sensitivity: 'base' });
+                    if (artistCmp !== 0) return artistCmp;
+                    return (a.album || '').localeCompare(b.album || '', undefined, { sensitivity: 'base' });
+                  });
+
+                return filtered.length === 0 ? (
+                  <p className="text-zinc-500 text-sm text-center py-4">No albums match "{presetFilter}"</p>
+                ) : (
+                  <>{filtered.map(ls => {
+                    const preset = presetMap.get(ls.id);
+                    const status = getPresetStatus(preset);
+                    const badge = STATUS_BADGE[status];
+                    return (
+                      <label
+                        key={ls.id}
+                        className={`flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-colors ${
+                          selected.has(ls.id) ? 'bg-pink-500/10 border border-pink-500/20' : 'bg-white/5 border border-transparent hover:bg-white/10'
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selected.has(ls.id)}
+                          onChange={() => toggleItem(ls.id)}
+                          className="accent-pink-500"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-white truncate">{ls.artist_name}</span>
+                            <span className="text-[10px] text-zinc-600">—</span>
+                            <span className="text-sm text-zinc-300 truncate">{ls.album || 'Top Songs'}</span>
+                            <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded flex-shrink-0 ${badge.color}`}>
+                              {badge.icon} {badge.label}
                             </span>
-                          )}
-                          {preset?.reference_track_path && (
-                            <span className="text-[9px] text-zinc-600 truncate max-w-[120px]" title={preset.reference_track_path}>
-                              🎵 {preset.reference_track_path.split(/[\\/]/).pop()}
-                            </span>
-                          )}
+                          </div>
+                          <div className="flex items-center gap-2 mt-0.5">
+                            {preset?.adapter_path && (
+                              <span className="text-[9px] text-zinc-600 truncate max-w-[120px]" title={preset.adapter_path}>
+                                🔌 {preset.adapter_path.split(/[\\/]/).pop()}
+                              </span>
+                            )}
+                            {preset?.reference_track_path && (
+                              <span className="text-[9px] text-zinc-600 truncate max-w-[120px]" title={preset.reference_track_path}>
+                                🎵 {preset.reference_track_path.split(/[\\/]/).pop()}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    </label>
-                  );
-                })
-              )
+                      </label>
+                    );
+                  })}</>
+                );
+              })()
             )}
           </div>
 
