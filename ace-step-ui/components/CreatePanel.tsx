@@ -151,7 +151,6 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [lmRepetitionPenalty, setLmRepetitionPenalty] = usePersistedState('ace-lmRepetitionPenalty', 1.0);
   const [lmNegativePrompt, setLmNegativePrompt] = usePersistedState('ace-lmNegativePrompt', 'NO USER INPUT');
   const [lmCodesScale, setLmCodesScale] = usePersistedState('ace-lmCodesScale', 1.0);
-  const [showLmParams, setShowLmParams] = usePersistedState('acestep-showLmParams', false);
 
   // Expert Parameters — audio state
   const [referenceAudioUrl, setReferenceAudioUrl] = useState('');
