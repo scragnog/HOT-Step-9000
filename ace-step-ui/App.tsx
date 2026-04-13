@@ -1050,20 +1050,34 @@ function AppContent() {
       }
     } else {
       // --- SAME SONG: M/O toggle or play/pause ---
+
+      // Late-load: async enrichment may have added originalAudioUrl AFTER
+      // the initial song load (which set altAudio.src = ''). Detect this
+      // case and load the alt audio now.
+      if (originalUrl && !altAudio.src) {
+        console.log('[M/O] Late-loading original audio:', originalUrl);
+        altAudio.src = originalUrl;
+        altAudio.volume = 0;
+        altAudio.load();
+        // Once loaded, sync position to primary and apply the correct volume state
+        const onLateCanPlay = () => {
+          altAudio.currentTime = audio.currentTime;
+          if (playingOriginal) {
+            audio.volume = 0;
+            altAudio.volume = volume;
+          }
+          if (isPlaying && !audio.paused) {
+            altAudio.play().catch(() => {});
+          }
+          altAudio.removeEventListener('canplay', onLateCanPlay);
+        };
+        altAudio.addEventListener('canplay', onLateCanPlay);
+      }
+
       // Swap volumes for instant M/O switching (no src change!)
-      console.log('[M/O Toggle]', {
-        playingOriginal,
-        originalUrl,
-        masteredUrl,
-        altSrc: altAudio.src,
-        altReadyState: altAudio.readyState,
-        altPaused: altAudio.paused,
-        sameFile: altAudio.src === audio.src,
-        hasAltSrc: !!altAudio.src,
-      });
       if (playingOriginal && originalUrl) {
         audio.volume = 0;
-        altAudio.volume = volume;
+        altAudio.volume = altAudio.readyState >= 1 ? volume : 0;
       } else {
         audio.volume = volume;
         altAudio.volume = 0;
