@@ -2178,6 +2178,11 @@ class LLMHandler:
             formatted_prompt = self.build_formatted_prompt(caption, lyrics, generation_phase="cot")
 
             logger.info(f"generate_with_stop_condition: formatted_prompt={formatted_prompt}")
+            # Seed RNG for deterministic Phase 1 (CoT) generation
+            if seeds:
+                torch.manual_seed(seeds[0])
+                if torch.cuda.is_available():
+                    torch.cuda.manual_seed_all(seeds[0])
             # Generate CoT (stop at </think>)
             cot_output_text, status = self.generate_from_formatted_prompt(
                 formatted_prompt=formatted_prompt,
@@ -2278,6 +2283,13 @@ class LLMHandler:
         if is_batch:
             # Batch mode: generate codes for all items
             formatted_prompts = [formatted_prompt_with_cot] * actual_batch_size
+
+            # Seed RNG for deterministic Phase 2 batch generation
+            if seeds:
+                torch.manual_seed(seeds[0])
+                if torch.cuda.is_available():
+                    torch.cuda.manual_seed_all(seeds[0])
+                logger.info(f"[LM Phase 2] Seeded RNG with seed={seeds[0]} for deterministic codes generation")
 
             # Call backend-specific batch generation
             try:
@@ -2384,6 +2396,12 @@ class LLMHandler:
             }
         else:
             # Single mode: generate codes for one item
+            # Seed RNG for deterministic Phase 2 single-mode generation
+            if seeds:
+                torch.manual_seed(seeds[0])
+                if torch.cuda.is_available():
+                    torch.cuda.manual_seed_all(seeds[0])
+                logger.info(f"[LM Phase 2] Seeded RNG with seed={seeds[0]} for deterministic codes generation")
             codes_output_text, status = self.generate_from_formatted_prompt(
                 formatted_prompt=formatted_prompt_with_cot,
                 cfg={
