@@ -405,8 +405,10 @@ router.post('/', authMiddleware, async (req: AuthenticatedRequest, res: Response
     });
 
     if (!acestepResponse.ok) {
-      const error = await acestepResponse.json().catch(() => ({ error: 'Generation failed' }));
-      const msg = error.error || error.message || 'Failed to start generation';
+      const errorBody = await acestepResponse.json().catch(() => ({ error: 'Generation failed' }));
+      // FastAPI uses "detail", Express conventions use "error"/"message"
+      const msg = errorBody.detail || errorBody.error || errorBody.message || 'Failed to start generation';
+      console.error(`[Generate] ACE-Step /release_task returned ${acestepResponse.status}:`, JSON.stringify(errorBody));
       try {
         await pool.query(
           `UPDATE generation_jobs SET status = 'failed', error = ?, updated_at = datetime('now') WHERE id = ?`,
