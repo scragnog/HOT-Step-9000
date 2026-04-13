@@ -532,11 +532,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
                                 <input
                                     type="number"
                                     min={4}
-                                    max={200}
+                                    max={500}
                                     step={4}
                                     value={quickPresetSteps}
                                     onChange={(e) => {
-                                        const val = Math.max(4, Math.min(200, parseInt(e.target.value, 10) || 12));
+                                        const val = Math.max(4, Math.min(500, parseInt(e.target.value, 10) || 12));
                                         setQuickPresetSteps(val);
                                         localStorage.setItem('quick_preset_steps', String(val));
                                     }}

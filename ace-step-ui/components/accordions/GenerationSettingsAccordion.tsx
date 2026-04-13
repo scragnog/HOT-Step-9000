@@ -293,7 +293,7 @@ export const GenerationSettingsAccordion: React.FC<GenerationSettingsAccordionPr
                                     label={t('inferenceSteps')}
                                     value={props.inferenceSteps}
                                     min={4}
-                                    max={props.isTurbo ? 20 : 200}
+                                    max={props.isTurbo ? 20 : 500}
                                     step={1}
                                     onChange={props.onInferenceStepsChange}
                                     helpText={props.isTurbo ? 'Turbo models are optimised for 8 steps (max 20)' : t('moreStepsBetterQuality')}
