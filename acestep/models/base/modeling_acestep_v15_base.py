@@ -1677,11 +1677,17 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
             lm_hints_25Hz = self.detokenize(lm_hints_5Hz)
             # Crop lm_hints_25Hz to match src_latents length (tokenize may have added padding)
             lm_hints_25Hz = lm_hints_25Hz[:, :src_latents.shape[1], :]
-        # Apply lm_codes_scale blending: interpolate between original src_latents and LM hints
+        # Apply lm_codes_scale blending: interpolate between silence and LM hints
+        # NOTE: We blend with silence_latent (not src_latents) because when precomputed
+        # LM hints exist, src_latents and lm_hints are decoded from the same audio codes —
+        # blending X with X at any ratio is a no-op. Silence is the correct "no-LM" baseline.
         if lm_codes_scale < 1.0:
             from loguru import logger as _scale_log
-            _scale_log.info(f"[prepare_condition] Applying lm_codes_scale={lm_codes_scale:.3f} blending")
-            lm_hints_25Hz = lm_codes_scale * lm_hints_25Hz + (1.0 - lm_codes_scale) * src_latents
+            _scale_log.info(f"[prepare_condition] Applying lm_codes_scale={lm_codes_scale:.3f} blending (with silence baseline)")
+            silence_blend = silence_latent[:, :lm_hints_25Hz.shape[1], :]
+            if silence_blend.shape[0] < lm_hints_25Hz.shape[0]:
+                silence_blend = silence_blend.expand(lm_hints_25Hz.shape[0], -1, -1)
+            lm_hints_25Hz = lm_codes_scale * lm_hints_25Hz + (1.0 - lm_codes_scale) * silence_blend
         src_latents = torch.where(is_covers.unsqueeze(-1).unsqueeze(-1) > 0, lm_hints_25Hz, src_latents)
         # Concatenate source latents with chunk masks as context
         context_latents = torch.cat([src_latents, chunk_masks.to(dtype)], dim=-1)
