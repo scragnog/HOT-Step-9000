@@ -756,7 +756,52 @@
 
         // Set Merge Mode Toggle
         const mergeModeToggle = document.getElementById('mergeModeToggle');
+        const mergeModeRow = document.getElementById('mergeModeRow');
         mergeModeToggle.checked = CURRENT_ADAPTER_MERGE_MODE === 'true';
+
+        // ---- Constraint enforcement ----
+        // XL models don't support Redmond Mode.
+        // Quantized DiTs require adapter merge mode for LoRA/LoKR to work.
+        function updateModelConstraints() {
+            const selectedModel = modelSelect.value || '';
+            const isXl = /xl/i.test(selectedModel);
+            const selectedQuant = quantizationSelect.value || 'auto';
+            const isQuantized = selectedQuant !== 'none' && selectedQuant !== 'auto';
+
+            // --- Redmond Mode: disable for XL models ---
+            if (isXl) {
+                redmondToggle.checked = false;
+                redmondToggle.disabled = true;
+                redmondRow.classList.add('unavailable');
+                redmondDesc.textContent = 'Redmond Mode is not available for XL models';
+            } else {
+                redmondToggle.disabled = false;
+                redmondRow.classList.remove('unavailable');
+                if (!redmondAvailable) {
+                    redmondDesc.textContent = 'DPO quality refinement — adapter will download on first launch (~750 MB)';
+                } else {
+                    redmondDesc.textContent = 'DPO quality refinement — merges into base model at startup';
+                }
+            }
+
+            // --- Merge Mode: force-enable for quantized DiT ---
+            const mergeModeDesc = mergeModeRow.querySelector('.toggle-desc');
+            if (isQuantized) {
+                mergeModeToggle.checked = true;
+                mergeModeToggle.disabled = true;
+                mergeModeRow.style.opacity = '0.7';
+                if (mergeModeDesc) mergeModeDesc.textContent = 'Required for quantized DiT — adapters cannot load without merge mode.';
+            } else {
+                mergeModeToggle.disabled = false;
+                mergeModeRow.style.opacity = '';
+                if (mergeModeDesc) mergeModeDesc.textContent = 'Merge adapter weights into the model — zero extra VRAM. Scale changes trigger a re-merge (~3-5s).';
+            }
+        }
+
+        // Run on init and on dropdown changes
+        updateModelConstraints();
+        modelSelect.addEventListener('change', updateModelConstraints);
+        quantizationSelect.addEventListener('change', updateModelConstraints);
 
         // ---- Buttons & Events ----
         const btnLaunch = document.getElementById('btnLaunch');

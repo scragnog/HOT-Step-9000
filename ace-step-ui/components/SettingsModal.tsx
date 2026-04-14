@@ -65,6 +65,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
     const [mergeModeLoading, setMergeModeLoading] = useState(false);
     const [mergeModeFetched, setMergeModeFetched] = useState(false);
 
+    // Model/quantization awareness for constraint enforcement
+    const [isXlModel, setIsXlModel] = useState(false);
+    const [isQuantized, setIsQuantized] = useState(false);
+    const [modelInfoFetched, setModelInfoFetched] = useState(false);
+
     // Fetch Redmond status from Python API on first open
     React.useEffect(() => {
         if (!isOpen || redmondFetched) return;
@@ -98,6 +103,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
             } catch { /* Python API might not be running yet */ }
         })();
     }, [isOpen, mergeModeFetched]);
+
+    // Fetch model status (XL detection + quantization) on first open
+    React.useEffect(() => {
+        if (!isOpen || modelInfoFetched) return;
+        (async () => {
+            try {
+                const res = await fetch('/api/models/status');
+                if (res.ok) {
+                    const json = await res.json();
+                    const data = json?.data || json;
+                    const activeModel = (data.active_model || '').toLowerCase();
+                    setIsXlModel(/xl/.test(activeModel));
+                    const quant = data.quantization || '';
+                    setIsQuantized(!!quant && quant !== 'none' && quant !== 'auto');
+                    setModelInfoFetched(true);
+                }
+            } catch { /* API might not be up yet */ }
+        })();
+    }, [isOpen, modelInfoFetched]);
 
     const handleRedmondToggle = async () => {
         setRedmondLoading(true);
@@ -653,11 +677,14 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
                                 </div>
                                 <button
                                     onClick={handleMergeModeToggle}
-                                    disabled={mergeModeLoading}
-                                    className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${mergeModeEnabled ? 'bg-emerald-600' : 'bg-zinc-300 dark:bg-zinc-600'} ${mergeModeLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                    disabled={mergeModeLoading || isQuantized}
+                                    className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${(mergeModeEnabled || isQuantized) ? 'bg-emerald-600' : 'bg-zinc-300 dark:bg-zinc-600'} ${(mergeModeLoading || isQuantized) ? 'opacity-50 cursor-not-allowed' : ''}`}
                                 >
-                                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${mergeModeEnabled ? 'translate-x-5' : 'translate-x-0'}`} />
+                                    <span className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform duration-200 ${(mergeModeEnabled || isQuantized) ? 'translate-x-5' : 'translate-x-0'}`} />
                                 </button>
+                                {isQuantized && (
+                                    <p className="text-[10px] text-amber-500 dark:text-amber-400 mt-1">Required — adapters cannot load without merge mode on quantized models</p>
+                                )}
                             </div>
                         </div>
                     </div>
@@ -679,16 +706,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ isOpen, onClose, t
                                 <div>
                                     <p className="text-sm text-zinc-900 dark:text-white font-medium">DPO Quality Refinement</p>
                                     <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                                        {!redmondAvailable
+                                        {isXlModel
+                                            ? 'Not available for XL models'
+                                            : !redmondAvailable
                                             ? 'Not installed — download via install.bat'
                                             : 'Merges quality adapter into the base DiT model'}
                                     </p>
                                 </div>
                                 <button
                                     onClick={handleRedmondToggle}
-                                    disabled={redmondLoading || !redmondAvailable}
+                                    disabled={redmondLoading || !redmondAvailable || isXlModel}
                                     className={`relative w-11 h-6 rounded-full transition-colors duration-200 ${
-                                        !redmondAvailable ? 'bg-zinc-200 dark:bg-zinc-700 opacity-40 cursor-not-allowed' :
+                                        (!redmondAvailable || isXlModel) ? 'bg-zinc-200 dark:bg-zinc-700 opacity-40 cursor-not-allowed' :
                                         redmondEnabled ? 'bg-amber-600' : 'bg-zinc-300 dark:bg-zinc-600'
                                     }`}
                                 >
