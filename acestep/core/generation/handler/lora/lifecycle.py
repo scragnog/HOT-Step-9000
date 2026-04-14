@@ -528,7 +528,15 @@ def add_lora(self, lora_path: str, adapter_name: str | None = None) -> str:
             from acestep.core.generation.handler.lora.advanced_adapter_mixin import (
                 _extract_adapter_delta,
                 _apply_merged_weights,
+                _dequantize_decoder_nf4,
+                _requantize_decoder_nf4,
             )
+
+            # If NF4 quantized, dequantize first so backup and adapter ops work
+            _needs_nf4_requant = False
+            if getattr(self, 'quantization', None) == 'nf4':
+                deq_count = _dequantize_decoder_nf4(self.model)
+                _needs_nf4_requant = deq_count > 0
 
             # Backup base decoder on first load (same as advanced system)
             if self._base_decoder is None:
@@ -598,6 +606,11 @@ def add_lora(self, lora_path: str, adapter_name: str | None = None) -> str:
 
             # Apply merged weights to GPU decoder
             _apply_merged_weights(self)
+
+            # Re-quantize merged weights back to NF4 for VRAM savings
+            if _needs_nf4_requant:
+                _requantize_decoder_nf4(self.model)
+
             _flush_vram("merge-post-apply")
 
             delta_keys = len(result["delta"])
