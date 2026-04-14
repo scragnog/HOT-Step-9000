@@ -925,6 +925,19 @@ export const LyricStudioV2: React.FC<LyricStudioV2Props> = ({ onPlaySong, isPlay
         generationModel={loadSelections().generation}
         refinementModel={loadSelections().refinement}
         showToast={showToast}
+        onFetchComplete={async () => {
+          await loadArtists();
+          if (nav.selectedArtist) loadAlbums(nav.selectedArtist.id);
+          // Refresh bulk data for the queue panel itself
+          try {
+            const [lsRes, pRes] = await Promise.all([
+              lireekApi.listLyricsSets(),
+              lireekApi.listProfiles(),
+            ]);
+            setAllLyricsSets(lsRes.lyrics_sets);
+            setAllProfiles(pRes.profiles);
+          } catch {}
+        }}
       />
 
       {/* Prompt Editor modal */}
