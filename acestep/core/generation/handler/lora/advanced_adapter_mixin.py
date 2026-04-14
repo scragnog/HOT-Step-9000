@@ -23,6 +23,18 @@ from loguru import logger
 MAX_ADAPTER_SLOTS = 4
 
 
+def _safe_to_float(tensor: torch.Tensor) -> torch.Tensor:
+    """Convert a tensor to float32, handling torchao quantized tensors.
+
+    ``AffineQuantizedTensor.float()`` does NOT dequantize — it returns another
+    quantized tensor.  We must call ``.dequantize()`` first to get a plain
+    ``torch.Tensor`` that supports standard arithmetic (aten.add, etc.).
+    """
+    if hasattr(tensor, 'dequantize'):
+        return tensor.dequantize().float()
+    return tensor.float()
+
+
 def _log_vram(label: str) -> None:
     """Log current CUDA VRAM usage with a contextual label."""
     if not torch.cuda.is_available():
@@ -444,7 +456,7 @@ def _apply_merged_weights(self) -> None:
     for k in self._base_decoder:
         base_val = self._base_decoder[k]
         if k in all_keys:
-            combined = base_val.float()
+            combined = _safe_to_float(base_val)
             for s in active_slots.values():
                 if k in s["delta"]:
                     combined = combined + s["scale"] * s["delta"][k]
@@ -452,7 +464,7 @@ def _apply_merged_weights(self) -> None:
 
             # Log a few sample keys
             if k in sample_keys:
-                base_norm = base_val.float().norm().item()
+                base_norm = _safe_to_float(base_val).norm().item()
                 merged_norm = merged[k].float().norm().item()
                 logger.info(f"[DIAG] Key '{k}': base_norm={base_norm:.4f} -> merged_norm={merged_norm:.4f}")
         else:
@@ -636,7 +648,7 @@ def _apply_merged_weights_with_groups(self) -> None:
         if k in all_keys:
             group = _determine_group(k)
             layer_idx = _extract_layer_index(k)
-            combined = base_val.float()
+            combined = _safe_to_float(base_val)
             for s in active_slots.values():
                 if k in s["delta"]:
                     gs = s.get("group_scales", {})
@@ -728,11 +740,14 @@ def load_lora_slot(self, lora_path: str, slot: Optional[int] = None) -> str:
             logger.info("Backing up base decoder state_dict to CPU")
             backup = {}
             for k, v in self.model.decoder.state_dict().items():
-                # After _dequantize_decoder_nf4, weights should be plain bf16.
-                # Use float() as a safe universal path that handles any
-                # remaining quantized tensors via __torch_dispatch__.
+                # Dequantize torchao quantized tensors (INT8/INT4/NF4) so
+                # _base_decoder always holds plain tensors that support
+                # standard arithmetic in the merge functions.
                 try:
-                    backup[k] = v.detach().cpu().clone()
+                    if hasattr(v, 'dequantize'):
+                        backup[k] = v.dequantize().to(torch.bfloat16).detach().cpu().clone()
+                    else:
+                        backup[k] = v.detach().cpu().clone()
                 except Exception:
                     backup[k] = v.float().to(torch.bfloat16).detach().cpu().clone()
             self._base_decoder = backup
@@ -1091,7 +1106,7 @@ def _apply_merged_weights_temporal(self, schedule_scales: Dict[int, float]) -> N
         if k in all_keys:
             group = _determine_group(k)
             layer_idx = _extract_layer_index(k)
-            combined = base_val.float()
+            combined = _safe_to_float(base_val)
             for sid, s in active_slots.items():
                 if k in s["delta"]:
                     slot_scale = schedule_scales.get(sid, 0.0)
