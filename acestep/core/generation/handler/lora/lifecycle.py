@@ -434,8 +434,21 @@ def _load_lokr_adapter(decoder: Any, weights_path: str) -> Any:
 
 
 def _default_adapter_name_from_path(lora_path: str) -> str:
-    """Derive a default adapter name from path (e.g. 'final' from './lora/final')."""
+    """Derive a default adapter name from path.
+
+    Skips generic trainer checkpoint folder names like 'best', 'final',
+    'checkpoint-*', 'last' and walks up to the parent to find a
+    descriptive name (e.g. 'Yazoo_lora_...' instead of 'best').
+    """
+    import re
+    _GENERIC_NAMES = {"best", "final", "last", "output", "latest", "default"}
+
     name = os.path.basename(lora_path.rstrip(os.sep))
+    # Walk up if the name is generic or looks like 'checkpoint-NNNN'
+    if name.lower() in _GENERIC_NAMES or re.match(r'^checkpoint[-_]\d+$', name, re.IGNORECASE):
+        parent_name = os.path.basename(os.path.dirname(lora_path.rstrip(os.sep)))
+        if parent_name:
+            return parent_name
     return name if name else "default"
 
 
