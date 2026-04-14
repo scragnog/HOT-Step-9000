@@ -1701,12 +1701,7 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
             lm_hints_25Hz = self.detokenize(lm_hints_5Hz)
             # Crop lm_hints_25Hz to match src_latents length (tokenize may have added padding)
             lm_hints_25Hz = lm_hints_25Hz[:, :src_latents.shape[1], :]
-        # Apply lm_codes_scale blending: interpolate between silence and LM hints
-        if lm_codes_scale < 1.0:
-            silence_blend = silence_latent[:, :lm_hints_25Hz.shape[1], :]
-            if silence_blend.shape[0] < lm_hints_25Hz.shape[0]:
-                silence_blend = silence_blend.expand(lm_hints_25Hz.shape[0], -1, -1)
-            lm_hints_25Hz = lm_codes_scale * lm_hints_25Hz + (1.0 - lm_codes_scale) * silence_blend
+        # NOTE: lm_codes_scale handled as step-based switching in generate_audio
         src_latents = torch.where(is_covers.unsqueeze(-1).unsqueeze(-1) > 0, lm_hints_25Hz, src_latents)
         # Concatenate source latents with chunk masks as context
         context_latents = torch.cat([src_latents, chunk_masks.to(dtype)], dim=-1)
@@ -2025,6 +2020,37 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
             use_heun = False
 
         cover_steps = int(num_steps * audio_cover_strength)
+
+        # ── LM codes scale: step-based switching for thinking mode ──────
+        if precomputed_lm_hints_25Hz is not None and lm_codes_scale < 1.0:
+            lm_code_steps = int(num_steps * lm_codes_scale)
+            cover_steps = lm_code_steps
+            if encoder_hidden_states_non_cover is None:
+                non_is_covers = torch.zeros_like(is_covers)
+                silence_expanded = silence_latent[:, :src_latents.shape[1], :].expand(
+                    src_latents.shape[0], -1, -1
+                )
+                encoder_hidden_states_non_cover, encoder_attention_mask_non_cover, context_latents_non_cover = self.prepare_condition(
+                    text_hidden_states=text_hidden_states,
+                    text_attention_mask=text_attention_mask,
+                    lyric_hidden_states=lyric_hidden_states,
+                    lyric_attention_mask=lyric_attention_mask,
+                    refer_audio_acoustic_hidden_states_packed=refer_audio_acoustic_hidden_states_packed,
+                    refer_audio_order_mask=refer_audio_order_mask,
+                    hidden_states=silence_expanded,
+                    attention_mask=attention_mask,
+                    silence_latent=silence_latent,
+                    src_latents=silence_expanded,
+                    chunk_masks=chunk_masks,
+                    is_covers=non_is_covers,
+                    precomputed_lm_hints_25Hz=None,
+                    audio_codes=None,
+                )
+            logger.info(
+                f"[generate_audio] LM codes scale: {lm_codes_scale:.2f} → "
+                f"using LM codes for first {lm_code_steps}/{num_steps} steps"
+            )
+
         _switched_to_non_cover = False
         for step_idx in range(num_steps):
             current_timestep = t_schedule[step_idx].item()

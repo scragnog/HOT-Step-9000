@@ -1677,17 +1677,9 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
             lm_hints_25Hz = self.detokenize(lm_hints_5Hz)
             # Crop lm_hints_25Hz to match src_latents length (tokenize may have added padding)
             lm_hints_25Hz = lm_hints_25Hz[:, :src_latents.shape[1], :]
-        # Apply lm_codes_scale blending: interpolate between silence and LM hints
-        # NOTE: We blend with silence_latent (not src_latents) because when precomputed
-        # LM hints exist, src_latents and lm_hints are decoded from the same audio codes —
-        # blending X with X at any ratio is a no-op. Silence is the correct "no-LM" baseline.
-        if lm_codes_scale < 1.0:
-            from loguru import logger as _scale_log
-            _scale_log.info(f"[prepare_condition] Applying lm_codes_scale={lm_codes_scale:.3f} blending (with silence baseline)")
-            silence_blend = silence_latent[:, :lm_hints_25Hz.shape[1], :]
-            if silence_blend.shape[0] < lm_hints_25Hz.shape[0]:
-                silence_blend = silence_blend.expand(lm_hints_25Hz.shape[0], -1, -1)
-            lm_hints_25Hz = lm_codes_scale * lm_hints_25Hz + (1.0 - lm_codes_scale) * silence_blend
+        # NOTE: lm_codes_scale is NOT applied here (latent blending produces dissonant results).
+        # Instead, it controls step-based switching in generate_audio: LM codes condition
+        # the first N% of diffusion steps, then switch to text-only conditioning.
         src_latents = torch.where(is_covers.unsqueeze(-1).unsqueeze(-1) > 0, lm_hints_25Hz, src_latents)
         # Concatenate source latents with chunk masks as context
         context_latents = torch.cat([src_latents, chunk_masks.to(dtype)], dim=-1)
@@ -1967,6 +1959,42 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
 
         # Calculate cover steps based on audio_cover_strength
         cover_steps = int(infer_steps * audio_cover_strength)
+
+        # ── LM codes scale: step-based switching for thinking mode ──────
+        # Per ACE-Step developer (JunminGong): lm_codes_scale controls how many
+        # early diffusion steps use LM-generated audio codes for conditioning.
+        # At scale=1.0: all steps use LM codes. At scale=0.5: first 50% of steps
+        # use LM codes, remaining use text-only. At scale=0.0: no LM influence.
+        if precomputed_lm_hints_25Hz is not None and lm_codes_scale < 1.0:
+            lm_code_steps = int(infer_steps * lm_codes_scale)
+            cover_steps = lm_code_steps  # Override cover_steps for the switching mechanism
+            # Prepare non-LM context if not already available (audio_cover_strength=1.0)
+            if encoder_hidden_states_non_cover is None:
+                non_is_covers = torch.zeros_like(is_covers)
+                silence_expanded = silence_latent[:, :src_latents.shape[1], :].expand(
+                    src_latents.shape[0], -1, -1
+                )
+                encoder_hidden_states_non_cover, encoder_attention_mask_non_cover, context_latents_non_cover = self.prepare_condition(
+                    text_hidden_states=text_hidden_states,
+                    text_attention_mask=text_attention_mask,
+                    lyric_hidden_states=lyric_hidden_states,
+                    lyric_attention_mask=lyric_attention_mask,
+                    refer_audio_acoustic_hidden_states_packed=refer_audio_acoustic_hidden_states_packed,
+                    refer_audio_order_mask=refer_audio_order_mask,
+                    hidden_states=silence_expanded,
+                    attention_mask=attention_mask,
+                    silence_latent=silence_latent,
+                    src_latents=silence_expanded,
+                    chunk_masks=chunk_masks,
+                    is_covers=non_is_covers,
+                    precomputed_lm_hints_25Hz=None,
+                    audio_codes=None,
+                )
+            logger.info(
+                f"[generate_audio] LM codes scale: {lm_codes_scale:.2f} → "
+                f"using LM codes for first {lm_code_steps}/{infer_steps} steps, "
+                f"then switching to text-only conditioning"
+            )
         device, dtype = context_latents.device, context_latents.dtype
 
         # Build timestep schedule using the scheduler registry
