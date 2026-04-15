@@ -1995,7 +1995,8 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
 
         # ── LM codes scale: step-based switching for thinking mode ──────
         if precomputed_lm_hints_25Hz is not None and lm_codes_scale < 1.0:
-            lm_code_steps = int(num_steps * lm_codes_scale)
+            effective_scale = lm_codes_scale ** 3  # cubic perceptual curve
+            lm_code_steps = int(num_steps * effective_scale)
             cover_steps = lm_code_steps
             if encoder_hidden_states_non_cover is None:
                 non_is_covers = torch.zeros_like(is_covers)
@@ -2019,7 +2020,7 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
                     audio_codes=None,
                 )
             logger.info(
-                f"[generate_audio] LM codes scale: {lm_codes_scale:.2f} → "
+                f"[generate_audio] LM codes scale: {lm_codes_scale:.2f} (effective: {effective_scale:.3f}) → "
                 f"using LM codes for first {lm_code_steps}/{num_steps} steps"
             )
 

@@ -1963,10 +1963,12 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         # ── LM codes scale: step-based switching for thinking mode ──────
         # Per ACE-Step developer (JunminGong): lm_codes_scale controls how many
         # early diffusion steps use LM-generated audio codes for conditioning.
-        # At scale=1.0: all steps use LM codes. At scale=0.5: first 50% of steps
-        # use LM codes, remaining use text-only. At scale=0.0: no LM influence.
+        # A cubic perceptual curve maps the 0-1 slider to effective step fraction,
+        # because LM influence saturates at ~35% of steps in flow-matching models.
+        # Cubic: slider 0.7 → 0.343 effective (≈ saturation point).
         if precomputed_lm_hints_25Hz is not None and lm_codes_scale < 1.0:
-            lm_code_steps = int(infer_steps * lm_codes_scale)
+            effective_scale = lm_codes_scale ** 3  # cubic perceptual curve
+            lm_code_steps = int(infer_steps * effective_scale)
             cover_steps = lm_code_steps  # Override cover_steps for the switching mechanism
             # Prepare non-LM context if not already available (audio_cover_strength=1.0)
             if encoder_hidden_states_non_cover is None:
@@ -1991,7 +1993,7 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
                     audio_codes=None,
                 )
             logger.info(
-                f"[generate_audio] LM codes scale: {lm_codes_scale:.2f} → "
+                f"[generate_audio] LM codes scale: {lm_codes_scale:.2f} (effective: {effective_scale:.3f}) → "
                 f"using LM codes for first {lm_code_steps}/{infer_steps} steps, "
                 f"then switching to text-only conditioning"
             )
