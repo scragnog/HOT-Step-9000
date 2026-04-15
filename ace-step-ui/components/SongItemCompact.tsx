@@ -108,7 +108,7 @@ export const SongItemCompact: React.FC<SongItemCompactProps> = ({
                 className={`group flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-[#18181b] transition-all cursor-pointer border ${isSelected
                     ? 'bg-zinc-100 dark:bg-[#18181b] border-zinc-200 dark:border-white/10'
                     : 'border-transparent'
-                    }`}
+                    } ${showDropdown ? 'relative z-50' : ''}`}
             >
                 {/* Selection checkbox */}
                 {isSelectionMode && (

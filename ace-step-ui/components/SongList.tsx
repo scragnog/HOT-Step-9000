@@ -891,7 +891,7 @@ const SongItem: React.FC<SongItemProps> = ({
                         }
                     }, 0);
                 }}
-                className={`group flex items-center gap-4 p-2 rounded-lg transition-all cursor-pointer border ${isSelected ? 'bg-white/10 dark:bg-white/8 backdrop-blur-sm border-white/15' : 'border-transparent bg-transparent hover:bg-white/5 dark:hover:bg-white/5'} ${song.audioUrl && !song.isGenerating ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                className={`group flex items-center gap-4 p-2 rounded-lg transition-all cursor-pointer border ${isSelected ? 'bg-white/10 dark:bg-white/8 backdrop-blur-sm border-white/15' : 'border-transparent bg-transparent hover:bg-white/5 dark:hover:bg-white/5'} ${song.audioUrl && !song.isGenerating ? 'cursor-grab active:cursor-grabbing' : ''} ${showDropdown ? 'relative z-50' : ''}`}
             >
                 {isSelectionMode && (
                     <button
