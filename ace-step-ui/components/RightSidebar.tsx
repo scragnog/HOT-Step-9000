@@ -389,18 +389,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({ song, onClose, onOpe
                             <Video size={18} strokeWidth={1.5} className="group-hover:scale-110 transition-transform" />
                             <span className="text-[9px] font-medium">Video</span>
                         </button>
-                        <button
-                            onClick={() => {
-                                if (!song?.audioUrl) return;
-                                const audioUrl = song.audioUrl.startsWith('http') ? song.audioUrl : `${window.location.origin}${song.audioUrl}`;
-                                window.open(`/editor?audioUrl=${encodeURIComponent(audioUrl)}`, '_blank');
-                            }}
-                            title={t('openInEditor')}
-                            className="group flex flex-col items-center gap-1 p-2.5 text-zinc-500 hover:text-amber-600 dark:text-zinc-400 dark:hover:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-500/10 rounded-xl transition-all duration-200"
-                        >
-                            <Edit3 size={18} strokeWidth={1.5} className="group-hover:scale-110 transition-transform" />
-                            <span className="text-[9px] font-medium">Editor</span>
-                        </button>
+
+
                         <button
                             onClick={() => onReuse && onReuse(song)}
                             title={t('reusePrompt')}

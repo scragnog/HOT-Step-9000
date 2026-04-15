@@ -366,11 +366,6 @@ app.get('/api/audio/debug', async (req, res) => {
   res.json(results);
 });
 
-// Audio Editor (AudioMass) - needs relaxed CSP for inline scripts and external images
-app.use('/editor', (req, res, next) => {
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; media-src 'self' blob: data: http://localhost:* https:; connect-src 'self' http://localhost:* https:; worker-src 'self' blob:");
-  next();
-}, express.static(path.join(__dirname, '../audio-editor')));
 
 // Demucs Web (Stem Extraction) - requires COOP/COEP headers for SharedArrayBuffer and relaxed CSP for ONNX runtime
 app.use('/demucs-web', (req, res, next) => {

@@ -41,10 +41,6 @@ export default defineConfig(({ mode }) => {
           target: backendUrl,
           changeOrigin: true,
         },
-        '/editor': {
-          target: backendUrl,
-          changeOrigin: true,
-        },
         '/blog': {
           target: backendUrl,
           changeOrigin: true,

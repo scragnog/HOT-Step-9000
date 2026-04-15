@@ -318,19 +318,8 @@ export const SongProfile: React.FC<SongProfileProps> = ({ songId, onBack, onPlay
                                     <span className="font-medium">{song.viewCount || 0}</span>
                                 </div>
 
-                                {user?.id === song.userId && (
-                                    <button
-                                        onClick={() => {
-                                            if (!song.audioUrl) return;
-                                            const audioUrl = song.audioUrl.startsWith('http') ? song.audioUrl : `${window.location.origin}${song.audioUrl}`;
-                                            window.open(`/editor?audioUrl=${encodeURIComponent(audioUrl)}`, '_blank');
-                                        }}
-                                        className="flex items-center gap-1.5 px-3 py-2 rounded-full bg-gradient-to-r from-indigo-500 to-purple-500 hover:from-indigo-600 hover:to-purple-600 text-white text-sm font-semibold transition-all duration-200 shadow-lg shadow-indigo-500/25"
-                                    >
-                                        <Edit3 size={14} />
-                                        <span>{t('edit')}</span>
-                                    </button>
-                                )}
+
+
                                 
                                 <button
                                     onClick={() => setShareModalOpen(true)}

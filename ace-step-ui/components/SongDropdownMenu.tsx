@@ -3,7 +3,6 @@ import { Song } from '../types';
 import { useI18n } from '../context/I18nContext';
 import {
     Video,
-    Edit3,
     Layers,
     Repeat,
     ListPlus,
@@ -25,7 +24,6 @@ interface SongDropdownMenuProps {
     position?: 'left' | 'right';
     direction?: 'up' | 'down';
     onCreateVideo?: () => void;
-    onEditAudio?: () => void;
     onExtractStems?: () => void;
     onReusePrompt?: () => void;
     onAddToPlaylist?: () => void;
@@ -74,7 +72,6 @@ export const SongDropdownMenu: React.FC<SongDropdownMenuProps> = ({
     position = 'right',
     direction = 'down',
     onCreateVideo,
-    onEditAudio,
     onExtractStems,
     onReusePrompt,
     onAddToPlaylist,
@@ -122,14 +119,7 @@ export const SongDropdownMenu: React.FC<SongDropdownMenuProps> = ({
         onClose();
     };
 
-    const handleEditAudio = () => {
-        if (!song.audioUrl) return;
-        const audioUrl = song.audioUrl.startsWith('http')
-            ? song.audioUrl
-            : `${window.location.origin}${song.audioUrl}`;
-        window.open(`/editor?audioUrl=${encodeURIComponent(audioUrl)}`, '_blank');
-        onClose();
-    };
+
 
     const handleExtractStems = () => {
         if (!song.audioUrl) return;
@@ -166,13 +156,7 @@ export const SongDropdownMenu: React.FC<SongDropdownMenuProps> = ({
                 label={t('createVideo')}
                 onClick={() => handleAction(onCreateVideo)}
             />
-            {isOwner && (
-                <MenuItem
-                    icon={<Edit3 size={14} />}
-                    label={t('editAudio')}
-                    onClick={onEditAudio ? () => handleAction(onEditAudio) : handleEditAudio}
-                />
-            )}
+
             <MenuItem
                 icon={<Layers size={14} />}
                 label={t('extractStems')}

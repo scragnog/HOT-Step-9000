@@ -1,7 +1,7 @@
 import React, { useRef, useState, useEffect } from 'react';
 import { Song } from '../types';
 import { MasteringToggle } from './MasteringToggle';
-import { Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Download, Heart, MoreVertical, Volume2, VolumeX, Video, Maximize2, Repeat1, ChevronDown, ChevronUp, Edit3, AudioLines } from 'lucide-react';
+import { Play, Pause, SkipBack, SkipForward, Repeat, Shuffle, Download, Heart, MoreVertical, Volume2, VolumeX, Video, Maximize2, Repeat1, ChevronDown, ChevronUp, AudioLines } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useResponsive } from '../context/ResponsiveContext';
 import { useI18n } from '../context/I18nContext';
@@ -183,13 +183,7 @@ export const Player: React.FC<PlayerProps> = ({
         }
     };
 
-    const handleEditAudio = () => {
-        if (!currentSong?.audioUrl) return;
-        const audioUrl = currentSong.audioUrl.startsWith('http')
-            ? currentSong.audioUrl
-            : `${window.location.origin}${currentSong.audioUrl}`;
-        window.open(`/editor?audioUrl=${encodeURIComponent(audioUrl)}`, '_blank');
-    };
+
 
     const handleExtractAudio = () => {
         if (!currentSong?.audioUrl) return;
@@ -637,13 +631,7 @@ export const Player: React.FC<PlayerProps> = ({
                                 >
                                     <Heart size={22} fill={isLiked ? "currentColor" : "none"} />
                                 </button>
-                                <button
-                                    onClick={handleEditAudio}
-                                    className="p-3 rounded-full hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors"
-                                    title={t('editAudio')}
-                                >
-                                    <Edit3 size={20} />
-                                </button>
+
                                 <button
                                     onClick={handleExtractAudio}
                                     className="p-3 rounded-full hover:bg-zinc-200 dark:hover:bg-white/10 transition-colors"
