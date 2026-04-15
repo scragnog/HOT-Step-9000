@@ -1993,11 +1993,11 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         # Recalculate cover_steps based on actual num_steps
         cover_steps = int(num_steps * audio_cover_strength)
 
-        # ── LM codes scale: step-based switching for thinking mode ──────
+        # ── LM codes scale: timestep-based switching for thinking mode ─────
+        _lm_t_threshold = None
         if precomputed_lm_hints_25Hz is not None and lm_codes_scale < 1.0:
             effective_scale = lm_codes_scale ** 3  # cubic perceptual curve
-            lm_code_steps = int(num_steps * effective_scale)
-            cover_steps = lm_code_steps
+            _lm_t_threshold = 1.0 - effective_scale  # switch when t drops below this
             if encoder_hidden_states_non_cover is None:
                 non_is_covers = torch.zeros_like(is_covers)
                 silence_expanded = silence_latent[:, :src_latents.shape[1], :].expand(
@@ -2021,7 +2021,7 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
                 )
             logger.info(
                 f"[generate_audio] LM codes scale: {lm_codes_scale:.2f} (effective: {effective_scale:.3f}) → "
-                f"using LM codes for first {lm_code_steps}/{num_steps} steps"
+                f"switch to text-only when t ≤ {_lm_t_threshold:.3f} (step-count invariant)"
             )
 
         _switched_to_non_cover = False
@@ -2033,7 +2033,11 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
             if on_step_callback is not None:
                 on_step_callback(step_idx=step_idx, total_steps=num_steps)
 
-            if step_idx >= cover_steps and not _switched_to_non_cover:
+            # Switch trigger: step-based (cover_steps) OR timestep-based (LM threshold)
+            _do_switch = (step_idx >= cover_steps)
+            if _lm_t_threshold is not None:
+                _do_switch = _do_switch or (current_timestep <= _lm_t_threshold)
+            if _do_switch and not _switched_to_non_cover:
                 _switched_to_non_cover = True
                 encoder_hidden_states = encoder_hidden_states_non_cover
                 encoder_attention_mask = encoder_attention_mask_non_cover

@@ -1960,16 +1960,16 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
         # Calculate cover steps based on audio_cover_strength
         cover_steps = int(infer_steps * audio_cover_strength)
 
-        # ── LM codes scale: step-based switching for thinking mode ──────
+        # ── LM codes scale: timestep-based switching for thinking mode ─────
         # Per ACE-Step developer (JunminGong): lm_codes_scale controls how many
         # early diffusion steps use LM-generated audio codes for conditioning.
-        # A cubic perceptual curve maps the 0-1 slider to effective step fraction,
-        # because LM influence saturates at ~35% of steps in flow-matching models.
-        # Cubic: slider 0.7 → 0.343 effective (≈ saturation point).
+        # Uses timestep threshold (not step count) for step-count-invariant behavior.
+        # A cubic perceptual curve maps the 0-1 slider to effective fraction,
+        # because LM influence saturates at ~35% of the t-range in flow-matching.
+        _lm_t_threshold = None
         if precomputed_lm_hints_25Hz is not None and lm_codes_scale < 1.0:
             effective_scale = lm_codes_scale ** 3  # cubic perceptual curve
-            lm_code_steps = int(infer_steps * effective_scale)
-            cover_steps = lm_code_steps  # Override cover_steps for the switching mechanism
+            _lm_t_threshold = 1.0 - effective_scale  # switch when t drops below this
             # Prepare non-LM context if not already available (audio_cover_strength=1.0)
             if encoder_hidden_states_non_cover is None:
                 non_is_covers = torch.zeros_like(is_covers)
@@ -1994,8 +1994,7 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
                 )
             logger.info(
                 f"[generate_audio] LM codes scale: {lm_codes_scale:.2f} (effective: {effective_scale:.3f}) → "
-                f"using LM codes for first {lm_code_steps}/{infer_steps} steps, "
-                f"then switching to text-only conditioning"
+                f"switch to text-only when t ≤ {_lm_t_threshold:.3f} (step-count invariant)"
             )
         device, dtype = context_latents.device, context_latents.dtype
 
@@ -2195,7 +2194,12 @@ class AceStepConditionGenerationModel(AceStepPreTrainedModel):
                 if on_step_callback is not None:
                     t_curr_f_cb = t_curr.item() if isinstance(t_curr, torch.Tensor) else float(t_curr)
                     on_step_callback(step_idx=step_idx, t_curr=t_curr_f_cb, total_steps=infer_steps)
-                if step_idx >= cover_steps and not _switched_to_non_cover:
+                # Switch trigger: step-based (cover_steps) OR timestep-based (LM threshold)
+                _do_switch = (step_idx >= cover_steps)
+                if _lm_t_threshold is not None:
+                    _t_val = t_curr.item() if isinstance(t_curr, torch.Tensor) else float(t_curr)
+                    _do_switch = _do_switch or (_t_val <= _lm_t_threshold)
+                if _do_switch and not _switched_to_non_cover:
                     _switched_to_non_cover = True
                     if do_cfg_guidance:
                         if is_pag:
