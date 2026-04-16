@@ -17,7 +17,7 @@ import time
 from pathlib import Path
 
 import torch
-import torchaudio
+
 from loguru import logger
 
 
@@ -128,9 +128,14 @@ def main():
             logger.info(f"BigVGAN already present at {bigvgan_dir}")
 
     # Load input audio
-    logger.info(f"Loading: {input_path}")
-    waveform, sr = torchaudio.load(str(input_path))
-    logger.info(f"  Shape: {waveform.shape}, SR: {sr}")
+    import soundfile as sf
+    import numpy as np
+    wav_np, sr = sf.read(str(input_path), dtype="float32")
+    if wav_np.ndim == 1:
+        wav_np = wav_np[np.newaxis, :]  # [1, T]
+    else:
+        wav_np = wav_np.T  # [T, C] → [C, T]
+    waveform = torch.from_numpy(wav_np)
 
     # Discover vocoders
     from acestep.core.vocoder_service import VocoderService
@@ -170,7 +175,7 @@ def main():
 
             # Save output
             out_path = output_dir / f"{stem}_{name}.wav"
-            torchaudio.save(str(out_path), enhanced, sr)
+            sf.write(str(out_path), enhanced.numpy().T, sr)
             logger.info(f"  Saved: {out_path}")
 
             # Compute metrics

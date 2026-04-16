@@ -80,3 +80,8 @@ openai>=1.0
 sentencepiece>=0.2.0
 # gguf must be installed from llama.cpp source to stay in sync with bundled converter
 gguf @ git+https://github.com/ggml-org/llama.cpp#subdirectory=gguf-py
+
+# Vocoder post-processing (optional — for audio quality enhancement)
+# pip install bigvgan vocos
+bigvgan>=0.1
+vocos>=0.1

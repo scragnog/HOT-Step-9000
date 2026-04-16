@@ -79,6 +79,10 @@ dependencies = [
 llama-cpp = [
     "llama-cpp-python>=0.3.0",
 ]
+vocoder = [
+    "bigvgan>=0.1",
+    "vocos>=0.1",
+]
 
 [[tool.uv.index]]
 name = "pypi"
