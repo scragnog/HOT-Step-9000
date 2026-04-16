@@ -60,9 +60,9 @@ def register_cancel_route(
                 import json
                 import time
 
-                local_cache[f"ace_step_v1.5_{job_id}"] = json.dumps(
+                local_cache.set(f"ace_step_v1.5_{job_id}", json.dumps(
                     [{"file": "", "wave": "", "status": 2, "create_time": int(time.time()), "error": "Cancelled by user"}]
-                )
+                ))
             print(f"[API Server] Job {job_id} cancelled by user")
 
         return wrap_response({"job_id": job_id, "status": "cancelled"})

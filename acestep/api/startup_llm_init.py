@@ -57,6 +57,8 @@ def initialize_llm_at_startup(
                 lm_model_path = "acestep-5Hz-lm-0.6B"
                 print(f"[API Server] No recommended model for this GPU tier, using smallest: {lm_model_path}")
 
+        lm_backend = os.getenv("ACESTEP_LM_BACKEND", "vllm").strip().lower()
+
         is_supported, warning_msg = is_lm_model_supported(lm_model_path, gpu_config)
         if not is_supported and lm_backend == "llama-cpp":
             # llama-cpp uses GGUF quantized models — VRAM usage is much lower
@@ -70,8 +72,6 @@ def initialize_llm_at_startup(
                 print(f"[API Server] Falling back to supported LM model: {lm_model_path}")
             else:
                 print(f"[API Server] No GPU-validated LM model available, attempting {lm_model_path} anyway (may cause OOM)")
-
-        lm_backend = os.getenv("ACESTEP_LM_BACKEND", "vllm").strip().lower()
         if lm_backend not in {"vllm", "pt", "mlx", "custom-vllm", "llama-cpp"}:
             lm_backend = "vllm"
         lm_device = os.getenv("ACESTEP_LM_DEVICE", device)
