@@ -420,11 +420,81 @@ class VocoderService:
     # Application
     # ------------------------------------------------------------------
 
+    @staticmethod
+    def _frequency_blend(
+        original: torch.Tensor,
+        vocoded: torch.Tensor,
+        sample_rate: int,
+        crossover_hz: float = 6000.0,
+        blend_width_hz: float = 2000.0,
+    ) -> torch.Tensor:
+        """Blend *original* and *vocoded* in the frequency domain.
+
+        Below ``crossover_hz - blend_width_hz/2`` the original signal is
+        kept untouched.  Above ``crossover_hz + blend_width_hz/2`` the
+        vocoder output is used.  In between, a smooth cosine crossfade
+        transitions from one to the other.
+
+        Both tensors must be ``[C, T]`` at *sample_rate*.
+        """
+        # Ensure same length
+        min_len = min(original.shape[-1], vocoded.shape[-1])
+        original = original[..., :min_len]
+        vocoded = vocoded[..., :min_len]
+
+        n_fft = 2048
+        hop = 512
+        window = torch.hann_window(n_fft, device=original.device)
+
+        channels = []
+        for ch in range(original.shape[0]):
+            # STFT both signals
+            orig_stft = torch.stft(
+                original[ch], n_fft, hop_length=hop,
+                window=window, return_complex=True,
+            )
+            voco_stft = torch.stft(
+                vocoded[ch], n_fft, hop_length=hop,
+                window=window, return_complex=True,
+            )
+
+            # Build frequency-dependent blend mask [n_freq, 1]
+            n_freq = orig_stft.shape[0]
+            freqs = torch.linspace(0, sample_rate / 2, n_freq, device=original.device)
+
+            low = crossover_hz - blend_width_hz / 2
+            high = crossover_hz + blend_width_hz / 2
+
+            # alpha=0 → use original, alpha=1 → use vocoder
+            alpha = torch.zeros_like(freqs)
+            in_transition = (freqs >= low) & (freqs <= high)
+            alpha[in_transition] = 0.5 * (
+                1.0 - torch.cos(
+                    torch.pi * (freqs[in_transition] - low) / blend_width_hz
+                )
+            )
+            alpha[freqs > high] = 1.0
+            alpha = alpha.unsqueeze(-1)  # [n_freq, 1] for broadcasting
+
+            # Blend in STFT domain
+            blended_stft = (1.0 - alpha) * orig_stft + alpha * voco_stft
+
+            # iSTFT back
+            blended = torch.istft(
+                blended_stft, n_fft, hop_length=hop,
+                window=window, length=min_len,
+            )
+            channels.append(blended.unsqueeze(0))
+
+        return torch.cat(channels, dim=0)
+
     def apply_vocoder(
         self,
         waveform: torch.Tensor,
         model_name: str,
         sample_rate: int = 48000,
+        crossover_hz: float = 0.0,
+        blend_width_hz: float = 2000.0,
     ) -> torch.Tensor:
         """Enhance *waveform* using the named vocoder.
 
@@ -435,6 +505,12 @@ class VocoderService:
                 - ``[T]`` (mono)
             model_name: Name of vocoder checkpoint directory.
             sample_rate: Sample rate of *waveform*.
+            crossover_hz: If > 0, keep original audio below this frequency
+                and blend in vocoder output only above it.  Set to 0 to
+                use the vocoder output fully (legacy behaviour).
+            blend_width_hz: Width of the crossover transition band in Hz.
+                A smooth cosine fade spans ±blend_width_hz/2 around
+                *crossover_hz*.
 
         Returns:
             Enhanced waveform with same number of dimensions as input.
@@ -461,7 +537,22 @@ class VocoderService:
             B, C, T = waveform.shape
             waveform = waveform.reshape(B * C, T)  # flatten batch+channels
 
-        result = backend.enhance(waveform, sample_rate)
+        vocoded = backend.enhance(waveform, sample_rate)
+
+        # Apply frequency-domain blending if crossover is set
+        if crossover_hz > 0:
+            logger.info(
+                f"[VocoderService] Frequency blending: keeping original "
+                f"below {crossover_hz}Hz, vocoder above "
+                f"(transition: ±{blend_width_hz/2:.0f}Hz)"
+            )
+            result = self._frequency_blend(
+                waveform, vocoded, sample_rate,
+                crossover_hz=crossover_hz,
+                blend_width_hz=blend_width_hz,
+            )
+        else:
+            result = vocoded
 
         # Restore original dimensionality
         if original_dim == 1:
@@ -473,3 +564,4 @@ class VocoderService:
 
 
 vocoder_service = VocoderService()
+
