@@ -196,7 +196,7 @@ echo ""
 if [[ ! -f "checkpoints/music_vocoder/diffusion_pytorch_model.safetensors" ]]; then
     read -rp "  Download vocoder model (~206 MB)? [Y/n] (default=Y): " VOCODER_CHOICE
     VOCODER_CHOICE=${VOCODER_CHOICE:-Y}
-    if [[ "${VOCODER_CHOICE,,}" == "y" ]]; then
+    if [[ "$(echo "$VOCODER_CHOICE" | tr '[:upper:]' '[:lower:]')" == "y" ]]; then
         mkdir -p checkpoints/music_vocoder
         curl -L -o "checkpoints/music_vocoder/config.json" \
             "https://huggingface.co/ACE-Step/ACE-Step-v1-3.5B/resolve/main/music_vocoder/config.json" || true
@@ -228,7 +228,10 @@ echo "    Installation Complete!"
 echo "  ============================================================"
 echo ""
 echo "    To start ACE-Step, run:   ./launch-macos.sh"
-echo "    To download more models:  python3 -m acestep.model_downloader --list"
+echo ""
+echo "    To download more models:"
+echo "      source .venv/bin/activate"
+echo "      python3 -m acestep.model_downloader --list"
 echo ""
 echo "    ⚠️  This is an EXPERIMENTAL macOS port."
 echo "    Please report issues at: github.com/scragnog/HOT-Step-9000"

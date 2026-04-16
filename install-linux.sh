@@ -175,7 +175,7 @@ if [[ -f "checkpoints/music_vocoder/diffusion_pytorch_model.safetensors" ]]; the
 else
     read -rp "  Download vocoder model? [Y/n] (default=Y): " VOCODER_CHOICE
     VOCODER_CHOICE=${VOCODER_CHOICE:-Y}
-    if [[ "${VOCODER_CHOICE,,}" == "y" ]]; then
+    if [[ "$(echo "$VOCODER_CHOICE" | tr '[:upper:]' '[:lower:]')" == "y" ]]; then
         mkdir -p checkpoints/music_vocoder
         curl -L -o "checkpoints/music_vocoder/config.json" \
             "https://huggingface.co/ACE-Step/ACE-Step-v1-3.5B/resolve/main/music_vocoder/config.json" || true
@@ -222,6 +222,9 @@ echo "    Installation Complete!"
 echo "  ============================================================"
 echo ""
 echo "    To start ACE-Step, run:   ./launch-linux.sh"
-echo "    To download more models:  python3 -m acestep.model_downloader --list"
+echo ""
+echo "    To download more models:"
+echo "      source .venv/bin/activate"
+echo "      python3 -m acestep.model_downloader --list"
 echo ""
 echo "  ============================================================"

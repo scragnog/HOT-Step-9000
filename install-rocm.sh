@@ -41,7 +41,7 @@ else
     echo "    https://rocm.docs.amd.com/projects/install-on-linux/en/latest/"
     echo ""
     read -rp "  Continue anyway? [y/N]: " ROCM_CONTINUE
-    if [[ "${ROCM_CONTINUE,,}" != "y" ]]; then
+    if [[ "$(echo "$ROCM_CONTINUE" | tr '[:upper:]' '[:lower:]')" != "y" ]]; then
         echo "  Aborting. Install ROCm first."
         exit 1
     fi
@@ -69,7 +69,7 @@ CURRENT_HSA="${HSA_OVERRIDE_GFX_VERSION:-}"
 if [[ -n "$CURRENT_HSA" ]]; then
     echo "  Current HSA_OVERRIDE_GFX_VERSION: $CURRENT_HSA"
     read -rp "  Keep this value? [Y/n]: " KEEP_HSA
-    if [[ "${KEEP_HSA,,}" == "n" ]]; then
+    if [[ "$(echo "$KEEP_HSA" | tr '[:upper:]' '[:lower:]')" == "n" ]]; then
         CURRENT_HSA=""
     fi
 fi
@@ -214,7 +214,7 @@ esac
 if [[ ! -f "checkpoints/music_vocoder/diffusion_pytorch_model.safetensors" ]]; then
     read -rp "  Download vocoder (~206 MB)? [Y/n] (default=Y): " VOCODER_CHOICE
     VOCODER_CHOICE=${VOCODER_CHOICE:-Y}
-    if [[ "${VOCODER_CHOICE,,}" == "y" ]]; then
+    if [[ "$(echo "$VOCODER_CHOICE" | tr '[:upper:]' '[:lower:]')" == "y" ]]; then
         mkdir -p checkpoints/music_vocoder
         curl -L -o "checkpoints/music_vocoder/config.json" \
             "https://huggingface.co/ACE-Step/ACE-Step-v1-3.5B/resolve/main/music_vocoder/config.json" || true
