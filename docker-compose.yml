@@ -1,0 +1,51 @@
+# ============================================================
+#  ACE-Step — Docker Compose
+#  Usage: docker compose up --build
+# ============================================================
+
+services:
+  ace-step:
+    build: .
+    container_name: ace-step
+    restart: unless-stopped
+
+    # GPU access (NVIDIA)
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+    ports:
+      - "3000:3000"   # Vite frontend
+      - "3001:3001"   # Express backend
+      - "8001:8001"   # Python API
+
+    volumes:
+      # Mount checkpoints so models aren't baked into the image
+      - ./checkpoints:/app/checkpoints
+      # Persist generated data
+      - ./data:/app/data
+      # Persist logs
+      - ./logs:/app/logs
+      # Pass environment config
+      - ./.env:/app/.env:ro
+      # HuggingFace cache (avoid re-downloads)
+      - ./huggingface:/app/huggingface
+
+    environment:
+      - PYTHONUNBUFFERED=1
+      - ACESTEP_NO_BROWSER=1
+      # Pass through any VRAM limits for testing
+      - MAX_CUDA_VRAM=${MAX_CUDA_VRAM:-}
+      # Quantization and model config are read from .env file
+
+    # Docker healthcheck
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 120s
+      retries: 3

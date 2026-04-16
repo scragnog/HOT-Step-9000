@@ -4,7 +4,7 @@
 
 <img src="./images/hotstep9000-transparentlogo.webp" width="400px" alt="HOT-Step 9000 Logo">
 
-**Local AI Music Generator for Windows**
+**Local AI Music Generator**
 
 *Summon bangers directly from your GPU.*
 
@@ -12,14 +12,24 @@
 
 ## About
 
-**HOT-Step 9000** is a fully functional, open-source local AI music generation suite designed for Windows.
+**HOT-Step 9000** is a fully functional, open-source local AI music generation suite.
 
 This project is a standalone frontend for [ACE-Step 1.5](https://github.com/ace-step/ACE-Step-1.5). It originally started as a fork of [sdbds/ACE-Step-1.5-for-windows](https://github.com/sdbds/ACE-Step-1.5-for-windows) but has since grown into its own distinct application with significant UI Overhauls, advanced features, and quality-of-life improvements.
 
 ### ⚠Work In Progress
-This application is under active, ongoing development. You may occasionally encounter bugs or unoptimized features. We welcome bug reports and feature requests via GitHub Issues. 
+This application is under active, ongoing development. You may occasionally encounter bugs or unoptimized features. We welcome bug reports and feature requests via GitHub Issues.
 
-While currently optimized and supported specifically for **Windows environments**, PRs contributing cross-platform support are welcome.
+### Platform Support
+
+| Platform | GPU | Status | Launcher |
+|----------|-----|--------|----------|
+| **Windows** | NVIDIA CUDA | ✅ Fully supported | `LAUNCH.bat` |
+| **Linux** | NVIDIA CUDA | ✅ Supported | `./launch-linux.sh` |
+| **macOS** | Apple Silicon (MPS) | ⚠️ Experimental | `./launch-macos.sh` |
+| **Linux** | AMD ROCm | ⚠️ Experimental | `./launch-rocm.sh` |
+| **Docker** | NVIDIA CUDA | ✅ Supported | `docker compose up` |
+
+> **Experimental** means the Python backend supports the platform but we don't have the hardware to test it ourselves. Community bug reports are very welcome!
 
 ---
 
@@ -181,13 +191,79 @@ These are measured values using the full **acestep-5Hz-lm-4B** model:
 
 ## Installation & Usage
 
-*(Assuming basic Python/CUDA knowledge and a suitable Windows GPU environment)*
+### Windows (NVIDIA CUDA) — Primary
 
 1. Clone the repository.
 2. Run `install.bat` to install dependencies.
 3. Download applicable models into the `checkpoints/` directory.
 4. Run `LAUNCH.bat` to start the application with the interactive loading screen.
 5. In the UI, set your generation parameters, enter a prompt, and bring forth the **bangers**.
+
+### Linux (NVIDIA CUDA)
+
+**Requirements:** Python 3.11/3.12, Node.js 18+, NVIDIA CUDA drivers
+
+```bash
+git clone https://github.com/scragnog/HOT-Step-9000.git
+cd HOT-Step-9000
+chmod +x install-linux.sh launch-linux.sh
+./install-linux.sh    # First-time setup
+./launch-linux.sh     # Start the app
+```
+
+### macOS (Apple Silicon) — Experimental
+
+**Requirements:** macOS with M1/M2/M3/M4, Python 3.11/3.12, Node.js 18+
+
+```bash
+git clone https://github.com/scragnog/HOT-Step-9000.git
+cd HOT-Step-9000
+chmod +x install-macos.sh launch-macos.sh
+./install-macos.sh    # First-time setup
+./launch-macos.sh     # Start the app
+```
+
+**macOS Limitations:**
+- No `torch.compile` (MLX `mx.compile` used for MLX components)
+- No DiT quantization (torchao requires CUDA)
+- LM backends: `mlx` (recommended) or `pt` only (no vllm)
+- CPU offload disabled (unified memory — no benefit)
+
+### Linux (AMD ROCm) — Experimental
+
+**Requirements:** Python 3.11/3.12, Node.js 18+, ROCm 6.x drivers
+
+```bash
+git clone https://github.com/scragnog/HOT-Step-9000.git
+cd HOT-Step-9000
+chmod +x install-rocm.sh launch-rocm.sh
+./install-rocm.sh     # First-time setup (includes HSA_OVERRIDE guide)
+./launch-rocm.sh      # Start the app
+```
+
+**ROCm Limitations:**
+- No flash-attn (SDPA fallback used — same quality, slightly slower)
+- No `torch.compile` (disabled by default)
+- No quantization (torchao experimental on ROCm — higher VRAM usage)
+- Default dtype is `float32` (set `ACESTEP_ROCM_DTYPE=bfloat16` in `.env` if your GPU supports it)
+- LM backend: `pt` only
+
+### Docker (NVIDIA)
+
+**Requirements:** Docker, NVIDIA Container Toolkit
+
+```bash
+git clone https://github.com/scragnog/HOT-Step-9000.git
+cd HOT-Step-9000
+
+# Download models first (checkpoints/ is volume-mounted, not baked into image)
+python3 -m acestep.model_downloader
+
+# Build and run
+docker compose up --build
+```
+
+Access the UI at `http://localhost:3000` once all services are ready.
 
 ---
 

@@ -1,0 +1,41 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Node
+ace-step-ui/node_modules/
+ace-step-ui/server/node_modules/
+ace-step-ui/server/dist/
+
+# Git
+.git/
+.gitignore
+
+# IDE/Editor
+.vscode/
+.agents/
+.antigravityignore
+
+# Data (mounted as volumes)
+checkpoints/
+data/
+logs/
+huggingface/
+
+# Temporary files
+tmp_*/
+*.lock
+loading-config.js
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Documentation (not needed in image)
+docs/
+*.md
+!README.md
+
+# Windows scripts (not needed in Docker)
+*.bat

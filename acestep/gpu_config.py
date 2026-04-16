@@ -724,6 +724,15 @@ def get_gpu_config(gpu_memory_gb: Optional[float] = None) -> GPUConfig:
       offloading to CPU provides no benefit and adds overhead.
     - ``offload_dit_to_cpu_default = False`` — same reason.
 
+    On Linux with AMD ROCm/HIP, similar safety overrides are applied:
+
+    - ``compile_model_default = False`` — ``torch.compile`` is unreliable
+      on many AMD GPUs (compilation errors, segfaults).
+    - ``quantization_default = False`` — torchao quantization is experimental
+      on ROCm and may produce incorrect results.
+    - ``recommended_backend = "pt"`` — vllm requires CUDA; mlx requires macOS.
+    - ``lm_backend_restriction = "pt_only"`` — only PyTorch LM backend works.
+
     Args:
         gpu_memory_gb: GPU memory in GB. If None, will be auto-detected.
 
@@ -745,6 +754,15 @@ def get_gpu_config(gpu_memory_gb: Optional[float] = None) -> GPUConfig:
             "mlx backend, no CPU offload."
         )
 
+    # --- ROCm (AMD GPU) overrides ---
+    _rocm = is_rocm_available()
+    if _rocm:
+        logger.info(
+            f"AMD ROCm/HIP detected ({gpu_memory_gb:.1f} GB VRAM, tier={tier}). "
+            "Applying ROCm safety defaults: no compile, no quantization, "
+            "pt backend (vllm requires CUDA, mlx requires macOS)."
+        )
+
     return GPUConfig(
         tier=tier,
         gpu_memory_gb=gpu_memory_gb,
@@ -756,11 +774,16 @@ def get_gpu_config(gpu_memory_gb: Optional[float] = None) -> GPUConfig:
         available_lm_models=config["available_lm_models"],
         recommended_lm_model=config.get("recommended_lm_model", ""),
         # MPS: vllm requires CUDA, restrict to pt/mlx; prefer mlx for native acceleration
+        # ROCm: vllm requires CUDA, mlx requires macOS; restrict to pt only
         lm_backend_restriction="pt_mlx_only"
         if _mps
+        else "pt_only"
+        if _rocm
         else config.get("lm_backend_restriction", "all"),
         recommended_backend="mlx"
         if _mps
+        else "pt"
+        if _rocm
         else config.get("recommended_backend", "vllm"),
         # MPS: unified memory — offloading to CPU is pointless overhead
         offload_to_cpu_default=False
@@ -770,13 +793,15 @@ def get_gpu_config(gpu_memory_gb: Optional[float] = None) -> GPUConfig:
         if _mps
         else config.get("offload_dit_to_cpu_default", True),
         # MPS: torchao quantization is not supported
+        # ROCm: torchao quantization is experimental and unreliable
         quantization_default=False
-        if _mps
+        if (_mps or _rocm)
         else config.get("quantization_default", True),
         # MPS: torch.compile unsupported (redirected to mx.compile at runtime);
+        # ROCm: torch.compile is unreliable on many AMD GPUs;
         # default to False — user can opt in via the UI checkbox.
         compile_model_default=False
-        if _mps
+        if (_mps or _rocm)
         else config.get("compile_model_default", True),
         lm_memory_gb=config["lm_memory_gb"],
     )
