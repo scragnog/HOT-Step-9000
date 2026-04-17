@@ -273,7 +273,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
   // ── Render ─────────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full bg-zinc-50 dark:bg-suno-panel overflow-hidden">
+    <div className="flex flex-col w-full h-full bg-zinc-50 dark:bg-suno-panel overflow-hidden">
       {/* Header */}
       <div className="flex-shrink-0 px-6 py-4 border-b border-zinc-200 dark:border-white/5">
         <div className="flex items-center gap-3">
