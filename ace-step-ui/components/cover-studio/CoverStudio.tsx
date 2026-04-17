@@ -208,6 +208,8 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
   const [toast, setToast] = useState('');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [genProgress, setGenProgress] = useState(0);
+  const [genStage, setGenStage] = useState('');
   const [filenamePrepend, setFilenamePrepend] = useState(() => restore<string>('filenamePrepend', ''));
 
   // Persist state changes
@@ -586,17 +588,31 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
 
   const pollJob = (jobId: string) => {
     if (!token) return;
+    setGenProgress(0);
+    setGenStage('Queued...');
     const interval = setInterval(async () => {
       try {
         const status = await generateApi.getStatus(jobId, token!);
+        // Update progress
+        if (status.progress != null) setGenProgress(Math.round(status.progress * 100));
+        if (status.stage) setGenStage(status.stage);
+        else if (status.status === 'running') setGenStage('Generating...');
+        else if (status.status === 'queued') setGenStage('Queued...');
+
         if (status.status === 'succeeded') {
           clearInterval(interval);
+          setGenProgress(100);
+          setGenStage('Complete!');
           setIsGenerating(false);
           setActiveJobId(null);
           setRefreshTrigger(prev => prev + 1);
           showToast('Cover generated successfully!');
+          // Reset progress after a moment
+          setTimeout(() => { setGenProgress(0); setGenStage(''); }, 3000);
         } else if (status.status === 'failed') {
           clearInterval(interval);
+          setGenProgress(0);
+          setGenStage('');
           setIsGenerating(false);
           setActiveJobId(null);
           showToast(`Generation failed: ${status.error || 'Unknown error'}`);
@@ -604,7 +620,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
       } catch {
         // Transient poll error — keep polling
       }
-    }, 3000);
+    }, 2000);
 
     // Safety timeout: 30 minutes
     setTimeout(() => {
@@ -612,6 +628,8 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
       if (isGenerating) {
         setIsGenerating(false);
         setActiveJobId(null);
+        setGenProgress(0);
+        setGenStage('');
       }
     }, 1_800_000);
   };
@@ -968,11 +986,29 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
             `}
           >
             {isGenerating ? (
-              <><Loader2 className="w-5 h-5 animate-spin" /> Generating Cover...</>
+              <><Loader2 className="w-5 h-5 animate-spin" /> Generating Cover...
+              {genProgress > 0 && <span className="text-xs opacity-70">({genProgress}%)</span>}
+              </>
             ) : (
               <><Guitar className="w-5 h-5" /> Generate Cover</>
             )}
           </button>
+
+          {/* Progress bar */}
+          {isGenerating && (
+            <div className="space-y-1.5">
+              <div className="w-full bg-black/20 rounded-full h-2 overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-cyan-500 to-teal-400 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${Math.max(genProgress, 2)}%` }}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-zinc-500">{genStage || 'Starting...'}</span>
+                <span className="text-[10px] text-zinc-500 font-mono">{genProgress}%</span>
+              </div>
+            </div>
+          )}
 
           {/* Readiness checklist */}
           {!canGenerate && !isGenerating && (
