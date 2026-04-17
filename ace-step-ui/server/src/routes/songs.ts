@@ -423,27 +423,29 @@ router.get('/download', async (req: AuthenticatedRequest, res: Response) => {
 router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const sourceFilter = (req.query.source as string) || null;
-    // Build LIKE pattern for generation_params fallback (catches pre-fix covers)
-    const sourceJsonPattern = sourceFilter ? `%"source":"${sourceFilter}"%` : null;
-    const result = await pool.query(
-      `SELECT s.id, s.title, s.lyrics, s.style, s.caption, s.cover_url, s.audio_url,
+
+    // SQLite's parameter binding doesn't support reusing $N placeholders,
+    // so we use two separate queries rather than a CASE expression.
+    const baseCols = `s.id, s.title, s.lyrics, s.style, s.caption, s.cover_url, s.audio_url,
               s.duration, s.bpm, s.key_scale, s.time_signature, s.tags, s.is_public,
               s.like_count, s.view_count, s.user_id, s.model as dit_model, s.created_at,
               s.generation_params,
-              COALESCE(u.username, 'Anonymous') as creator
-       FROM songs s
-       LEFT JOIN users u ON s.user_id = u.id
-       WHERE s.user_id = $1 AND (
-         CASE WHEN $2 IS NOT NULL THEN (
-           s.source = $2
-           OR s.generation_params LIKE $3
-         )
-         ELSE (s.source IS NULL OR s.source = 'create')
-         END
-       )
-       ORDER BY s.created_at DESC`,
-      [req.user!.id, sourceFilter, sourceJsonPattern]
-    );
+              COALESCE(u.username, 'Anonymous') as creator`;
+    const baseJoin = `FROM songs s LEFT JOIN users u ON s.user_id = u.id`;
+
+    const result = sourceFilter
+      ? await pool.query(
+          `SELECT ${baseCols} ${baseJoin}
+           WHERE s.user_id = $1 AND (s.source = $2 OR s.generation_params LIKE $3)
+           ORDER BY s.created_at DESC`,
+          [req.user!.id, sourceFilter, `%"source":"${sourceFilter}"%`]
+        )
+      : await pool.query(
+          `SELECT ${baseCols} ${baseJoin}
+           WHERE s.user_id = $1 AND (s.source IS NULL OR s.source = 'create')
+           ORDER BY s.created_at DESC`,
+          [req.user!.id]
+        );
 
     const songs = await Promise.all(
       result.rows.map(async (row) => ({
