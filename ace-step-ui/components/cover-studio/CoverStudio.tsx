@@ -145,6 +145,25 @@ function applyTriggerWord(params: Record<string, any>, adapterPath: string): voi
   console.log(`[CoverStudio] Trigger word '${triggerWord}' ${placement}ed → '${params.style}'`);
 }
 
+/** Transpose a key string (e.g. "D minor") by a number of semitones. */
+const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const NOTE_ALIASES: Record<string, number> = {
+  'C': 0, 'C#': 1, 'Db': 1, 'D': 2, 'D#': 3, 'Eb': 3, 'E': 4, 'Fb': 4,
+  'F': 5, 'F#': 6, 'Gb': 6, 'G': 7, 'G#': 8, 'Ab': 8, 'A': 9, 'A#': 10, 'Bb': 10, 'B': 11, 'Cb': 11,
+};
+
+function transposeKey(keyStr: string, semitones: number): string {
+  if (!keyStr || semitones === 0) return keyStr;
+  // Parse "D minor" or "C# major" or "A"
+  const parts = keyStr.trim().split(/\s+/);
+  const notePart = parts[0];
+  const quality = parts.slice(1).join(' ') || '';
+  const noteIndex = NOTE_ALIASES[notePart];
+  if (noteIndex === undefined) return keyStr;
+  const newIndex = ((noteIndex + semitones) % 12 + 12) % 12;
+  return quality ? `${NOTE_NAMES[newIndex]} ${quality}` : NOTE_NAMES[newIndex];
+}
+
 // ── Main Component ───────────────────────────────────────────────────────────
 
 export const CoverStudio: React.FC<CoverStudioProps> = ({
@@ -857,16 +876,23 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
               value={tempoScale}
               min={0.5} max={2.0} step={0.05}
               onChange={setTempoScale}
-              formatDisplay={v => `${v.toFixed(2)}x`}
-              helpText="1.0 = original tempo, <1 = slower, >1 = faster"
+              formatDisplay={v => {
+                const bpm = analysis?.bpm;
+                return bpm ? `${v.toFixed(2)}x (${Math.round(bpm * v)} BPM)` : `${v.toFixed(2)}x`;
+              }}
+              helpText={`1.0 = original tempo${analysis?.bpm ? ` (${Math.round(analysis.bpm)} BPM)` : ''}, <1 = slower, >1 = faster`}
             />
             <EditableSlider
               label="Pitch Shift"
               value={pitchShift}
               min={-12} max={12} step={1}
               onChange={setPitchShift}
-              formatDisplay={v => `${v > 0 ? '+' : ''}${v} st`}
-              helpText="Semitones to shift (-12 to +12)"
+              formatDisplay={v => {
+                const shifted = analysis?.key ? transposeKey(analysis.key, v) : null;
+                const sign = v > 0 ? '+' : '';
+                return shifted && v !== 0 ? `${sign}${v} st → ${shifted}` : `${sign}${v} st`;
+              }}
+              helpText={`Semitones to shift (-12 to +12)${analysis?.key ? `. Source: ${analysis.key}` : ''}`}
             />
           </div>
 
