@@ -861,20 +861,20 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
             </div>
 
             <EditableSlider
-              label="Cover Strength"
+              label="Structure Fidelity"
               value={audioCoverStrength}
               min={0} max={1} step={0.05}
               onChange={setAudioCoverStrength}
               formatDisplay={v => v.toFixed(2)}
-              helpText="How strongly the source audio influences the output structure"
+              helpText="How closely the output follows the source song's arrangement. Higher = more faithful structure, lower = more creative freedom"
             />
             <EditableSlider
-              label="Noise Strength"
+              label="Source Timbre"
               value={coverNoiseStrength}
               min={0} max={1} step={0.05}
               onChange={setCoverNoiseStrength}
               formatDisplay={v => v.toFixed(2)}
-              helpText="Amount of noise added to the cover for variation"
+              helpText="How much of the original artist's sound character is preserved. Higher = more original artist, lower = more adapter artist"
             />
             <EditableSlider
               label="Tempo Scale"
