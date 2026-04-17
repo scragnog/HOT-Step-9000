@@ -192,6 +192,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
   const [artists, setArtists] = useState<Artist[]>([]);
   const [selectedArtistId, setSelectedArtistId] = useState<number | null>(() => restore('selectedArtistId', null));
   const [selectedPreset, setSelectedPreset] = useState<AlbumPreset | null>(() => restore('selectedPreset', null));
+  const [artistCaption, setArtistCaption] = useState(() => restore<string>('artistCaption', ''));
   const [artistPresets, setArtistPresets] = useState<{ lsId: number; album: string; preset: AlbumPreset | null }[]>([]);
   const [isLoadingArtists, setIsLoadingArtists] = useState(false);
 
@@ -217,6 +218,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
   useEffect(() => { persist('lyrics', lyrics); }, [lyrics]);
   useEffect(() => { persist('selectedArtistId', selectedArtistId); }, [selectedArtistId]);
   useEffect(() => { persist('selectedPreset', selectedPreset); }, [selectedPreset]);
+  useEffect(() => { persist('artistCaption', artistCaption); }, [artistCaption]);
   useEffect(() => { persist('audioCoverStrength', audioCoverStrength); }, [audioCoverStrength]);
   useEffect(() => { persist('coverNoiseStrength', coverNoiseStrength); }, [coverNoiseStrength]);
   useEffect(() => { persist('tempoScale', tempoScale); }, [tempoScale]);
@@ -398,6 +400,20 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
       }
       setArtistPresets(presetResults);
 
+      // Fetch caption from the first lyrics set that has generations
+      let foundCaption = '';
+      for (const ls of lyrics_sets) {
+        try {
+          const { generations } = await lireekApi.listGenerations(undefined, ls.id);
+          const withCaption = generations.find(g => g.caption);
+          if (withCaption?.caption) {
+            foundCaption = withCaption.caption;
+            break;
+          }
+        } catch { /* ignore */ }
+      }
+      setArtistCaption(foundCaption);
+
       // Pick the first preset that has an adapter_path
       const withAdapter = presetResults.find(p => p.preset?.adapter_path);
       if (withAdapter?.preset) {
@@ -413,6 +429,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
     } catch {
       setSelectedPreset(null);
       setArtistPresets([]);
+      setArtistCaption('');
     }
   };
 
@@ -438,11 +455,20 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
       const targetBpm = Math.round(sourceBpm * tempoScale);
       const targetKey = pitchShift !== 0 ? transposeKey(sourceKey, pitchShift) : sourceKey;
 
+      // Derive trigger word from adapter filename (not full artist name)
+      const adapterPath = selectedPreset?.adapter_path || '';
+      const triggerWord = adapterPath
+        ? adapterPath.replace(/\\/g, '/').split('/').pop()?.replace(/\.safetensors$/i, '') || ''
+        : '';
+
       const params: Record<string, any> = {
         customMode: true,
         lyrics,
-        style: selectedArtist?.name || songArtist || '',
+        // Use trigger word for style, not full artist name
+        style: triggerWord || songArtist || '',
         title: `${songTitle || 'Cover'} (${selectedArtist?.name || 'Cover'})`,
+        // Use the caption from the artist's generated lyrics
+        caption: artistCaption || '',
         taskType: 'cover',
         sourceAudioUrl,
         audioCoverStrength,
