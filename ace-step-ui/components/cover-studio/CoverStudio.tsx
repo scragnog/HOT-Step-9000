@@ -1033,7 +1033,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
             />
 
             {/* Vocals Only Toggle */}
-            <label className="flex items-center gap-3 py-2 px-1 cursor-pointer group">
+            <div onClick={() => setVocalsOnly(v => !v)} className="flex items-center gap-3 py-2 px-1 cursor-pointer group select-none">
               <div className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${
                 vocalsOnly ? 'bg-pink-500' : 'bg-zinc-300 dark:bg-zinc-700'
               }`}>
@@ -1045,7 +1045,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
                 <div className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 group-hover:text-pink-400 transition-colors">Vocals Only Source</div>
                 <div className="text-[9px] text-zinc-500">Extract vocals before generation — instrumentation comes from adapter style</div>
               </div>
-            </label>
+            </div>
             <EditableSlider
               label="Tempo Scale"
               value={tempoScale}
