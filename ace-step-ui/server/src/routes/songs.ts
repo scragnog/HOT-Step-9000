@@ -432,8 +432,11 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
        FROM songs s
        LEFT JOIN users u ON s.user_id = u.id
        WHERE s.user_id = $1 AND (
-         CASE WHEN $2::text IS NOT NULL THEN s.source = $2
-              ELSE (s.source IS NULL OR s.source = 'create')
+         CASE WHEN $2::text IS NOT NULL THEN (
+           s.source = $2
+           OR s.generation_params::text LIKE '%"source":"' || $2 || '"%'
+         )
+         ELSE (s.source IS NULL OR s.source = 'create')
          END
        )
        ORDER BY s.created_at DESC`,

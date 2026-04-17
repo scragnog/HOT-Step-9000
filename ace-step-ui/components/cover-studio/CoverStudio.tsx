@@ -909,11 +909,10 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
               )}
             </div>
           )}
+        </div>
 
-          {/* Divider */}
-          <div className="border-t border-zinc-200 dark:border-white/5" />
-
-          {/* Recent Covers */}
+        {/* ── FOURTH PANEL: Recent Covers ── */}
+        <div className="w-[320px] flex-shrink-0 border-l border-zinc-200 dark:border-white/5 overflow-y-auto scrollbar-hide p-4">
           <RecentCovers
             onPlaySong={onPlaySong}
             currentSong={currentSong}
