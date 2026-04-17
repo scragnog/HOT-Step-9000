@@ -1253,6 +1253,43 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
               </div>
             )}
 
+            {/* Album selector (when artist has multiple albums) */}
+            {(() => {
+              const presetsWithAdapters = artistPresets.filter(p => p.preset?.adapter_path);
+              if (presetsWithAdapters.length <= 1) return null;
+              return (
+                <div className="flex items-center gap-2">
+                  <label className="text-[10px] font-medium text-zinc-500 uppercase whitespace-nowrap">Album</label>
+                  <div className="relative flex-1">
+                    <select
+                      value={artistPresets.findIndex(p => p.preset === selectedPreset)}
+                      onChange={e => {
+                        const idx = parseInt(e.target.value);
+                        const chosen = artistPresets[idx];
+                        if (chosen?.preset) {
+                          setSelectedPreset(chosen.preset);
+                          if (chosen.preset.audio_cover_strength != null) {
+                            setAudioCoverStrength(chosen.preset.audio_cover_strength);
+                          }
+                        }
+                      }}
+                      className="w-full appearance-none rounded-lg bg-black/5 dark:bg-white/5 border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 pr-8 text-xs text-zinc-700 dark:text-zinc-300 cursor-pointer focus:ring-2 focus:ring-cyan-500/50 focus:outline-none"
+                    >
+                      {artistPresets.filter(p => p.preset?.adapter_path).map(p => {
+                        const idx = artistPresets.indexOf(p);
+                        return (
+                          <option key={p.lsId} value={idx}>
+                            {p.album}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-400 pointer-events-none" />
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Selected preset info */}
             {selectedPreset && (
               <div className="rounded-lg bg-cyan-500/5 border border-cyan-500/20 px-3 py-2 space-y-1">
