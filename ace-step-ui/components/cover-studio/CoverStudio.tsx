@@ -703,6 +703,20 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
     }
   };
 
+  const handleCancelGeneration = async () => {
+    if (!activeJobId || !token) return;
+    try {
+      await generateApi.cancelJob(activeJobId, token);
+      showToast('Generation cancelled');
+    } catch (err: any) {
+      console.warn('[CoverStudio] Cancel failed:', err);
+    }
+    setIsGenerating(false);
+    setActiveJobId(null);
+    setGenProgress(0);
+    setGenStage('');
+  };
+
   // ── Job polling ────────────────────────────────────────────────────────
 
   const pollJob = (jobId: string) => {
@@ -1396,7 +1410,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
             )}
           </button>
 
-          {/* Progress bar */}
+          {/* Progress bar + Cancel */}
           {isGenerating && (
             <div className="space-y-1.5">
               <div className="w-full bg-black/20 rounded-full h-2 overflow-hidden">
@@ -1407,7 +1421,16 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[10px] text-zinc-500">{genStage || 'Starting...'}</span>
-                <span className="text-[10px] text-zinc-500 font-mono">{genProgress}%</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] text-zinc-500 font-mono">{genProgress}%</span>
+                  <button
+                    onClick={handleCancelGeneration}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-600/80 hover:bg-red-600 text-white text-[10px] font-semibold transition-colors"
+                    title="Cancel generation"
+                  >
+                    <X className="w-3 h-3" /> Cancel
+                  </button>
+                </div>
               </div>
             </div>
           )}

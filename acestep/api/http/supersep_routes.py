@@ -165,26 +165,18 @@ def register_supersep_routes(
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
-    from pydantic import BaseModel
-    from typing import List as TList
-
-    class _StemInput(BaseModel):
-        path: str
-        volume: float = 1.0
-        muted: bool = False
-
-    class _RecombineBody(BaseModel):
-        stems: TList[_StemInput]
-
     @app.post("/v1/supersep/recombine")
-    def supersep_recombine(body: _RecombineBody):
+    async def supersep_recombine(request: Request):
         """Recombine stems with volume/mute settings.
 
+        Body: {stems: [{path, volume, muted}]}
         Returns: {mixed_path: "<absolute path to mixed file>"}
-
-        NOTE: sync def — FastAPI runs in thread pool automatically.
         """
-        stems = [s.model_dump() for s in body.stems]
+        from starlette.concurrency import run_in_threadpool
+
+        body = await request.json()
+        stems = body.get("stems", [])
+
         logger.info(f"[SuperSep] Recombine request: {len(stems)} stems")
 
         if not stems:
@@ -204,7 +196,8 @@ def register_supersep_routes(
                 project_root, ".cache", "acestep", "supersep", "mixes", f"{mix_id}.flac",
             )
 
-            mixed_path = recombine_stems(stems, output_path)
+            # run_in_threadpool is FastAPI's built-in thread offload — safe with async
+            mixed_path = await run_in_threadpool(recombine_stems, stems, output_path)
             logger.info(f"[SuperSep] Recombine complete: {mixed_path}")
             return {"mixed_path": mixed_path}
 
