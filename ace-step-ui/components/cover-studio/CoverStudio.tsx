@@ -492,9 +492,8 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
               // Find the vocals stem
               const vocalsStem = (data.stems || []).find((s: any) => s.stem_type === 'vocals');
               if (vocalsStem?.file_path) {
-                // Return a Python API URL that serves this file
-                const downloadUrl = `${PYTHON_API}/v1/stems/${job_id}/download/vocals`;
-                resolve(downloadUrl);
+                // Return the actual filesystem path — generation needs a real file, not a URL
+                resolve(vocalsStem.file_path);
               } else {
                 reject(new Error('No vocals stem found in output'));
               }
