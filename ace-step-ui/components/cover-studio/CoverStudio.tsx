@@ -432,7 +432,12 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
     try {
       const selectedArtist = artists.find(a => a.id === selectedArtistId);
 
-      // 1) Build base params
+      // 1) Build base params — BPM and key are the TARGET values (after adjustments)
+      const sourceBpm = analysis?.bpm || 120;
+      const sourceKey = analysis?.key || 'C major';
+      const targetBpm = Math.round(sourceBpm * tempoScale);
+      const targetKey = pitchShift !== 0 ? transposeKey(sourceKey, pitchShift) : sourceKey;
+
       const params: Record<string, any> = {
         customMode: true,
         lyrics,
@@ -442,8 +447,8 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
         sourceAudioUrl,
         audioCoverStrength,
         coverNoiseStrength,
-        bpm: analysis?.bpm || 120,
-        keyScale: analysis?.key || 'C major',
+        bpm: targetBpm,
+        keyScale: targetKey,
         duration: 0,
         instrumental: false,
         coverArtSubject: songTitle || 'cover',
@@ -451,7 +456,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
         artistName: selectedArtist?.name || songArtist || '',
       };
 
-      // Apply tempo/pitch if changed
+      // Tempo/pitch params for source audio modification
       if (tempoScale !== 1.0) params.tempoScale = tempoScale;
       if (pitchShift !== 0) params.pitchShift = pitchShift;
 
