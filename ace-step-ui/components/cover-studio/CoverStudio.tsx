@@ -1236,7 +1236,14 @@ const RecentCovers: React.FC<RecentCoversProps> = ({ onPlaySong, currentSong, is
     // Title was stored as "SongTitle (ArtistName)" — extract the original song title
     const rawTitle = downloadSong.title || 'Untitled';
     const sourceArtist = gp.sourceArtist || localStorage.getItem('cover-studio-songArtist')?.replace(/^"|"$/g, '') || '';
-    const displayTitle = `${filenamePrepend}${coverArtist ? coverArtist + ' - ' : ''}${rawTitle}${sourceArtist ? ` (${sourceArtist} Cover)` : ''}`;
+    const rawDisplayTitle = `${filenamePrepend}${coverArtist ? coverArtist + ' - ' : ''}${rawTitle}${sourceArtist ? ` (${sourceArtist} Cover)` : ''}`;
+    // Sanitize for filesystem: replace curly quotes with ASCII, strip illegal filename chars
+    const displayTitle = rawDisplayTitle
+      .replace(/[\u2018\u2019\u0060]/g, "'")   // curly single quotes → straight
+      .replace(/[\u201C\u201D]/g, '"')           // curly double quotes → straight
+      .replace(/[?*:<>|"]/g, '_')                // illegal filename chars → underscore
+      .replace(/\//g, '-')                        // forward slash → dash
+      .replace(/\\/g, '-');                       // backslash → dash
 
     const downloadSingleURL = (url: string, suffix: string) => {
       const targetUrl = new URL('/api/songs/download', window.location.origin);
