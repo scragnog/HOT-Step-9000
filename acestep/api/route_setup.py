@@ -23,6 +23,7 @@ from acestep.api.http.sample_format_routes import register_sample_format_routes
 from acestep.api.http.stats_route import register_stats_route
 from acestep.api.http.steering_routes import register_steering_routes
 from acestep.api.http.stems_routes import register_stems_routes
+from acestep.api.http.supersep_routes import register_supersep_routes
 from acestep.api.http.system_routes import register_system_routes
 from acestep.api.http.mastering_routes import register_mastering_routes
 from acestep.api.http.cover_art_routes import register_cover_art_routes
@@ -207,6 +208,11 @@ def configure_api_routes(
     )
 
     register_cover_art_routes(
+        app=app,
+        get_project_root=get_project_root,
+    )
+
+    register_supersep_routes(
         app=app,
         get_project_root=get_project_root,
     )

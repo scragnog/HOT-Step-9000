@@ -297,3 +297,6 @@ test_roundtrip.py
 tmp_*.py
 # Auto-downloaded llama-quantize binaries
 acestep/tools/bin/
+
+# SuperSep model weights (downloaded by install.bat)
+models/supersep/

@@ -480,6 +480,42 @@ if exist "checkpoints\scragvae\diffusion_pytorch_model.safetensors" (
 echo.
 
 :: -------------------------------------------------------------------
+:: 5g. Optional: Download SuperSep Models (Advanced Stem Separation)
+:: -------------------------------------------------------------------
+echo.
+echo  ============================================================
+echo    Optional: SuperSep Models (Advanced Stem Separation)
+echo  ============================================================
+echo.
+echo    SuperSep provides up to 17-stem separation for Cover Studio's
+echo    Advanced Mode. Models will auto-download on first use if skipped.
+echo    Size: ~2.3 GB total (4 specialized models)
+echo.
+
+if exist "models\supersep\BS-Roformer-SW.ckpt" (
+    echo  SuperSep models already installed. Skipping.
+) else (
+    set /p SUPERSEP_CHOICE="  Download SuperSep models? [Y/n] (default=n): "
+    if "!SUPERSEP_CHOICE!"=="" set SUPERSEP_CHOICE=n
+    if /i "!SUPERSEP_CHOICE!"=="Y" (
+        echo.
+        echo  Downloading SuperSep models from HuggingFace...
+        if not exist "models\supersep" mkdir "models\supersep"
+        echo  [1/4] BS-RoFormer SW (667 MB^)...
+        python -c "from audio_separator.separator import Separator; s=Separator(model_file_dir='models/supersep'); s.load_model('BS-Roformer-SW.ckpt')"
+        echo  [2/4] Mel-Band RoFormer Karaoke (871 MB^)...
+        python -c "from audio_separator.separator import Separator; s=Separator(model_file_dir='models/supersep'); s.load_model('mel_band_roformer_karaoke_aufr33_viperx_sdr_10.1956.ckpt')"
+        echo  [3/4] MDX23C DrumSep (417 MB^)...
+        python -c "from audio_separator.separator import Separator; s=Separator(model_file_dir='models/supersep'); s.load_model('MDX23C-DrumSep-aufr33-jarredou.ckpt')"
+        echo  [4/4] Demucs htdemucs_6s (auto-download on first use^)...
+        echo  SuperSep model download complete.
+    ) else (
+        echo  Skipping SuperSep download. Models will auto-download on first use.
+    )
+)
+echo.
+
+:: -------------------------------------------------------------------
 :: 6. Install UI dependencies (Node.js / npm)
 :: -------------------------------------------------------------------
 echo  [6/6] Setting up React UI...
