@@ -198,6 +198,7 @@ def register_supersep_routes(
 
         try:
             from acestep.supersep_pipeline import recombine_stems
+            import asyncio
 
             project_root = get_project_root()
             mix_id = str(uuid4())
@@ -205,7 +206,11 @@ def register_supersep_routes(
                 project_root, ".cache", "acestep", "supersep", "mixes", f"{mix_id}.flac",
             )
 
-            mixed_path = recombine_stems(stems, output_path)
+            # Run in thread — recombine_stems is CPU-bound (soundfile + numpy)
+            loop = asyncio.get_event_loop()
+            mixed_path = await loop.run_in_executor(
+                None, recombine_stems, stems, output_path
+            )
             return {"mixed_path": mixed_path}
 
         except Exception as e:
