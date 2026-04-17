@@ -202,6 +202,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
   const [coverNoiseStrength, setCoverNoiseStrength] = useState(() => restore<number>('coverNoiseStrength', 0));
   const [tempoScale, setTempoScale] = useState(() => restore<number>('tempoScale', 1.0));
   const [pitchShift, setPitchShift] = useState(() => restore<number>('pitchShift', 0));
+  const [vocalsOnly, setVocalsOnly] = useState(() => restore<boolean>('vocalsOnly', false));
 
   // Generation
   const [isGenerating, setIsGenerating] = useState(false);
@@ -227,6 +228,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
   useEffect(() => { persist('coverNoiseStrength', coverNoiseStrength); }, [coverNoiseStrength]);
   useEffect(() => { persist('tempoScale', tempoScale); }, [tempoScale]);
   useEffect(() => { persist('pitchShift', pitchShift); }, [pitchShift]);
+  useEffect(() => { persist('vocalsOnly', vocalsOnly); }, [vocalsOnly]);
   useEffect(() => { persist('filenamePrepend', filenamePrepend); }, [filenamePrepend]);
 
   // Load artists on mount
@@ -447,6 +449,76 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
     await loadArtistPresets(artist);
   };
 
+  // ── Vocal extraction (stem split) ───────────────────────────────────
+
+  const extractVocals = (audioUrl: string): Promise<string> => {
+    const PYTHON_API = `http://${window.location.hostname}:8001`;
+    return new Promise(async (resolve, reject) => {
+      try {
+        // Resolve the audio URL to a filesystem path
+        let audioPath = audioUrl;
+        if (audioUrl.startsWith('/audio/')) {
+          // Let the Python API resolve it via its own URL handling
+          audioPath = `http://${window.location.hostname}:3001${audioUrl}`;
+        }
+
+        const resp = await fetch(`${PYTHON_API}/v1/stems/separate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ audio_path: audioPath, mode: 'vocals' }),
+        });
+
+        if (!resp.ok) {
+          const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+          throw new Error(err.detail || `Stem split failed: ${resp.status}`);
+        }
+
+        const { job_id } = await resp.json();
+        console.log('[CoverStudio] Stem split job started:', job_id);
+
+        // Listen for SSE completion
+        const es = new EventSource(`${PYTHON_API}/v1/stems/${job_id}/progress`);
+        const timeout = setTimeout(() => {
+          es.close();
+          reject(new Error('Stem split timed out (5 min)'));
+        }, 300_000);
+
+        es.onmessage = (evt) => {
+          try {
+            const data = JSON.parse(evt.data);
+            if (data.type === 'progress') {
+              setGenStage(`Extracting vocals: ${data.message || ''}`);
+              setGenProgress(Math.round((data.percent || 0) * 15)); // 0-15% of total
+            } else if (data.type === 'complete') {
+              clearTimeout(timeout);
+              es.close();
+              // Find the vocals stem
+              const vocalsStem = (data.stems || []).find((s: any) => s.stem_type === 'vocals');
+              if (vocalsStem?.file_path) {
+                // Return a Python API URL that serves this file
+                const downloadUrl = `${PYTHON_API}/v1/stems/${job_id}/download/vocals`;
+                resolve(downloadUrl);
+              } else {
+                reject(new Error('No vocals stem found in output'));
+              }
+            } else if (data.type === 'error') {
+              clearTimeout(timeout);
+              es.close();
+              reject(new Error(data.message || 'Stem split error'));
+            }
+          } catch { /* ignore parse errors */ }
+        };
+        es.onerror = () => {
+          clearTimeout(timeout);
+          es.close();
+          reject(new Error('SSE connection lost during stem split'));
+        };
+      } catch (err) {
+        reject(err);
+      }
+    });
+  };
+
   // ── Generation (mirrors Lyric Studio's useAudioGeneration flow) ────────
 
   const handleGenerate = async () => {
@@ -457,6 +529,20 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
     setIsGenerating(true);
     try {
       const selectedArtist = artists.find(a => a.id === selectedArtistId);
+
+      // 0) Vocals-only pre-processing: stem split to extract vocals
+      let effectiveSourceUrl = sourceAudioUrl;
+      if (vocalsOnly && sourceAudioUrl) {
+        setGenStage('Extracting vocals...');
+        setGenProgress(5);
+        try {
+          effectiveSourceUrl = await extractVocals(sourceAudioUrl);
+          console.log('[CoverStudio] Using vocals-only source:', effectiveSourceUrl);
+        } catch (err: any) {
+          showToast(`Vocal extraction failed: ${err.message}. Using full mix.`);
+          // Fall back to full mix
+        }
+      }
 
       // 1) Build base params — BPM and key are the TARGET values (after adjustments)
       const sourceBpm = analysis?.bpm || 120;
@@ -477,7 +563,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
         style: artistCaption || '',
         title: `${songTitle || 'Cover'} (${selectedArtist?.name || 'Cover'})`,
         taskType: 'cover',
-        sourceAudioUrl,
+        sourceAudioUrl: effectiveSourceUrl,
         audioCoverStrength,
         coverNoiseStrength,
         bpm: targetBpm,
@@ -945,6 +1031,21 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
               formatDisplay={v => v.toFixed(2)}
               helpText="How much of the original artist's sound character is preserved. Higher = more original artist, lower = more adapter artist"
             />
+
+            {/* Vocals Only Toggle */}
+            <label className="flex items-center gap-3 py-2 px-1 cursor-pointer group">
+              <div className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${
+                vocalsOnly ? 'bg-pink-500' : 'bg-zinc-300 dark:bg-zinc-700'
+              }`}>
+                <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                  vocalsOnly ? 'translate-x-4' : 'translate-x-0'
+                }`} />
+              </div>
+              <div>
+                <div className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 group-hover:text-pink-400 transition-colors">Vocals Only Source</div>
+                <div className="text-[9px] text-zinc-500">Extract vocals before generation — instrumentation comes from adapter style</div>
+              </div>
+            </label>
             <EditableSlider
               label="Tempo Scale"
               value={tempoScale}
