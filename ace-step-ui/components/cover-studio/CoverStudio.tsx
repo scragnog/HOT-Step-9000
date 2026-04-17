@@ -464,11 +464,9 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
       const params: Record<string, any> = {
         customMode: true,
         lyrics,
-        // Use trigger word for style, not full artist name
-        style: triggerWord || songArtist || '',
+        // Style = artist caption (trigger word gets prepended by applyTriggerWord)
+        style: artistCaption || songArtist || '',
         title: `${songTitle || 'Cover'} (${selectedArtist?.name || 'Cover'})`,
-        // Use the caption from the artist's generated lyrics
-        caption: artistCaption || '',
         taskType: 'cover',
         sourceAudioUrl,
         audioCoverStrength,
