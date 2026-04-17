@@ -493,6 +493,12 @@
             </li>
             <li class="detail" id="d-api">Waiting for server to start…</li>
 
+            <li id="s-lireek">
+                <span class="icon pending" id="i-lireek"></span>
+                <span>Lireek API <small style="color:#555">(port 8002)</small></span>
+            </li>
+            <li class="detail" id="d-lireek">Waiting for lyrics server…</li>
+
             <li id="s-backend">
                 <span class="icon pending" id="i-backend"></span>
                 <span>Express Backend <small style="color:#555">(port 3001)</small></span>
@@ -515,7 +521,7 @@
     <script src="loading-config.js" onerror="window.VITE_PORT='3000'"></script>
     <script>
         const start = Date.now();
-        const state = { apiUp: false, apiReady: false, backend: false, frontend: false };
+        const state = { apiUp: false, apiReady: false, lireek: false, backend: false, frontend: false };
         let userClickedStart = false;
         let isUpdating = false;
 
@@ -901,6 +907,8 @@
             btnUpdate.textContent = "Updating... Please wait";
             
             document.getElementById('s-api').style.display = 'none';
+            document.getElementById('s-lireek').style.display = 'none';
+            document.getElementById('d-lireek').style.display = 'none';
             document.getElementById('s-backend').style.display = 'none';
             document.getElementById('s-frontend').style.display = 'none';
             document.getElementById('d-api').style.display = 'none';
@@ -917,6 +925,8 @@
                 btnLaunch.disabled = false;
                 btnUpdate.disabled = false;
                 document.getElementById('s-api').style.display = '';
+                document.getElementById('s-lireek').style.display = '';
+                document.getElementById('d-lireek').style.display = '';
                 document.getElementById('s-backend').style.display = '';
                 document.getElementById('s-frontend').style.display = '';
                 document.getElementById('d-api').style.display = '';
@@ -1050,6 +1060,16 @@
             }
             if (state.backend) { setIcon('i-backend', 'done'); setRow('s-backend', 'done'); }
 
+            // ---- Lireek API (lightweight lyrics server) ----
+            if (!state.lireek) {
+                setIcon('i-lireek', 'running'); setRow('s-lireek', 'running');
+                state.lireek = await probeNoCors('http://localhost:8002/health');
+                if (state.lireek) {
+                    setDetail('d-lireek', 'Lyrics database ready');
+                }
+            }
+            if (state.lireek) { setIcon('i-lireek', 'done'); setRow('s-lireek', 'done'); }
+
             // ---- Vite frontend ----
             if (!state.frontend) {
                 setIcon('i-frontend', 'running'); setRow('s-frontend', 'running');
@@ -1060,7 +1080,7 @@
             document.getElementById('elapsed').textContent = `Elapsed: ${elapsed()}`;
 
             // Only redirect if everything is ready AND the user actively clicked Start
-            if (state.apiReady && state.backend && state.frontend && userClickedStart) {
+            if (state.apiReady && state.lireek && state.backend && state.frontend && userClickedStart) {
                 document.getElementById('spinnerWrap').style.display = 'none';
                 document.getElementById('readyBanner').classList.add('show');
                 document.getElementById('elapsed').textContent = `All ready in ${elapsed()} — redirecting…`;

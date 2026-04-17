@@ -18,13 +18,13 @@ export default defineConfig(({ mode }) => {
           target: env.ACESTEP_API_URL || `http://${env.ACESTEP_API_HOST || '127.0.0.1'}:${env.ACESTEP_API_PORT || '8001'}`,
           changeOrigin: true,
         },
-        // LLM providers & Lireek — direct to Python backend
+        // LLM providers & Lireek — direct to lightweight Lireek server (separate from main Python API)
         '/api/llm': {
-          target: env.ACESTEP_API_URL || `http://${env.ACESTEP_API_HOST || '127.0.0.1'}:${env.ACESTEP_API_PORT || '8001'}`,
+          target: `http://${env.ACESTEP_API_HOST || '127.0.0.1'}:${env.ACESTEP_LIREEK_PORT || '8002'}`,
           changeOrigin: true,
         },
         '/api/lireek': {
-          target: env.ACESTEP_API_URL || `http://${env.ACESTEP_API_HOST || '127.0.0.1'}:${env.ACESTEP_API_PORT || '8001'}`,
+          target: `http://${env.ACESTEP_API_HOST || '127.0.0.1'}:${env.ACESTEP_LIREEK_PORT || '8002'}`,
           changeOrigin: true,
         },
         // Redmond Mode — direct to Python backend (bypasses Node.js middleware)

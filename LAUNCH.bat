@@ -185,6 +185,12 @@ start /min "HOT-Step 9000 UI Frontend" cmd /k "set VITE_PORT=%VITE_PORT%&& cd /d
 echo   Started (minimized windows).
 echo.
 
+REM ---- Step 3b: Start Lireek API server (instant startup, no model loading) ----
+echo [3b/5] Starting Lireek API server...
+start /min "Lireek API Server" cmd /k "cd /d "%~dp0" && call .venv\Scripts\activate.bat && set "PYTHONPATH=%~dp0" && set "PYTHONUNBUFFERED=1" && python acestep/lireek_server.py --port 8002 --host 127.0.0.1"
+echo   Started (minimized window).
+echo.
+
 REM ---- Step 4: Wait for UI selection ----
 echo [4/5] Waiting for user selection in loading screen...
 :wait_for_user
@@ -244,11 +250,13 @@ echo   It will auto-redirect to ACE-Step once
 echo   all services are ready.
 echo.
 echo   Python API:  http://localhost:8001
+echo   Lireek API:  http://localhost:8002
 echo   Backend:     http://localhost:3001
 echo   Frontend:    http://localhost:%VITE_PORT%
 echo.
-echo   Three minimized windows are running:
+echo   Four minimized windows are running:
 echo     - Python API server
+echo     - Lireek API server (lyrics/LLM)
 echo     - UI Backend (Express)
 echo     - UI Frontend (Vite)
 echo.

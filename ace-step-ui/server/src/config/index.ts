@@ -22,6 +22,11 @@ export const config = {
     apiUrl: process.env.ACESTEP_API_URL || `http://${process.env.ACESTEP_API_HOST || '127.0.0.1'}:${process.env.ACESTEP_API_PORT || '8001'}`,
   },
 
+  // Lireek API (local — separate lightweight server for lyrics/LLM)
+  lireek: {
+    apiUrl: process.env.ACESTEP_LIREEK_URL || `http://${process.env.ACESTEP_API_HOST || '127.0.0.1'}:${process.env.ACESTEP_LIREEK_PORT || '8002'}`,
+  },
+
   // Pexels (optional - for video backgrounds)
   pexels: {
     apiKey: process.env.PEXELS_API_KEY || '',

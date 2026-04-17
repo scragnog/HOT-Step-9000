@@ -479,6 +479,13 @@ app.post('/api/shutdown', async (req, res) => {
         collectAncestors(pid).forEach(a => { console.log(`[Shutdown]   ancestor ${a}`); pidsToKill.add(a); });
       }
 
+      const lireekPort = parseInt(process.env.ACESTEP_LIREEK_PORT || '8002', 10);
+      for (const pid of findPidsOnPort(lireekPort)) {
+        console.log(`[Shutdown] Lireek API PID ${pid} (port ${lireekPort})`);
+        pidsToKill.add(pid);
+        collectAncestors(pid).forEach(a => { console.log(`[Shutdown]   ancestor ${a}`); pidsToKill.add(a); });
+      }
+
       const vitePort = parseInt(process.env.VITE_PORT || '3000', 10);
       for (const pid of findPidsOnPort(vitePort)) {
         console.log(`[Shutdown] Vite PID ${pid} (port ${vitePort})`);
@@ -821,10 +828,10 @@ app.use('/api/analyze', analyzeRoutes);
 app.use('/api/model', modelRoutes);
 app.use('/api/redmond', redmondRoutes);
 
-// Generic proxy for Python backend routes not handled by Express
+// Generic proxy for Lireek server routes (separate lightweight Python process)
 app.use(['/api/lireek', '/api/llm'], async (req, res) => {
   try {
-    const targetUrl = `${config.acestep.apiUrl}${req.originalUrl}`;
+    const targetUrl = `${config.lireek.apiUrl}${req.originalUrl}`;
 
     // Build clean headers — strip hop-by-hop headers that break proxied requests
     const skipHeaders = new Set(['content-length', 'connection', 'transfer-encoding', 'host', 'keep-alive']);
