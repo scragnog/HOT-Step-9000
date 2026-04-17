@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Upload, Music, Search, Play, Pause, Loader2, Guitar, Disc3, Zap, X, RefreshCw } from 'lucide-react';
+import { Upload, Music, Search, Play, Pause, Loader2, Guitar, Disc3, Zap, X, RefreshCw, Download, Trash2 } from 'lucide-react';
 import { lireekApi, Artist, AlbumPreset, LyricsSet } from '../../services/lyricStudioApi';
-import { generateApi } from '../../services/api';
+import { generateApi, songsApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
 import { Song } from '../../types';
 import { EditableSlider } from '../EditableSlider';
+import { DownloadModal, DownloadFormat, DownloadVersion } from '../DownloadModal';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -207,6 +208,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
   const [toast, setToast] = useState('');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const [activeJobId, setActiveJobId] = useState<string | null>(null);
+  const [filenamePrepend, setFilenamePrepend] = useState(() => restore<string>('filenamePrepend', ''));
 
   // Persist state changes
   useEffect(() => { persist('sourceFileName', sourceFileName); }, [sourceFileName]);
@@ -223,6 +225,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
   useEffect(() => { persist('coverNoiseStrength', coverNoiseStrength); }, [coverNoiseStrength]);
   useEffect(() => { persist('tempoScale', tempoScale); }, [tempoScale]);
   useEffect(() => { persist('pitchShift', pitchShift); }, [pitchShift]);
+  useEffect(() => { persist('filenamePrepend', filenamePrepend); }, [filenamePrepend]);
 
   // Load artists on mount
   useEffect(() => {
@@ -482,6 +485,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
         coverArtSubject: songTitle || 'cover',
         source: 'cover-studio',
         artistName: selectedArtist?.name || songArtist || '',
+        sourceArtist: songArtist || '',
       };
 
       // Tempo/pitch params for source audio modification
@@ -779,6 +783,25 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
               </button>
             </div>
           </div>
+
+          {/* Filename Prepend */}
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+              <Download className="w-4 h-4 text-orange-400" />
+              Download Settings
+            </div>
+            <div>
+              <label className="text-[10px] font-medium text-zinc-500 uppercase">Filename Prepend</label>
+              <input
+                type="text"
+                value={filenamePrepend}
+                onChange={e => setFilenamePrepend(e.target.value)}
+                placeholder="e.g. 01 - , My Album - "
+                className="w-full mt-1 bg-white dark:bg-black/20 border border-zinc-200 dark:border-white/10 rounded-lg px-3 py-2 text-sm text-zinc-900 dark:text-white placeholder-zinc-400 dark:placeholder-zinc-600 focus:outline-none focus:border-orange-500 transition-colors"
+              />
+              <p className="text-[9px] text-zinc-500 mt-1">Prepended to download filenames</p>
+            </div>
+          </div>
         </div>
 
         {/* ── CENTER PANEL: Lyrics Editor ── */}
@@ -1004,6 +1027,9 @@ const RecentCovers: React.FC<RecentCoversProps> = ({ onPlaySong, currentSong, is
   const { token } = useAuth();
   const [covers, setCovers] = useState<Song[]>([]);
   const [loading, setLoading] = useState(false);
+  const [clearing, setClearing] = useState(false);
+  const [downloadSong, setDownloadSong] = useState<Song | null>(null);
+  const [downloadModalOpen, setDownloadModalOpen] = useState(false);
 
   useEffect(() => {
     if (!token) return;
@@ -1046,11 +1072,94 @@ const RecentCovers: React.FC<RecentCoversProps> = ({ onPlaySong, currentSong, is
       .finally(() => setLoading(false));
   }, [token, refreshTrigger]);
 
+  // Clear all covers
+  const handleClearAll = async () => {
+    if (!token || covers.length === 0) return;
+    if (!window.confirm(`Delete all ${covers.length} covers? This removes files from disk too.`)) return;
+    setClearing(true);
+    try {
+      for (const cover of covers) {
+        try { await songsApi.deleteSong(cover.id, token); } catch { /* continue */ }
+      }
+      setCovers([]);
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  // Download handler
+  const handleDownloadClick = (e: React.MouseEvent, cover: Song) => {
+    e.stopPropagation();
+    setDownloadSong(cover);
+    setDownloadModalOpen(true);
+  };
+
+  const handleDownload = (format: DownloadFormat, version: DownloadVersion) => {
+    if (!downloadSong) return;
+    const gp = (downloadSong as any).generationParams || {};
+    const filenamePrepend = localStorage.getItem('cover-studio-filenamePrepend')?.replace(/^"|"$/g, '') || '';
+    // Extract cover artist name and source artist
+    const coverArtist = gp.artistName || '';
+    // Title was stored as "SongTitle (ArtistName)" — extract the original song title
+    const rawTitle = downloadSong.title || 'Untitled';
+    const sourceArtist = gp.sourceArtist || localStorage.getItem('cover-studio-songArtist')?.replace(/^"|"$/g, '') || '';
+    const displayTitle = `${filenamePrepend}${coverArtist ? coverArtist + ' - ' : ''}${rawTitle}${sourceArtist ? ` (${sourceArtist} Cover)` : ''}`;
+
+    const downloadSingleURL = (url: string, suffix: string) => {
+      const targetUrl = new URL('/api/songs/download', window.location.origin);
+      targetUrl.searchParams.set('audioUrl', url);
+      targetUrl.searchParams.set('title', `${displayTitle}${suffix}`);
+      targetUrl.searchParams.set('format', format);
+      targetUrl.searchParams.set('songId', downloadSong.id);
+      if (format === 'mp3') {
+        const br = localStorage.getItem('mp3_export_bitrate');
+        if (br) targetUrl.searchParams.set('mp3Bitrate', br);
+      }
+      if (format === 'opus') {
+        const br = localStorage.getItem('opus_export_bitrate');
+        if (br) targetUrl.searchParams.set('opusBitrate', br);
+      }
+      const link = document.createElement('a');
+      link.href = targetUrl.toString();
+      const ext = format === 'opus' ? 'ogg' : format;
+      link.download = `${displayTitle}${suffix}.${ext}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+
+    if (version === 'mastered' || version === 'both') {
+      downloadSingleURL(downloadSong.audioUrl || '', '');
+    }
+    if (version === 'original' || version === 'both') {
+      const origUrl = gp.originalAudioUrl;
+      if (origUrl) {
+        setTimeout(() => downloadSingleURL(origUrl, ' (Unmastered)'), version === 'both' ? 500 : 0);
+      }
+    }
+  };
+
+  const hasOriginal = downloadSong && (downloadSong as any).generationParams?.originalAudioUrl;
+
   return (
+    <>
     <div className="space-y-2">
-      <div className="flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
-        <Music className="w-4 h-4 text-cyan-400" />
-        Recent Covers
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
+          <Music className="w-4 h-4 text-cyan-400" />
+          Recent Covers
+          {covers.length > 0 && <span className="text-[10px] text-zinc-500 font-normal">({covers.length})</span>}
+        </div>
+        {covers.length > 0 && (
+          <button
+            onClick={handleClearAll}
+            disabled={clearing}
+            className="p-1 rounded-md hover:bg-red-900/30 text-zinc-500 hover:text-red-400 transition-colors"
+            title="Clear all covers"
+          >
+            {clearing ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -1064,11 +1173,11 @@ const RecentCovers: React.FC<RecentCoversProps> = ({ onPlaySong, currentSong, is
           {covers.map(cover => {
             const isCurrent = currentSong?.id === cover.id;
             return (
-              <button
+              <div
                 key={cover.id}
                 onClick={() => onPlaySong(cover, covers)}
                 className={`
-                  w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 text-left
+                  w-full flex items-center gap-2 px-3 py-2 rounded-lg transition-all duration-200 text-left cursor-pointer group relative
                   ${isCurrent
                     ? 'bg-cyan-500/20 ring-1 ring-cyan-400/50'
                     : 'hover:bg-white/5'
@@ -1086,11 +1195,31 @@ const RecentCovers: React.FC<RecentCoversProps> = ({ onPlaySong, currentSong, is
                   <div className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate">{cover.title}</div>
                   <div className="text-[10px] text-zinc-500">{cover.duration}</div>
                 </div>
-              </button>
+                {/* Hover actions */}
+                <div className="absolute right-1 top-1/2 -translate-y-1/2 flex gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    onClick={(e) => handleDownloadClick(e, cover)}
+                    className="p-1.5 rounded-md bg-zinc-800/80 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors"
+                    title="Download"
+                  >
+                    <Download className="w-3 h-3" />
+                  </button>
+                </div>
+              </div>
             );
           })}
         </div>
       )}
     </div>
+
+    {/* Download Modal */}
+    <DownloadModal
+      isOpen={downloadModalOpen}
+      onClose={() => { setDownloadModalOpen(false); setDownloadSong(null); }}
+      onDownload={handleDownload}
+      songTitle={downloadSong?.title}
+      hasOriginal={!!hasOriginal}
+    />
+    </>
   );
 };
