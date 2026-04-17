@@ -31,6 +31,7 @@ interface CoverStudioProps {
 // ── Persistence helpers (localStorage) ──────────────────────────────────────
 
 const STORAGE_PREFIX = 'cover-studio-';
+const TRACK_CACHE_KEY = 'cover-studio-trackCache';
 
 function persist(key: string, value: any) {
   try { localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value)); } catch {}
@@ -41,6 +42,33 @@ function restore<T>(key: string, fallback: T): T {
     const raw = localStorage.getItem(STORAGE_PREFIX + key);
     return raw !== null ? JSON.parse(raw) : fallback;
   } catch { return fallback; }
+}
+
+// ── Source track cache — remembers analysis + lyrics per filename ────────────
+
+interface TrackCacheEntry {
+  artist: string;
+  title: string;
+  lyrics: string;
+  bpm: number;
+  key: string;
+  scale?: string;
+  duration: number | null;
+  album?: string;
+}
+
+function getTrackCache(): Record<string, TrackCacheEntry> {
+  try {
+    return JSON.parse(localStorage.getItem(TRACK_CACHE_KEY) || '{}');
+  } catch { return {}; }
+}
+
+function saveTrackCacheEntry(filename: string, entry: Partial<TrackCacheEntry>) {
+  try {
+    const cache = getTrackCache();
+    cache[filename] = { ...(cache[filename] || {}), ...entry } as TrackCacheEntry;
+    localStorage.setItem(TRACK_CACHE_KEY, JSON.stringify(cache));
+  } catch {}
 }
 
 // ── Helpers from useAudioGeneration (reused for param merging) ───────────────
@@ -203,16 +231,57 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
 
     setSourceFile(file);
     setSourceFileName(file.name);
-    setIsUploading(true);
 
+    // ── Check track cache first ──
+    const cached = getTrackCache()[file.name];
+    if (cached) {
+      console.log('[CoverStudio] Track cache hit for', file.name);
+      showToast('Loaded from cache — instant recall!');
+      if (cached.artist) setSongArtist(cached.artist);
+      if (cached.title) setSongTitle(cached.title);
+      if (cached.lyrics) setLyrics(cached.lyrics);
+      setMetadata({ artist: cached.artist || '', title: cached.title || '', album: cached.album || '', duration: cached.duration });
+      setAnalysis({ bpm: cached.bpm, key: cached.key, scale: cached.scale });
+
+      // Still need to upload as reference track for the generation pipeline
+      setIsUploading(true);
+      try {
+        const uploadFormData = new FormData();
+        uploadFormData.append('audio', file);
+        const uploadRes = await fetch('/api/reference-tracks', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: uploadFormData,
+        });
+        if (!uploadRes.ok) throw new Error('Upload failed');
+        const uploadData = await uploadRes.json();
+        setSourceAudioUrl(uploadData.track?.audio_url || '');
+      } catch (err: any) {
+        showToast(`Upload error: ${err.message}`);
+      } finally {
+        setIsUploading(false);
+      }
+      return;
+    }
+
+    // ── No cache — full analysis pipeline ──
+    setIsUploading(true);
     try {
       // 1. Extract metadata
       const metaFormData = new FormData();
       metaFormData.append('audio', file);
       const metaRes = await fetch('/api/analyze/metadata', { method: 'POST', body: metaFormData });
+      let extractedArtist = '';
+      let extractedTitle = '';
+      let extractedAlbum = '';
+      let extractedDuration: number | null = null;
       if (metaRes.ok) {
         const meta: AudioMetadata = await metaRes.json();
         setMetadata(meta);
+        extractedArtist = meta.artist || '';
+        extractedTitle = meta.title || '';
+        extractedAlbum = meta.album || '';
+        extractedDuration = meta.duration;
         if (meta.artist) setSongArtist(meta.artist);
         if (meta.title) setSongTitle(meta.title);
       }
@@ -233,6 +302,9 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
       // 3. Analyze with Essentia for BPM/key
       setIsUploading(false);
       setIsAnalyzing(true);
+      let analyzedBpm = 120;
+      let analyzedKey = 'C major';
+      let analyzedScale: string | undefined;
       const analyzeRes = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -240,12 +312,22 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
       });
       if (analyzeRes.ok) {
         const data = await analyzeRes.json();
-        setAnalysis({
-          bpm: data.bpm || 120,
-          key: `${data.key || 'C'} ${data.scale || 'major'}`,
-          scale: data.scale,
-        });
+        analyzedBpm = data.bpm || 120;
+        analyzedKey = `${data.key || 'C'} ${data.scale || 'major'}`;
+        analyzedScale = data.scale;
+        setAnalysis({ bpm: analyzedBpm, key: analyzedKey, scale: analyzedScale });
       }
+
+      // 4. Save to track cache (lyrics added later after Genius search)
+      saveTrackCacheEntry(file.name, {
+        artist: extractedArtist,
+        title: extractedTitle,
+        album: extractedAlbum,
+        duration: extractedDuration,
+        bpm: analyzedBpm,
+        key: analyzedKey,
+        scale: analyzedScale,
+      });
     } catch (err: any) {
       showToast(`Error: ${err.message}`);
     } finally {
@@ -264,6 +346,15 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
       setLyrics(result.lyrics);
       if (result.title) setSongTitle(result.title);
       showToast('Lyrics found!');
+
+      // Update track cache with lyrics (and any corrected artist/title)
+      if (sourceFileName) {
+        saveTrackCacheEntry(sourceFileName, {
+          lyrics: result.lyrics,
+          artist: songArtist.trim(),
+          title: result.title || songTitle.trim(),
+        });
+      }
     } catch (err: any) {
       showToast(err.message || 'No lyrics found');
     } finally {
