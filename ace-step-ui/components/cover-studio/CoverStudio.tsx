@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Upload, Music, Search, Play, Pause, Loader2, Guitar, Disc3, Zap, X, RefreshCw, Download, Trash2 } from 'lucide-react';
+import { Upload, Music, Search, Play, Pause, Loader2, Guitar, Disc3, Zap, X, RefreshCw, Download, Trash2, Volume2, VolumeX, Sliders, ChevronDown, RotateCcw } from 'lucide-react';
 import { lireekApi, Artist, AlbumPreset, LyricsSet } from '../../services/lyricStudioApi';
 import { generateApi, songsApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
@@ -202,7 +202,14 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
   const [coverNoiseStrength, setCoverNoiseStrength] = useState(() => restore<number>('coverNoiseStrength', 0));
   const [tempoScale, setTempoScale] = useState(() => restore<number>('tempoScale', 1.0));
   const [pitchShift, setPitchShift] = useState(() => restore<number>('pitchShift', 0));
-  const [vocalsOnly, setVocalsOnly] = useState(() => restore<boolean>('vocalsOnly', false));
+  // Advanced Mode (SuperSep stem separation)
+  const [advancedMode, setAdvancedMode] = useState(() => restore<boolean>('advancedMode', false));
+  const [sepLevel, setSepLevel] = useState(() => restore<string>('sepLevel', 'basic'));
+  const [superSepStems, setSuperSepStems] = useState<any[]>([]);
+  const [stemVolumes, setStemVolumes] = useState<Record<string, { volume: number; muted: boolean }>>({});
+  const [isSeparating, setIsSeparating] = useState(false);
+  const [sepProgress, setSepProgress] = useState(0);
+  const [sepStage, setSepStage] = useState('');
 
   // Generation
   const [isGenerating, setIsGenerating] = useState(false);
@@ -228,7 +235,8 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
   useEffect(() => { persist('coverNoiseStrength', coverNoiseStrength); }, [coverNoiseStrength]);
   useEffect(() => { persist('tempoScale', tempoScale); }, [tempoScale]);
   useEffect(() => { persist('pitchShift', pitchShift); }, [pitchShift]);
-  useEffect(() => { persist('vocalsOnly', vocalsOnly); }, [vocalsOnly]);
+  useEffect(() => { persist('advancedMode', advancedMode); }, [advancedMode]);
+  useEffect(() => { persist('sepLevel', sepLevel); }, [sepLevel]);
   useEffect(() => { persist('filenamePrepend', filenamePrepend); }, [filenamePrepend]);
 
   // Load artists on mount
@@ -449,70 +457,84 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
     await loadArtistPresets(artist);
   };
 
-  // ── Vocal extraction (stem split) ───────────────────────────────────
+  // ── SuperSep Advanced Mode ──────────────────────────────────────────
 
-  const extractVocals = (audioUrl: string): Promise<string> => {
-    const PYTHON_API = `http://${window.location.hostname}:8001`;
-    return new Promise(async (resolve, reject) => {
-      try {
-        // Send the audio URL as-is — Python's _resolve_audio_path handles
-        // both /audio/... paths and absolute filesystem paths.
-        const audioPath = audioUrl;
+  const PYTHON_API = `http://${window.location.hostname}:8001`;
 
-        const resp = await fetch(`${PYTHON_API}/v1/stems/separate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ audio_path: audioPath, mode: 'vocals' }),
-        });
+  const runSuperSep = async (audioUrl: string, level: string) => {
+    setIsSeparating(true);
+    setSepProgress(0);
+    setSepStage('Starting SuperSep...');
+    setSuperSepStems([]);
+    setStemVolumes({});
+    try {
+      const resp = await fetch(`${PYTHON_API}/v1/supersep/separate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ audio_path: audioUrl, level }),
+      });
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+        throw new Error(err.detail || `SuperSep failed: ${resp.status}`);
+      }
+      const { job_id } = await resp.json();
 
-        if (!resp.ok) {
-          const err = await resp.json().catch(() => ({ detail: resp.statusText }));
-          throw new Error(err.detail || `Stem split failed: ${resp.status}`);
-        }
-
-        const { job_id } = await resp.json();
-        console.log('[CoverStudio] Stem split job started:', job_id);
-
-        // Listen for SSE completion
-        const es = new EventSource(`${PYTHON_API}/v1/stems/${job_id}/progress`);
-        const timeout = setTimeout(() => {
-          es.close();
-          reject(new Error('Stem split timed out (5 min)'));
-        }, 300_000);
-
+      // SSE progress
+      return new Promise<any[]>((resolve, reject) => {
+        const es = new EventSource(`${PYTHON_API}/v1/supersep/${job_id}/progress`);
+        const timeout = setTimeout(() => { es.close(); reject(new Error('SuperSep timed out (10 min)')); }, 600_000);
         es.onmessage = (evt) => {
           try {
             const data = JSON.parse(evt.data);
             if (data.type === 'progress') {
-              setGenStage(`Extracting vocals: ${data.message || ''}`);
-              setGenProgress(Math.round((data.percent || 0) * 15)); // 0-15% of total
+              setSepProgress(Math.round((data.percent || 0) * 100));
+              setSepStage(data.message || `Stage ${data.stage}`);
             } else if (data.type === 'complete') {
               clearTimeout(timeout);
               es.close();
-              // Find the vocals stem
-              const vocalsStem = (data.stems || []).find((s: any) => s.stem_type === 'vocals');
-              if (vocalsStem?.file_path) {
-                // Return the actual filesystem path — generation needs a real file, not a URL
-                resolve(vocalsStem.file_path);
-              } else {
-                reject(new Error('No vocals stem found in output'));
-              }
+              const stems = data.stems || [];
+              setSuperSepStems(stems);
+              // Initialize volumes
+              const vols: Record<string, { volume: number; muted: boolean }> = {};
+              stems.forEach((s: any) => { vols[s.id] = { volume: 1.0, muted: false }; });
+              setStemVolumes(vols);
+              setSepProgress(100);
+              setSepStage(`Done — ${stems.length} stems`);
+              resolve(stems);
             } else if (data.type === 'error') {
               clearTimeout(timeout);
               es.close();
-              reject(new Error(data.message || 'Stem split error'));
+              reject(new Error(data.message || 'SuperSep error'));
             }
-          } catch { /* ignore parse errors */ }
+          } catch { /* ignore */ }
         };
-        es.onerror = () => {
-          clearTimeout(timeout);
-          es.close();
-          reject(new Error('SSE connection lost during stem split'));
-        };
-      } catch (err) {
-        reject(err);
-      }
+        es.onerror = () => { clearTimeout(timeout); es.close(); reject(new Error('SSE lost')); };
+      });
+    } catch (err: any) {
+      showToast(`SuperSep failed: ${err.message}`);
+      throw err;
+    } finally {
+      setIsSeparating(false);
+    }
+  };
+
+  const recombineStems = async (): Promise<string> => {
+    const stemsPayload = superSepStems.map(s => ({
+      path: s.file_path,
+      volume: stemVolumes[s.id]?.volume ?? 1.0,
+      muted: stemVolumes[s.id]?.muted ?? false,
+    }));
+    const resp = await fetch(`${PYTHON_API}/v1/supersep/recombine`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stems: stemsPayload }),
     });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({ detail: resp.statusText }));
+      throw new Error(err.detail || 'Recombine failed');
+    }
+    const { mixed_path } = await resp.json();
+    return mixed_path;
   };
 
   // ── Generation (mirrors Lyric Studio's useAudioGeneration flow) ────────
@@ -526,17 +548,16 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
     try {
       const selectedArtist = artists.find(a => a.id === selectedArtistId);
 
-      // 0) Vocals-only pre-processing: stem split to extract vocals
+      // 0) Advanced Mode: recombine stems with adjusted volumes
       let effectiveSourceUrl = sourceAudioUrl;
-      if (vocalsOnly && sourceAudioUrl) {
-        setGenStage('Extracting vocals...');
+      if (advancedMode && superSepStems.length > 0) {
+        setGenStage('Recombining stems...');
         setGenProgress(5);
         try {
-          effectiveSourceUrl = await extractVocals(sourceAudioUrl);
-          console.log('[CoverStudio] Using vocals-only source:', effectiveSourceUrl);
+          effectiveSourceUrl = await recombineStems();
+          console.log('[CoverStudio] Using recombined source:', effectiveSourceUrl);
         } catch (err: any) {
-          showToast(`Vocal extraction failed: ${err.message}. Using full mix.`);
-          // Fall back to full mix
+          showToast(`Stem recombine failed: ${err.message}. Using full mix.`);
         }
       }
 
@@ -843,6 +864,148 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
             </div>
           )}
 
+          {/* Advanced Mode (SuperSep) */}
+          {sourceAudioUrl && (
+            <div className="space-y-3">
+              {/* Toggle + Level Dropdown */}
+              <div className="flex items-center justify-between">
+                <div
+                  onClick={() => setAdvancedMode(v => !v)}
+                  className="flex items-center gap-2 cursor-pointer group select-none"
+                >
+                  <div className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${
+                    advancedMode ? 'bg-pink-500' : 'bg-zinc-300 dark:bg-zinc-700'
+                  }`}>
+                    <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${
+                      advancedMode ? 'translate-x-4' : 'translate-x-0'
+                    }`} />
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <Sliders className="w-4 h-4 text-pink-400" />
+                    <span className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 group-hover:text-pink-400 transition-colors">
+                      Advanced Mode
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {advancedMode && (
+                <div className="space-y-3">
+                  {/* Separation Level Dropdown */}
+                  <div className="flex items-center gap-2">
+                    <label className="text-[10px] font-medium text-zinc-500 uppercase whitespace-nowrap">Separation</label>
+                    <div className="relative flex-1">
+                      <select
+                        value={sepLevel}
+                        onChange={e => setSepLevel(e.target.value)}
+                        disabled={isSeparating}
+                        className="w-full appearance-none rounded-lg bg-black/5 dark:bg-white/5 border border-zinc-200 dark:border-zinc-700 px-3 py-1.5 pr-8 text-xs text-zinc-700 dark:text-zinc-300 cursor-pointer disabled:opacity-50 focus:ring-2 focus:ring-pink-500/50 focus:outline-none"
+                      >
+                        <option value="basic">Basic — 6 stems (fastest)</option>
+                        <option value="vocal-split">Vocal Split — 8 stems</option>
+                        <option value="full">Full — 14 stems</option>
+                        <option value="maximum">Maximum — 17 stems</option>
+                      </select>
+                      <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-zinc-400 pointer-events-none" />
+                    </div>
+                    <button
+                      onClick={() => sourceAudioUrl && runSuperSep(sourceAudioUrl, sepLevel)}
+                      disabled={isSeparating || !sourceAudioUrl}
+                      className="px-3 py-1.5 rounded-lg bg-pink-500 hover:bg-pink-600 disabled:bg-zinc-600 disabled:cursor-not-allowed text-white text-xs font-semibold transition-colors whitespace-nowrap"
+                    >
+                      {isSeparating ? 'Separating...' : 'Split'}
+                    </button>
+                  </div>
+
+                  {/* Progress Bar */}
+                  {isSeparating && (
+                    <div className="space-y-1">
+                      <div className="flex items-center gap-2 text-xs text-zinc-500">
+                        <Loader2 className="w-3 h-3 animate-spin text-pink-400" />
+                        <span className="truncate">{sepStage}</span>
+                        <span className="ml-auto font-mono text-pink-400">{sepProgress}%</span>
+                      </div>
+                      <div className="w-full h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-700 overflow-hidden">
+                        <div
+                          className="h-full rounded-full bg-gradient-to-r from-pink-500 to-purple-500 transition-all duration-300"
+                          style={{ width: `${sepProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Stem Mixer */}
+                  {superSepStems.length > 0 && !isSeparating && (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-medium text-zinc-500 uppercase">Stem Mixer ({superSepStems.length} stems)</span>
+                        <button
+                          onClick={() => {
+                            const vols: Record<string, { volume: number; muted: boolean }> = {};
+                            superSepStems.forEach((s: any) => { vols[s.id] = { volume: 1.0, muted: false }; });
+                            setStemVolumes(vols);
+                          }}
+                          className="text-[10px] text-zinc-400 hover:text-pink-400 transition-colors flex items-center gap-1"
+                        >
+                          <RotateCcw className="w-3 h-3" /> Reset
+                        </button>
+                      </div>
+
+                      {/* Group stems by category */}
+                      {(['vocals', 'instruments', 'drums', 'other'] as const).map(cat => {
+                        const catStems = superSepStems.filter((s: any) => s.category === cat);
+                        if (catStems.length === 0) return null;
+                        const catLabel = cat === 'vocals' ? '🎤 Vocals' : cat === 'instruments' ? '🎸 Instruments' : cat === 'drums' ? '🥁 Drums' : '✨ Other';
+                        return (
+                          <div key={cat} className="space-y-1">
+                            <div className="text-[9px] font-bold text-zinc-400 uppercase tracking-wider">{catLabel}</div>
+                            {catStems.map((stem: any) => {
+                              const sv = stemVolumes[stem.id] || { volume: 1.0, muted: false };
+                              return (
+                                <div key={stem.id} className="flex items-center gap-2 py-0.5">
+                                  <button
+                                    onClick={() => setStemVolumes(prev => ({ ...prev, [stem.id]: { ...sv, muted: !sv.muted } }))}
+                                    className={`flex-shrink-0 p-0.5 rounded transition-colors ${
+                                      sv.muted ? 'text-red-400 hover:text-red-300' : 'text-zinc-400 hover:text-zinc-300'
+                                    }`}
+                                    title={sv.muted ? 'Unmute' : 'Mute'}
+                                  >
+                                    {sv.muted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+                                  </button>
+                                  <span className={`text-[10px] w-24 truncate ${
+                                    sv.muted ? 'text-zinc-500 line-through' : 'text-zinc-300'
+                                  }`} title={stem.stem_name}>
+                                    {stem.stem_name}
+                                  </span>
+                                  <input
+                                    type="range"
+                                    min={0} max={200} step={1}
+                                    value={Math.round(sv.volume * 100)}
+                                    onChange={e => setStemVolumes(prev => ({
+                                      ...prev,
+                                      [stem.id]: { ...sv, volume: parseInt(e.target.value) / 100 }
+                                    }))}
+                                    disabled={sv.muted}
+                                    className="flex-1 h-1 accent-pink-500 disabled:opacity-30"
+                                  />
+                                  <span className={`text-[9px] font-mono w-8 text-right ${
+                                    sv.muted ? 'text-red-400' : sv.volume > 1 ? 'text-amber-400' : 'text-zinc-400'
+                                  }`}>
+                                    {sv.muted ? 'OFF' : `${Math.round(sv.volume * 100)}%`}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Song Details */}
           <div className="space-y-3">
             <div className="flex items-center gap-2 text-sm font-semibold text-zinc-700 dark:text-zinc-300">
@@ -1028,20 +1191,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
               helpText="How much of the original artist's sound character is preserved. Higher = more original artist, lower = more adapter artist"
             />
 
-            {/* Vocals Only Toggle */}
-            <div onClick={() => setVocalsOnly(v => !v)} className="flex items-center gap-3 py-2 px-1 cursor-pointer group select-none">
-              <div className={`relative w-9 h-5 rounded-full transition-colors duration-200 ${
-                vocalsOnly ? 'bg-pink-500' : 'bg-zinc-300 dark:bg-zinc-700'
-              }`}>
-                <div className={`absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform duration-200 ${
-                  vocalsOnly ? 'translate-x-4' : 'translate-x-0'
-                }`} />
-              </div>
-              <div>
-                <div className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 group-hover:text-pink-400 transition-colors">Vocals Only Source</div>
-                <div className="text-[9px] text-zinc-500">Extract vocals before generation — instrumentation comes from adapter style</div>
-              </div>
-            </div>
+
             <EditableSlider
               label="Tempo Scale"
               value={tempoScale}
