@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict
 from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from loguru import logger
 
 
@@ -211,3 +211,37 @@ def register_supersep_routes(
         except Exception as e:
             logger.error(f"[SuperSep] Recombine failed: {e}")
             raise HTTPException(500, f"Recombination failed: {e}")
+
+    @app.get("/v1/supersep/serve")
+    async def supersep_serve(path: str = ""):
+        """Serve a stem audio file from the supersep cache.
+
+        Only allows serving files from .cache/acestep/supersep/ for security.
+        """
+        if not path:
+            raise HTTPException(400, "path is required")
+
+        # Security: resolve and verify the file is inside the supersep cache
+        project_root = get_project_root()
+        allowed_base = os.path.normpath(
+            os.path.join(project_root, ".cache", "acestep", "supersep")
+        )
+        resolved = os.path.normpath(os.path.abspath(path))
+
+        if not resolved.startswith(allowed_base):
+            raise HTTPException(403, "Access denied: path outside supersep cache")
+
+        if not os.path.isfile(resolved):
+            raise HTTPException(404, f"File not found: {path}")
+
+        # Determine media type from extension
+        ext = os.path.splitext(resolved)[1].lower()
+        media_types = {
+            ".flac": "audio/flac",
+            ".wav": "audio/wav",
+            ".mp3": "audio/mpeg",
+            ".ogg": "audio/ogg",
+        }
+        media_type = media_types.get(ext, "application/octet-stream")
+
+        return FileResponse(resolved, media_type=media_type)

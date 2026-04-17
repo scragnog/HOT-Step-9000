@@ -211,9 +211,9 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
   const [sepProgress, setSepProgress] = useState(0);
   const [sepStage, setSepStage] = useState('');
   const [isRecombining, setIsRecombining] = useState(false);
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
-  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const stemAudiosRef = useRef<{ el: HTMLAudioElement; gain: GainNode; source: MediaElementAudioSourceNode }[]>([]);
 
   // Generation
   const [isGenerating, setIsGenerating] = useState(false);
@@ -242,6 +242,17 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
   useEffect(() => { persist('advancedMode', advancedMode); }, [advancedMode]);
   useEffect(() => { persist('sepLevel', sepLevel); }, [sepLevel]);
   useEffect(() => { persist('filenamePrepend', filenamePrepend); }, [filenamePrepend]);
+
+  // Sync stem volume/mute to Web Audio gain nodes in real-time
+  useEffect(() => {
+    if (!isPreviewPlaying) return;
+    stemAudiosRef.current.forEach(({ el, gain }, idx) => {
+      const stem = superSepStems[idx];
+      if (!stem) return;
+      const sv = stemVolumes[stem.id] || { volume: 1.0, muted: false };
+      gain.gain.value = sv.muted ? 0 : sv.volume;
+    });
+  }, [stemVolumes, isPreviewPlaying, superSepStems]);
 
   // Load artists on mount
   useEffect(() => {
@@ -1006,62 +1017,71 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
                     </div>
                   )}
 
-                  {/* Preview Playback */}
+                  {/* Real-time Preview Playback (multi-track) */}
                   {superSepStems.length > 0 && !isSeparating && (
                     <div className="flex items-center gap-2 pt-1">
                       <button
-                        onClick={async () => {
-                          // If already playing, stop
-                          if (isPreviewPlaying && previewAudioRef.current) {
-                            previewAudioRef.current.pause();
-                            previewAudioRef.current.currentTime = 0;
+                        onClick={() => {
+                          if (isPreviewPlaying) {
+                            // Stop all
+                            stemAudiosRef.current.forEach(({ el }) => {
+                              el.pause();
+                              el.currentTime = 0;
+                            });
                             setIsPreviewPlaying(false);
                             return;
                           }
-                          // Recombine and play
-                          setIsRecombining(true);
-                          try {
-                            const mixPath = await recombineStems();
-                            // Serve via Python API's audio file endpoint
-                            const url = `${PYTHON_API}/v1/audio?path=${encodeURIComponent(mixPath)}`;
-                            setPreviewUrl(url);
-                            // Play after URL is set
-                            setTimeout(() => {
-                              if (previewAudioRef.current) {
-                                previewAudioRef.current.load();
-                                previewAudioRef.current.play();
-                                setIsPreviewPlaying(true);
-                              }
-                            }, 100);
-                          } catch (err: any) {
-                            showToast(`Preview failed: ${err.message}`);
-                          } finally {
-                            setIsRecombining(false);
+                          // Create AudioContext if needed
+                          if (!audioCtxRef.current) {
+                            audioCtxRef.current = new AudioContext();
                           }
+                          const ctx = audioCtxRef.current;
+                          if (ctx.state === 'suspended') ctx.resume();
+
+                          // Tear down old nodes
+                          stemAudiosRef.current.forEach(({ el, source }) => {
+                            el.pause();
+                            try { source.disconnect(); } catch {}
+                          });
+                          stemAudiosRef.current = [];
+
+                          // Create one audio element per stem
+                          let endedCount = 0;
+                          const totalActive = superSepStems.filter((s: any) => !stemVolumes[s.id]?.muted).length;
+
+                          superSepStems.forEach((stem: any) => {
+                            const sv = stemVolumes[stem.id] || { volume: 1.0, muted: false };
+                            const url = `${PYTHON_API}/v1/supersep/serve?path=${encodeURIComponent(stem.file_path)}`;
+                            const el = new Audio(url);
+                            el.crossOrigin = 'anonymous';
+                            const source = ctx.createMediaElementSource(el);
+                            const gain = ctx.createGain();
+                            gain.gain.value = sv.muted ? 0 : sv.volume;
+                            source.connect(gain).connect(ctx.destination);
+                            el.onended = () => {
+                              endedCount++;
+                              if (endedCount >= totalActive) setIsPreviewPlaying(false);
+                            };
+                            stemAudiosRef.current.push({ el, gain, source });
+                          });
+
+                          // Play all simultaneously
+                          stemAudiosRef.current.forEach(({ el }) => el.play().catch(() => {}));
+                          setIsPreviewPlaying(true);
                         }}
-                        disabled={isRecombining}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                           isPreviewPlaying
                             ? 'bg-pink-500 text-white hover:bg-pink-600'
                             : 'bg-black/5 dark:bg-white/5 text-zinc-600 dark:text-zinc-300 hover:bg-pink-500/20 hover:text-pink-400'
-                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                        }`}
                       >
-                        {isRecombining ? (
-                          <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Mixing...</>
-                        ) : isPreviewPlaying ? (
+                        {isPreviewPlaying ? (
                           <><Pause className="w-3.5 h-3.5" /> Stop Preview</>
                         ) : (
                           <><Play className="w-3.5 h-3.5" /> Preview Mix</>
                         )}
                       </button>
-                      {previewUrl && (
-                        <audio
-                          ref={previewAudioRef}
-                          src={previewUrl}
-                          onEnded={() => setIsPreviewPlaying(false)}
-                          className="hidden"
-                        />
-                      )}
+                      <span className="text-[9px] text-zinc-500">Real-time multi-track playback</span>
                     </div>
                   )}
                 </div>
