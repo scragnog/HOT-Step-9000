@@ -423,6 +423,8 @@ router.get('/download', async (req: AuthenticatedRequest, res: Response) => {
 router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const sourceFilter = (req.query.source as string) || null;
+    // Build LIKE pattern for generation_params fallback (catches pre-fix covers)
+    const sourceJsonPattern = sourceFilter ? `%"source":"${sourceFilter}"%` : null;
     const result = await pool.query(
       `SELECT s.id, s.title, s.lyrics, s.style, s.caption, s.cover_url, s.audio_url,
               s.duration, s.bpm, s.key_scale, s.time_signature, s.tags, s.is_public,
@@ -432,15 +434,15 @@ router.get('/', authMiddleware, async (req: AuthenticatedRequest, res: Response)
        FROM songs s
        LEFT JOIN users u ON s.user_id = u.id
        WHERE s.user_id = $1 AND (
-         CASE WHEN $2::text IS NOT NULL THEN (
+         CASE WHEN $2 IS NOT NULL THEN (
            s.source = $2
-           OR s.generation_params::text LIKE '%"source":"' || $2 || '"%'
+           OR s.generation_params LIKE $3
          )
          ELSE (s.source IS NULL OR s.source = 'create')
          END
        )
        ORDER BY s.created_at DESC`,
-      [req.user!.id, sourceFilter]
+      [req.user!.id, sourceFilter, sourceJsonPattern]
     );
 
     const songs = await Promise.all(
