@@ -27,6 +27,7 @@ import { MasteringConsoleModal, MasteringParams as MasteringParamsType } from '.
 import { SearchPage } from './components/SearchPage';
 // V1 LyricStudio retired — V2 is the sole implementation
 import { LyricStudioV2 } from './components/lyric-studio/v2/LyricStudioV2';
+import { CoverStudio } from './components/cover-studio/CoverStudio';
 import { LlmSettingsModal } from './components/LlmSettingsModal';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import DebugPanel from './components/DebugPanel';
@@ -1934,7 +1935,8 @@ function AppContent() {
       const downloadSingleURL = (url: string, suffix: string) => {
         const gp = songToDownload.generationParams || (songToDownload as any).generationParams;
         const isLyricStudio = gp?.source === 'lyric-studio';
-        const artistPrefix = isLyricStudio && gp?.artistName ? `${gp.artistName} - ` : '';
+        const isCoverStudio = gp?.source === 'cover-studio';
+        const artistPrefix = (isLyricStudio || isCoverStudio) && gp?.artistName ? `${gp.artistName} - ` : '';
         const displayTitle = `${artistPrefix}${songToDownload.title || 'song'}`;
         const targetUrl = new URL('/api/songs/download', window.location.origin);
         targetUrl.searchParams.set('audioUrl', url);
@@ -1984,7 +1986,8 @@ function AppContent() {
     const downloadOneSong = (song: Song, url: string, suffix: string) => {
       const gp = song.generationParams || (song as any).generationParams;
       const isLyricStudio = gp?.source === 'lyric-studio';
-      const artistPrefix = isLyricStudio && gp?.artistName ? `${gp.artistName} - ` : '';
+      const isCoverStudio = gp?.source === 'cover-studio';
+      const artistPrefix = (isLyricStudio || isCoverStudio) && gp?.artistName ? `${gp.artistName} - ` : '';
       const displayTitle = `${artistPrefix}${song.title || 'song'}`;
       const targetUrl = new URL('/api/songs/download', window.location.origin);
       targetUrl.searchParams.set('audioUrl', url);
@@ -2179,6 +2182,9 @@ function AppContent() {
 
       case 'lyric-studio':
         return <LyricStudioV2 onPlaySong={playSong} isPlaying={isPlaying} currentSong={currentSong} currentTime={currentTime} />;
+
+      case 'cover-studio':
+        return <CoverStudio onPlaySong={playSong} isPlaying={isPlaying} currentSong={currentSong} currentTime={currentTime} />;
 
 
       case 'create':
