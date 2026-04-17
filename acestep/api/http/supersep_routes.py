@@ -165,15 +165,27 @@ def register_supersep_routes(
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
 
+    from pydantic import BaseModel
+    from typing import List as TList
+
+    class _StemInput(BaseModel):
+        path: str
+        volume: float = 1.0
+        muted: bool = False
+
+    class _RecombineBody(BaseModel):
+        stems: TList[_StemInput]
+
     @app.post("/v1/supersep/recombine")
-    async def supersep_recombine(request: Request):
+    def supersep_recombine(body: _RecombineBody):
         """Recombine stems with volume/mute settings.
 
-        Body: {stems: [{path, volume, muted}]}
         Returns: {mixed_path: "<absolute path to mixed file>"}
+
+        NOTE: sync def — FastAPI runs in thread pool automatically.
         """
-        body = await request.json()
-        stems = body.get("stems", [])
+        stems = [s.model_dump() for s in body.stems]
+        logger.info(f"[SuperSep] Recombine request: {len(stems)} stems")
 
         if not stems:
             raise HTTPException(400, "stems array is required")
@@ -185,7 +197,6 @@ def register_supersep_routes(
 
         try:
             from acestep.supersep_pipeline import recombine_stems
-            import asyncio
 
             project_root = get_project_root()
             mix_id = str(uuid4())
@@ -193,15 +204,14 @@ def register_supersep_routes(
                 project_root, ".cache", "acestep", "supersep", "mixes", f"{mix_id}.flac",
             )
 
-            # Run in thread — recombine_stems is CPU-bound (soundfile + numpy)
-            loop = asyncio.get_event_loop()
-            mixed_path = await loop.run_in_executor(
-                None, recombine_stems, stems, output_path
-            )
+            mixed_path = recombine_stems(stems, output_path)
+            logger.info(f"[SuperSep] Recombine complete: {mixed_path}")
             return {"mixed_path": mixed_path}
 
         except Exception as e:
             logger.error(f"[SuperSep] Recombine failed: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             raise HTTPException(500, f"Recombination failed: {e}")
 
     @app.get("/v1/supersep/serve")
