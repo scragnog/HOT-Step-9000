@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { Upload, Music, Search, Play, Pause, Loader2, AlertCircle, Guitar, Disc3, Zap, ChevronDown, ChevronRight, X } from 'lucide-react';
+import { Upload, Music, Search, Play, Pause, Loader2, Guitar, Disc3, Zap, X, RefreshCw } from 'lucide-react';
 import { lireekApi, Artist, AlbumPreset, LyricsSet } from '../../services/lyricStudioApi';
 import { generateApi } from '../../services/api';
 import { useAuth } from '../../context/AuthContext';
-import { Song, GenerationParams } from '../../types';
+import { Song } from '../../types';
 import { EditableSlider } from '../EditableSlider';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -28,52 +28,165 @@ interface CoverStudioProps {
   currentTime: number;
 }
 
+// ── Persistence helpers (localStorage) ──────────────────────────────────────
+
+const STORAGE_PREFIX = 'cover-studio-';
+
+function persist(key: string, value: any) {
+  try { localStorage.setItem(STORAGE_PREFIX + key, JSON.stringify(value)); } catch {}
+}
+
+function restore<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(STORAGE_PREFIX + key);
+    return raw !== null ? JSON.parse(raw) : fallback;
+  } catch { return fallback; }
+}
+
+// ── Helpers from useAudioGeneration (reused for param merging) ───────────────
+
+function readPersisted(key: string): any {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw !== null ? JSON.parse(raw) : undefined;
+  } catch { return undefined; }
+}
+
+function mergeCreatePanelSettings(params: Record<string, any>): void {
+  const map: [string, string][] = [
+    ['ace-inferenceSteps', 'inferenceSteps'],
+    ['ace-inferMethod', 'inferMethod'],
+    ['ace-scheduler', 'scheduler'],
+    ['ace-guidanceScale', 'guidanceScale'],
+    ['ace-shift', 'shift'],
+    ['ace-guidanceMode', 'guidanceMode'],
+    ['ace-audioFormat', 'audioFormat'],
+    ['ace-randomSeed', 'randomSeed'],
+    ['ace-enableNormalization', 'enableNormalization'],
+    ['ace-normalizationDb', 'normalizationDb'],
+    ['ace-vocalLanguage', 'vocalLanguage'],
+    ['ace-vocalGender', 'vocalGender'],
+    ['ace-lmTemperature', 'lmTemperature'],
+    ['ace-lmCfgScale', 'lmCfgScale'],
+    ['ace-lmTopK', 'lmTopK'],
+    ['ace-lmTopP', 'lmTopP'],
+    ['ace-lmModel', 'lmModel'],
+    ['ace-useCotMetas', 'useCotMetas'],
+    ['ace-useCotCaption', 'useCotCaption'],
+    ['ace-useCotLanguage', 'useCotLanguage'],
+    ['ace-vocoderModel', 'vocoderModel'],
+    ['ace-thinking', 'thinking'],
+  ];
+  for (const [storageKey, paramKey] of map) {
+    const val = readPersisted(storageKey);
+    if (val !== undefined && val !== null && val !== '') {
+      params[paramKey] = val;
+    }
+  }
+  params.getLrc = true;
+  params.generateCoverArt = localStorage.getItem('generate_cover_art') === 'true';
+}
+
+function getGlobalScaleOverride() {
+  try {
+    const enabled = JSON.parse(localStorage.getItem('ace-globalScaleOverride') || 'false');
+    const overallScale = JSON.parse(localStorage.getItem('ace-globalOverallScale') || '1.0');
+    const groupScales = JSON.parse(localStorage.getItem('ace-globalGroupScales') || 'null') || { self_attn: 1.0, cross_attn: 1.0, mlp: 1.0 };
+    return { enabled: !!enabled, overallScale, groupScales };
+  } catch {
+    return { enabled: false, overallScale: 1.0, groupScales: { self_attn: 1.0, cross_attn: 1.0, mlp: 1.0 } };
+  }
+}
+
+function applyTriggerWord(params: Record<string, any>, adapterPath: string): void {
+  const useFilename = localStorage.getItem('ace-globalTriggerUseFilename') === 'true';
+  const placement = (localStorage.getItem('ace-globalTriggerPlacement') as 'prepend' | 'append' | 'replace') || 'prepend';
+  if (!useFilename) return;
+  const fileName = adapterPath.replace(/\\/g, '/').split('/').pop() || '';
+  const triggerWord = fileName.replace(/\.safetensors$/i, '');
+  if (!triggerWord) return;
+  const current = ((params.style as string) || '').trim();
+  if (current.toLowerCase().includes(triggerWord.toLowerCase())) return;
+  if (placement === 'replace') {
+    params.style = triggerWord;
+  } else if (placement === 'append') {
+    params.style = current ? `${current}, ${triggerWord}` : triggerWord;
+  } else {
+    params.style = current ? `${triggerWord}, ${current}` : triggerWord;
+  }
+  console.log(`[CoverStudio] Trigger word '${triggerWord}' ${placement}ed → '${params.style}'`);
+}
+
 // ── Main Component ───────────────────────────────────────────────────────────
 
 export const CoverStudio: React.FC<CoverStudioProps> = ({
   onPlaySong,
   isPlaying,
   currentSong,
-  currentTime,
 }) => {
   const { token } = useAuth();
 
-  // Source audio state
+  // Source audio state (persisted)
   const [sourceFile, setSourceFile] = useState<File | null>(null);
-  const [sourceAudioUrl, setSourceAudioUrl] = useState('');
-  const [metadata, setMetadata] = useState<AudioMetadata | null>(null);
-  const [analysis, setAnalysis] = useState<AudioAnalysis | null>(null);
+  const [sourceFileName, setSourceFileName] = useState(() => restore<string>('sourceFileName', ''));
+  const [sourceAudioUrl, setSourceAudioUrl] = useState(() => restore<string>('sourceAudioUrl', ''));
+  const [metadata, setMetadata] = useState<AudioMetadata | null>(() => restore('metadata', null));
+  const [analysis, setAnalysis] = useState<AudioAnalysis | null>(() => restore('analysis', null));
   const [isUploading, setIsUploading] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // Song details state
-  const [songArtist, setSongArtist] = useState('');
-  const [songTitle, setSongTitle] = useState('');
-  const [lyrics, setLyrics] = useState('');
+  // Song details state (persisted)
+  const [songArtist, setSongArtist] = useState(() => restore<string>('songArtist', ''));
+  const [songTitle, setSongTitle] = useState(() => restore<string>('songTitle', ''));
+  const [lyrics, setLyrics] = useState(() => restore<string>('lyrics', ''));
   const [isSearchingLyrics, setIsSearchingLyrics] = useState(false);
 
-  // Target artist state
+  // Target artist state (persisted)
   const [artists, setArtists] = useState<Artist[]>([]);
-  const [selectedArtistId, setSelectedArtistId] = useState<number | null>(null);
-  const [selectedPreset, setSelectedPreset] = useState<AlbumPreset | null>(null);
+  const [selectedArtistId, setSelectedArtistId] = useState<number | null>(() => restore('selectedArtistId', null));
+  const [selectedPreset, setSelectedPreset] = useState<AlbumPreset | null>(() => restore('selectedPreset', null));
+  const [artistPresets, setArtistPresets] = useState<{ lsId: number; album: string; preset: AlbumPreset | null }[]>([]);
   const [isLoadingArtists, setIsLoadingArtists] = useState(false);
 
-  // Cover settings
-  const [audioCoverStrength, setAudioCoverStrength] = useState(0.5);
-  const [coverNoiseStrength, setCoverNoiseStrength] = useState(0);
-  const [tempoScale, setTempoScale] = useState(1.0);
-  const [pitchShift, setPitchShift] = useState(0);
+  // Cover settings (persisted)
+  const [audioCoverStrength, setAudioCoverStrength] = useState(() => restore<number>('audioCoverStrength', 0.5));
+  const [coverNoiseStrength, setCoverNoiseStrength] = useState(() => restore<number>('coverNoiseStrength', 0));
+  const [tempoScale, setTempoScale] = useState(() => restore<number>('tempoScale', 1.0));
+  const [pitchShift, setPitchShift] = useState(() => restore<number>('pitchShift', 0));
 
   // Generation
   const [isGenerating, setIsGenerating] = useState(false);
   const [toast, setToast] = useState('');
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const [activeJobId, setActiveJobId] = useState<string | null>(null);
+
+  // Persist state changes
+  useEffect(() => { persist('sourceFileName', sourceFileName); }, [sourceFileName]);
+  useEffect(() => { persist('sourceAudioUrl', sourceAudioUrl); }, [sourceAudioUrl]);
+  useEffect(() => { persist('metadata', metadata); }, [metadata]);
+  useEffect(() => { persist('analysis', analysis); }, [analysis]);
+  useEffect(() => { persist('songArtist', songArtist); }, [songArtist]);
+  useEffect(() => { persist('songTitle', songTitle); }, [songTitle]);
+  useEffect(() => { persist('lyrics', lyrics); }, [lyrics]);
+  useEffect(() => { persist('selectedArtistId', selectedArtistId); }, [selectedArtistId]);
+  useEffect(() => { persist('selectedPreset', selectedPreset); }, [selectedPreset]);
+  useEffect(() => { persist('audioCoverStrength', audioCoverStrength); }, [audioCoverStrength]);
+  useEffect(() => { persist('coverNoiseStrength', coverNoiseStrength); }, [coverNoiseStrength]);
+  useEffect(() => { persist('tempoScale', tempoScale); }, [tempoScale]);
+  useEffect(() => { persist('pitchShift', pitchShift); }, [pitchShift]);
 
   // Load artists on mount
   useEffect(() => {
     setIsLoadingArtists(true);
     lireekApi.listArtists()
-      .then(res => setArtists(res.artists))
+      .then(res => {
+        setArtists(res.artists);
+        // Re-select previously selected artist's preset
+        if (selectedArtistId && !selectedPreset) {
+          const artist = res.artists.find(a => a.id === selectedArtistId);
+          if (artist) loadArtistPresets(artist);
+        }
+      })
       .catch(() => showToast('Failed to load artists'))
       .finally(() => setIsLoadingArtists(false));
   }, []);
@@ -86,19 +199,16 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
   // ── File Upload + Metadata + Analysis ──────────────────────────────────
 
   const handleFileSelected = async (file: File) => {
-    if (!token) {
-      showToast('Please sign in first');
-      return;
-    }
+    if (!token) { showToast('Please sign in first'); return; }
 
     setSourceFile(file);
+    setSourceFileName(file.name);
     setIsUploading(true);
 
     try {
       // 1. Extract metadata
       const metaFormData = new FormData();
       metaFormData.append('audio', file);
-
       const metaRes = await fetch('/api/analyze/metadata', { method: 'POST', body: metaFormData });
       if (metaRes.ok) {
         const meta: AudioMetadata = await metaRes.json();
@@ -129,11 +239,11 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
         body: JSON.stringify({ audioUrl }),
       });
       if (analyzeRes.ok) {
-        const analysisData = await analyzeRes.json();
+        const data = await analyzeRes.json();
         setAnalysis({
-          bpm: analysisData.bpm || 120,
-          key: `${analysisData.key || 'C'} ${analysisData.scale || 'major'}`,
-          scale: analysisData.scale,
+          bpm: data.bpm || 120,
+          key: `${data.key || 'C'} ${data.scale || 'major'}`,
+          scale: data.scale,
         });
       }
     } catch (err: any) {
@@ -147,10 +257,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
   // ── Genius Lyrics Search ───────────────────────────────────────────────
 
   const handleSearchLyrics = async () => {
-    if (!songArtist.trim() || !songTitle.trim()) {
-      showToast('Enter artist and title first');
-      return;
-    }
+    if (!songArtist.trim() || !songTitle.trim()) { showToast('Enter artist and title first'); return; }
     setIsSearchingLyrics(true);
     try {
       const result = await lireekApi.searchSongLyrics(songArtist.trim(), songTitle.trim());
@@ -164,27 +271,47 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
     }
   };
 
-  // ── Artist Selection ───────────────────────────────────────────────────
+  // ── Artist Selection — loads ALL presets, picks the one with an adapter ─
 
-  const handleSelectArtist = async (artist: Artist) => {
-    setSelectedArtistId(artist.id);
+  const loadArtistPresets = async (artist: Artist) => {
     try {
       const { lyrics_sets } = await lireekApi.listLyricsSets(artist.id);
-      if (lyrics_sets.length > 0) {
-        const { preset } = await lireekApi.getPreset(lyrics_sets[0].id);
-        setSelectedPreset(preset);
-        if (preset?.audio_cover_strength != null) {
-          setAudioCoverStrength(preset.audio_cover_strength);
+      const presetResults: { lsId: number; album: string; preset: AlbumPreset | null }[] = [];
+
+      for (const ls of lyrics_sets) {
+        try {
+          const { preset } = await lireekApi.getPreset(ls.id);
+          presetResults.push({ lsId: ls.id, album: ls.album || ls.id.toString(), preset });
+        } catch {
+          presetResults.push({ lsId: ls.id, album: ls.album || ls.id.toString(), preset: null });
         }
+      }
+      setArtistPresets(presetResults);
+
+      // Pick the first preset that has an adapter_path
+      const withAdapter = presetResults.find(p => p.preset?.adapter_path);
+      if (withAdapter?.preset) {
+        setSelectedPreset(withAdapter.preset);
+        if (withAdapter.preset.audio_cover_strength != null) {
+          setAudioCoverStrength(withAdapter.preset.audio_cover_strength);
+        }
+      } else if (presetResults.length > 0 && presetResults[0].preset) {
+        setSelectedPreset(presetResults[0].preset);
       } else {
         setSelectedPreset(null);
       }
     } catch {
       setSelectedPreset(null);
+      setArtistPresets([]);
     }
   };
 
-  // ── Generation ─────────────────────────────────────────────────────────
+  const handleSelectArtist = async (artist: Artist) => {
+    setSelectedArtistId(artist.id);
+    await loadArtistPresets(artist);
+  };
+
+  // ── Generation (mirrors Lyric Studio's useAudioGeneration flow) ────────
 
   const handleGenerate = async () => {
     if (!token) { showToast('Please sign in first'); return; }
@@ -195,11 +322,11 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
     try {
       const selectedArtist = artists.find(a => a.id === selectedArtistId);
 
-      const params: any = {
+      // 1) Build base params
+      const params: Record<string, any> = {
         customMode: true,
         lyrics,
-        prompt: selectedArtist?.name || songArtist || 'cover',
-        style: selectedArtist?.name || '',
+        style: selectedArtist?.name || songArtist || '',
         title: `${songTitle || 'Cover'} (${selectedArtist?.name || 'Cover'})`,
         taskType: 'cover',
         sourceAudioUrl,
@@ -209,47 +336,142 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
         keyScale: analysis?.key || 'C major',
         duration: 0,
         instrumental: false,
-        vocalLanguage: 'en',
-        inferenceSteps: 27,
-        guidanceScale: 15,
-        batchSize: 1,
-        randomSeed: true,
-        seed: -1,
-        thinking: false,
-        audioFormat: 'flac',
-        inferMethod: 'euler',
-        scheduler: 'linear',
-        shift: 3.0,
-        lmTemperature: 0.9,
-        lmCfgScale: 1.0,
-        lmTopK: 250,
-        lmTopP: 0.95,
-        lmNegativePrompt: '',
-        loraPath: selectedPreset?.adapter_path,
-        loraScale: selectedPreset?.adapter_scale || 1.0,
-        referenceAudioUrl: selectedPreset?.reference_track_path,
         coverArtSubject: songTitle || 'cover',
         source: 'cover-studio',
+        artistName: selectedArtist?.name || songArtist || '',
       };
 
-      // Apply tempo/pitch if changed from default
+      // Apply tempo/pitch if changed
       if (tempoScale !== 1.0) params.tempoScale = tempoScale;
       if (pitchShift !== 0) params.pitchShift = pitchShift;
 
-      const job = await generateApi.startGeneration(params, token);
-      showToast(`Cover generation started! Job: ${job.jobId}`);
-      setRefreshTrigger(prev => prev + 1);
+      // 2) Merge persisted CreatePanel settings (scheduler, steps, guidance, etc.)
+      mergeCreatePanelSettings(params);
+
+      // 3) Load adapter from album preset (matches Lyric Studio flow exactly)
+      if (selectedPreset?.adapter_path) {
+        const scaleOverride = getGlobalScaleOverride();
+        const effectiveScale = scaleOverride.enabled ? scaleOverride.overallScale : (selectedPreset.adapter_scale ?? 1.0);
+        const effectiveGroupScales = scaleOverride.enabled ? scaleOverride.groupScales : selectedPreset.adapter_group_scales;
+
+        try {
+          const loraStatus = await generateApi.getLoraStatus(token);
+          const existingSlot = loraStatus?.advanced?.slots?.find(
+            (s: any) => s.path === selectedPreset.adapter_path
+          );
+
+          if (existingSlot) {
+            console.log('[CoverStudio] Adapter already loaded, skipping reload');
+            params.loraLoaded = true;
+            params.loraPath = selectedPreset.adapter_path;
+            params.loraScale = effectiveScale;
+            if (effectiveGroupScales) {
+              try {
+                await generateApi.setSlotGroupScales({
+                  slot: existingSlot.slot,
+                  ...effectiveGroupScales,
+                }, token);
+              } catch (gsErr) {
+                console.warn('[CoverStudio] Failed to apply group scales:', gsErr);
+              }
+            }
+          } else {
+            if (loraStatus?.advanced?.slots && loraStatus.advanced.slots.length > 0) {
+              showToast('Switching adapter...');
+              await generateApi.unloadLora(token);
+            } else {
+              showToast('Loading adapter...');
+            }
+            const loadPayload: any = {
+              lora_path: selectedPreset.adapter_path,
+              slot: 0,
+              scale: effectiveScale,
+              ...(effectiveGroupScales ? { group_scales: effectiveGroupScales } : {}),
+            };
+            console.log('[CoverStudio] Loading adapter:', JSON.stringify(loadPayload));
+            await generateApi.loadLora(loadPayload, token);
+            params.loraLoaded = true;
+            params.loraPath = selectedPreset.adapter_path;
+            params.loraScale = effectiveScale;
+          }
+        } catch (loadErr) {
+          console.warn('[CoverStudio] Adapter load failed, continuing without:', loadErr);
+          showToast('Warning: adapter failed to load');
+        }
+
+        // 4) Apply trigger word from adapter filename
+        applyTriggerWord(params, selectedPreset.adapter_path);
+      }
+
+      // 5) Reference track + matchering (matches Lyric Studio flow)
+      if (selectedPreset?.reference_track_path) {
+        params.referenceAudioUrl = selectedPreset.reference_track_path;
+        params.audioCoverStrength = selectedPreset.audio_cover_strength ?? audioCoverStrength;
+        params.autoMaster = true;
+        params.masteringParams = { mode: 'matchering', reference_file: selectedPreset.reference_track_path };
+      }
+
+      // 6) Start generation
+      console.log('[CoverStudio] Starting generation:', JSON.stringify({
+        title: params.title,
+        taskType: params.taskType,
+        source: params.source,
+        loraPath: params.loraPath,
+        referenceAudioUrl: params.referenceAudioUrl,
+        matchering: !!params.masteringParams,
+      }));
+      const res = await generateApi.startGeneration(params as any, token);
+      const jobId = res.jobId || (res as any).job_id;
+      showToast(`Cover generation started! Job: ${jobId}`);
+      setActiveJobId(jobId);
+
+      // 7) Poll for completion
+      if (jobId) {
+        pollJob(jobId);
+      }
     } catch (err: any) {
       showToast(`Generation failed: ${err.message}`);
-    } finally {
       setIsGenerating(false);
     }
+  };
+
+  // ── Job polling ────────────────────────────────────────────────────────
+
+  const pollJob = (jobId: string) => {
+    if (!token) return;
+    const interval = setInterval(async () => {
+      try {
+        const status = await generateApi.getStatus(jobId, token!);
+        if (status.status === 'succeeded') {
+          clearInterval(interval);
+          setIsGenerating(false);
+          setActiveJobId(null);
+          setRefreshTrigger(prev => prev + 1);
+          showToast('Cover generated successfully!');
+        } else if (status.status === 'failed') {
+          clearInterval(interval);
+          setIsGenerating(false);
+          setActiveJobId(null);
+          showToast(`Generation failed: ${status.error || 'Unknown error'}`);
+        }
+      } catch {
+        // Transient poll error — keep polling
+      }
+    }, 3000);
+
+    // Safety timeout: 30 minutes
+    setTimeout(() => {
+      clearInterval(interval);
+      if (isGenerating) {
+        setIsGenerating(false);
+        setActiveJobId(null);
+      }
+    }, 1_800_000);
   };
 
   // ── Drag & Drop ────────────────────────────────────────────────────────
 
   const [isDragging, setIsDragging] = useState(false);
-  const dropRef = useRef<HTMLDivElement>(null);
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -261,11 +483,6 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
       showToast('Unsupported file format');
     }
   }, [token]);
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-  }, []);
 
   const selectedArtist = artists.find(a => a.id === selectedArtistId);
   const canGenerate = sourceAudioUrl && lyrics.trim() && !isGenerating;
@@ -301,15 +518,14 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
             </div>
 
             <div
-              ref={dropRef}
               onDrop={handleDrop}
-              onDragOver={handleDragOver}
+              onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
               onDragLeave={() => setIsDragging(false)}
               className={`
                 relative rounded-xl border-2 border-dashed transition-all duration-200 cursor-pointer
                 ${isDragging
                   ? 'border-cyan-400 bg-cyan-500/10'
-                  : sourceFile
+                  : (sourceFileName || sourceAudioUrl)
                     ? 'border-cyan-500/30 bg-cyan-500/5'
                     : 'border-zinc-300 dark:border-white/10 hover:border-cyan-400 hover:bg-cyan-500/5'
                 }
@@ -330,12 +546,16 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
                     <Loader2 className="w-8 h-8 text-cyan-400 animate-spin" />
                     <span className="text-xs text-zinc-500">Uploading & analyzing...</span>
                   </div>
-                ) : sourceFile ? (
+                ) : (sourceFileName || sourceAudioUrl) ? (
                   <div className="flex flex-col items-center gap-2">
                     <Music className="w-8 h-8 text-cyan-400" />
-                    <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate max-w-full">{sourceFile.name}</span>
+                    <span className="text-xs font-medium text-zinc-700 dark:text-zinc-300 truncate max-w-full">
+                      {sourceFileName || 'Source loaded'}
+                    </span>
                     {metadata?.duration && (
-                      <span className="text-[10px] text-zinc-500">{Math.floor(metadata.duration / 60)}:{String(Math.floor(metadata.duration % 60)).padStart(2, '0')}</span>
+                      <span className="text-[10px] text-zinc-500">
+                        {Math.floor(metadata.duration / 60)}:{String(Math.floor(metadata.duration % 60)).padStart(2, '0')}
+                      </span>
                     )}
                   </div>
                 ) : (
@@ -382,7 +602,6 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
               <Search className="w-4 h-4 text-purple-400" />
               Song Details
             </div>
-
             <div className="space-y-2">
               <div>
                 <label className="text-[10px] font-medium text-zinc-500 uppercase">Artist</label>
@@ -440,7 +659,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
         </div>
 
         {/* ── RIGHT PANEL: Artist Selector + Settings + Generate ── */}
-        <div className="w-[320px] flex-shrink-0 overflow-y-auto scrollbar-hide p-4 space-y-4">
+        <div className="w-[640px] flex-shrink-0 overflow-y-auto scrollbar-hide p-4 space-y-4">
 
           {/* Target Artist */}
           <div className="space-y-3">
@@ -459,7 +678,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
                 <p className="text-[10px] text-zinc-400 mt-1">Add artists in Lyric Studio first.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-3 gap-2 max-h-[200px] overflow-y-auto scrollbar-hide">
+              <div className="grid grid-cols-5 gap-2 max-h-[240px] overflow-y-auto scrollbar-hide">
                 {artists.map(artist => (
                   <button
                     key={artist.id}
@@ -508,7 +727,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
                       {selectedPreset.reference_track_path.split(/[\\/]/).pop()}
                     </span>
                     <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-900/30 text-amber-400">
-                      REF
+                      REF + MATCHERING
                     </span>
                   </div>
                 )}
@@ -583,7 +802,7 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
           </button>
 
           {/* Readiness checklist */}
-          {!canGenerate && (
+          {!canGenerate && !isGenerating && (
             <div className="space-y-1.5">
               {!sourceAudioUrl && (
                 <div className="flex items-center gap-2 text-[10px] text-zinc-500">
@@ -595,12 +814,6 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
                 <div className="flex items-center gap-2 text-[10px] text-zinc-500">
                   <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
                   Add lyrics (search Genius or paste)
-                </div>
-              )}
-              {sourceAudioUrl && lyrics.trim() && (
-                <div className="flex items-center gap-2 text-[10px] text-emerald-400">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-                  Ready to generate
                 </div>
               )}
             </div>
@@ -647,19 +860,14 @@ const RecentCovers: React.FC<RecentCoversProps> = ({ onPlaySong, currentSong, is
     if (!token) return;
     setLoading(true);
 
-    fetch('/api/songs/mine', {
+    // Use source=cover-studio query param to get only cover studio songs
+    fetch('/api/songs?source=cover-studio', {
       headers: { Authorization: `Bearer ${token}` },
     })
       .then(res => res.json())
       .then(data => {
         const allSongs = data.songs || [];
         const coverSongs = allSongs
-          .filter((s: any) => {
-            const gp = typeof s.generationParams === 'string'
-              ? JSON.parse(s.generationParams)
-              : s.generationParams;
-            return gp?.source === 'cover-studio';
-          })
           .map((s: any): Song => ({
             id: s.id,
             title: s.title || 'Untitled Cover',
@@ -677,6 +885,9 @@ const RecentCovers: React.FC<RecentCoversProps> = ({ onPlaySong, currentSong, is
             viewCount: s.view_count || 0,
             userId: s.user_id,
             creator: s.creator,
+            generationParams: typeof s.generation_params === 'string'
+              ? JSON.parse(s.generation_params || '{}')
+              : (s.generation_params || {}),
           }))
           .sort((a: Song, b: Song) => b.createdAt.getTime() - a.createdAt.getTime())
           .slice(0, 20);
