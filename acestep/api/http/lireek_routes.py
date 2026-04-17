@@ -361,6 +361,40 @@ def register_lireek_routes(app: FastAPI) -> None:
             "songs_fetched": len(result.songs),
         }
 
+    # ── Single-Song Lyrics Search (for Cover Studio) ─────────────────────
+
+    class SearchSongLyricsRequest(BaseModel):
+        artist: str = Field(..., description="Artist name")
+        title: str = Field(..., description="Song title")
+
+    @app.post("/api/lireek/search-song-lyrics")
+    async def search_song_lyrics_endpoint(req: SearchSongLyricsRequest):
+        """Search Genius for a single song's lyrics by artist + title."""
+        import asyncio
+        from acestep.api.lireek.genius_service import search_song_lyrics
+
+        artist = req.artist.strip()
+        title = req.title.strip()
+        if not artist or not title:
+            raise HTTPException(status_code=400, detail="Both 'artist' and 'title' are required")
+
+        logger.info("search-song-lyrics: artist=%r, title=%r", artist, title)
+
+        try:
+            result = await asyncio.to_thread(search_song_lyrics, artist, title)
+        except ValueError as e:
+            logger.warning("search_song_lyrics ValueError: %s", e)
+            raise HTTPException(status_code=404, detail=str(e))
+        except Exception as e:
+            logger.error("Genius song search failed: %s", traceback.format_exc())
+            raise HTTPException(status_code=500, detail=str(e))
+
+        if result is None:
+            raise HTTPException(status_code=404, detail=f"No lyrics found for '{title}' by '{artist}'")
+
+        logger.info("search-song-lyrics found: title=%r, lyrics_len=%d", result.title, len(result.lyrics))
+        return {"title": result.title, "lyrics": result.lyrics}
+
     # ── Profiles ──────────────────────────────────────────────────────────
 
     @app.get("/api/lireek/profiles")

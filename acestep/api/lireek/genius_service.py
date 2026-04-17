@@ -496,3 +496,40 @@ def get_album_cover_art(artist_name: str, album_name: str) -> Optional[str]:
     except Exception as e:
         logger.warning("Failed to fetch album cover for '%s - %s': %s", artist_name, album_name, e)
         return None
+
+
+def search_song_lyrics(artist_name: str, title: str) -> Optional[SongLyrics]:
+    """Search Genius for a specific song by artist + title and return its lyrics."""
+    query = f"{title} {artist_name}"
+    hits = _api_search(query, per_page=10)
+
+    artist_lower = artist_name.lower()
+    title_lower = title.lower()
+
+    # Prefer exact artist + title match
+    best_url = None
+    best_title = None
+    for hit in hits:
+        result = hit.get("result", {})
+        hit_artist = result.get("primary_artist", {}).get("name", "").lower()
+        hit_title = result.get("title", "").lower()
+        url = result.get("url")
+        if not url:
+            continue
+        if hit_artist == artist_lower and title_lower in hit_title:
+            best_url = url
+            best_title = result.get("title", title)
+            break
+        if best_url is None:
+            best_url = url
+            best_title = result.get("title", title)
+
+    if not best_url:
+        return None
+
+    raw_lyrics = _scrape_lyrics(best_url)
+    if not raw_lyrics:
+        return None
+
+    return SongLyrics(title=best_title or title, lyrics=_clean_lyrics(raw_lyrics))
+

@@ -1,5 +1,6 @@
 /**
  * Audio analysis route — runs Essentia CLI to extract BPM and key from source audio.
+ * Also provides metadata extraction via music-metadata (ID3/Vorbis tags).
  */
 import { Router, Request, Response } from 'express';
 import path from 'path';
@@ -7,6 +8,8 @@ import { fileURLToPath } from 'url';
 import { execFile } from 'child_process';
 import { promises as fs } from 'fs';
 import os from 'os';
+import multer from 'multer';
+import { parseBuffer } from 'music-metadata';
 
 const router = Router();
 
@@ -137,6 +140,46 @@ router.post('/', async (req: Request, res: Response) => {
         console.error('[analyze] Essentia failed:', err.message || err);
         return res.status(500).json({ error: `Analysis failed: ${err.message || 'Unknown error'}` });
     }
+});
+
+// ── Metadata extraction (music-metadata) ─────────────────────────────────────
+
+const metadataUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 200 * 1024 * 1024 }, // 200MB
+});
+
+/**
+ * POST /api/analyze/metadata — extract ID3/Vorbis/FLAC tags from uploaded audio.
+ * Returns { artist, title, album, duration, sampleRate, bitrate }.
+ */
+router.post('/metadata', metadataUpload.single('audio'), async (req: Request, res: Response) => {
+  try {
+    if (!req.file) {
+      res.status(400).json({ error: 'No file uploaded' });
+      return;
+    }
+    const metadata = await parseBuffer(
+      req.file.buffer,
+      { mimeType: req.file.mimetype as any },
+      { duration: true, skipCovers: true },
+    );
+    console.log(
+      `[analyze/metadata] Extracted: artist="${metadata.common.artist || ''}", ` +
+      `title="${metadata.common.title || ''}", album="${metadata.common.album || ''}"`,
+    );
+    res.json({
+      artist: metadata.common.artist || '',
+      title: metadata.common.title || '',
+      album: metadata.common.album || '',
+      duration: metadata.format.duration || null,
+      sampleRate: metadata.format.sampleRate || null,
+      bitrate: metadata.format.bitrate || null,
+    });
+  } catch (err: any) {
+    console.error('[analyze/metadata] Failed:', err.message);
+    res.status(500).json({ error: 'Failed to extract metadata', details: err.message });
+  }
 });
 
 export default router;
