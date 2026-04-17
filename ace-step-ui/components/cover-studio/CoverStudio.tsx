@@ -455,12 +455,9 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
     const PYTHON_API = `http://${window.location.hostname}:8001`;
     return new Promise(async (resolve, reject) => {
       try {
-        // Resolve the audio URL to a filesystem path
-        let audioPath = audioUrl;
-        if (audioUrl.startsWith('/audio/')) {
-          // Let the Python API resolve it via its own URL handling
-          audioPath = `http://${window.location.hostname}:3001${audioUrl}`;
-        }
+        // Send the audio URL as-is — Python's _resolve_audio_path handles
+        // both /audio/... paths and absolute filesystem paths.
+        const audioPath = audioUrl;
 
         const resp = await fetch(`${PYTHON_API}/v1/stems/separate`, {
           method: 'POST',
