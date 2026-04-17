@@ -77,24 +77,20 @@ def register_supersep_routes(
             }
 
         def _run():
-            # ── VRAM offloading: move ACE-Step models to CPU ──
-            handler = getattr(app.state, "handler", None)
-            offloaded_parts = []
-            if handler and getattr(handler, "_models_loaded", False):
+            logger.info(f"[SuperSep] Job {job_id} starting (level={level})")
+
+            # ── Lightweight VRAM prep ──
+            # Don't move ACE-Step models to CPU — that can hang on large models
+            # with merged LoRA adapters. Just clear the cache and let
+            # audio-separator manage its own GPU memory.
+            try:
                 import torch
-                try:
-                    for attr_name in ("model", "vae", "tokenizer"):
-                        mod = getattr(handler, attr_name, None)
-                        if mod is not None and hasattr(mod, "to"):
-                            dev = next(mod.parameters()).device if hasattr(mod, "parameters") else None
-                            if dev is not None and dev.type != "cpu":
-                                logger.info(f"[SuperSep] Offloading {attr_name} from {dev} → cpu")
-                                mod.to("cpu")
-                                offloaded_parts.append((attr_name, mod, dev))
+                if torch.cuda.is_available():
                     torch.cuda.empty_cache()
-                    logger.info("[SuperSep] ACE-Step models offloaded to CPU")
-                except Exception as e:
-                    logger.warning(f"[SuperSep] VRAM offload failed (non-fatal): {e}")
+                    free_mb = torch.cuda.mem_get_info()[0] / (1024**2)
+                    logger.info(f"[SuperSep] CUDA cache cleared, {free_mb:.0f} MB free VRAM")
+            except Exception as e:
+                logger.warning(f"[SuperSep] CUDA cache clear failed (non-fatal): {e}")
 
             try:
                 from acestep.supersep_pipeline import run_supersep
@@ -126,22 +122,13 @@ def register_supersep_routes(
 
             except Exception as e:
                 logger.error(f"[SuperSep] Job {job_id} failed: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
                 with _lock:
                     _jobs[job_id]["status"] = "failed"
                     _jobs[job_id]["error"] = str(e)
                     _jobs[job_id]["message"] = f"Error: {e}"
-            finally:
-                # ── Restore ACE-Step models to GPU ──
-                if offloaded_parts:
-                    import torch
-                    for attr_name, mod, orig_dev in offloaded_parts:
-                        try:
-                            logger.info(f"[SuperSep] Restoring {attr_name} → {orig_dev}")
-                            mod.to(orig_dev)
-                        except Exception as e:
-                            logger.warning(f"[SuperSep] Failed to restore {attr_name}: {e}")
-                    torch.cuda.empty_cache()
-                    logger.info("[SuperSep] ACE-Step models restored to GPU")
+
 
         _executor.submit(_run)
         return {"job_id": job_id, "status": "running"}
