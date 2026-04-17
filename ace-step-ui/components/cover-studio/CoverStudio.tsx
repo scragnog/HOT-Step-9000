@@ -400,17 +400,21 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
       }
       setArtistPresets(presetResults);
 
-      // Fetch caption from the first lyrics set that has generations
+      // Fetch caption from the first lyrics set that has generations with a caption
       let foundCaption = '';
       for (const ls of lyrics_sets) {
         try {
           const { generations } = await lireekApi.listGenerations(undefined, ls.id);
-          const withCaption = generations.find(g => g.caption);
+          console.log(`[CoverStudio] Lyrics set ${ls.id} (${ls.album}): ${generations.length} generations`);
+          const withCaption = generations.find(g => g.caption && g.caption.trim().length > 0);
           if (withCaption?.caption) {
             foundCaption = withCaption.caption;
+            console.log(`[CoverStudio] Found caption from ${ls.album}:`, foundCaption);
             break;
           }
-        } catch { /* ignore */ }
+        } catch (err) {
+          console.warn(`[CoverStudio] Failed to fetch generations for lyrics set ${ls.id}:`, err);
+        }
       }
       setArtistCaption(foundCaption);
 
