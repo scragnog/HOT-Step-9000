@@ -335,6 +335,10 @@ export const lireekApi = {
       method: 'PATCH',
       body: { job_id: jobId, audio_url: audioUrl, cover_url: coverUrl || null },
     }),
+
+  /** Search Genius for a single song's lyrics (Cover Studio) */
+  searchSongLyrics: (artist: string, title: string): Promise<{ title: string; lyrics: string }> =>
+    api('/api/lireek/search-song-lyrics', { method: 'POST', body: { artist, title }, timeoutMs: 30_000 }),
 };
 
 // ── Recent Song type ──────────────────────────────────────────────────────
