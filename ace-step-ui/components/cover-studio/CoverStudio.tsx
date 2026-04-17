@@ -210,6 +210,10 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
   const [isSeparating, setIsSeparating] = useState(false);
   const [sepProgress, setSepProgress] = useState(0);
   const [sepStage, setSepStage] = useState('');
+  const [isRecombining, setIsRecombining] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
+  const previewAudioRef = useRef<HTMLAudioElement | null>(null);
 
   // Generation
   const [isGenerating, setIsGenerating] = useState(false);
@@ -999,6 +1003,65 @@ export const CoverStudio: React.FC<CoverStudioProps> = ({
                           </div>
                         );
                       })}
+                    </div>
+                  )}
+
+                  {/* Preview Playback */}
+                  {superSepStems.length > 0 && !isSeparating && (
+                    <div className="flex items-center gap-2 pt-1">
+                      <button
+                        onClick={async () => {
+                          // If already playing, stop
+                          if (isPreviewPlaying && previewAudioRef.current) {
+                            previewAudioRef.current.pause();
+                            previewAudioRef.current.currentTime = 0;
+                            setIsPreviewPlaying(false);
+                            return;
+                          }
+                          // Recombine and play
+                          setIsRecombining(true);
+                          try {
+                            const mixPath = await recombineStems();
+                            // Serve via Python API's audio file endpoint
+                            const url = `${PYTHON_API}/v1/audio?path=${encodeURIComponent(mixPath)}`;
+                            setPreviewUrl(url);
+                            // Play after URL is set
+                            setTimeout(() => {
+                              if (previewAudioRef.current) {
+                                previewAudioRef.current.load();
+                                previewAudioRef.current.play();
+                                setIsPreviewPlaying(true);
+                              }
+                            }, 100);
+                          } catch (err: any) {
+                            showToast(`Preview failed: ${err.message}`);
+                          } finally {
+                            setIsRecombining(false);
+                          }
+                        }}
+                        disabled={isRecombining}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
+                          isPreviewPlaying
+                            ? 'bg-pink-500 text-white hover:bg-pink-600'
+                            : 'bg-black/5 dark:bg-white/5 text-zinc-600 dark:text-zinc-300 hover:bg-pink-500/20 hover:text-pink-400'
+                        } disabled:opacity-50 disabled:cursor-not-allowed`}
+                      >
+                        {isRecombining ? (
+                          <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Mixing...</>
+                        ) : isPreviewPlaying ? (
+                          <><Pause className="w-3.5 h-3.5" /> Stop Preview</>
+                        ) : (
+                          <><Play className="w-3.5 h-3.5" /> Preview Mix</>
+                        )}
+                      </button>
+                      {previewUrl && (
+                        <audio
+                          ref={previewAudioRef}
+                          src={previewUrl}
+                          onEnded={() => setIsPreviewPlaying(false)}
+                          className="hidden"
+                        />
+                      )}
                     </div>
                   )}
                 </div>
