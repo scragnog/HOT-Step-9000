@@ -45,7 +45,7 @@ _CHECKPOINT_TO_VARIANT: Dict[str, str] = {
 }
 
 # Weight file extensions that transformers/diffusers look for when loading models
-_WEIGHT_FILE_EXTENSIONS = {".safetensors", ".bin", ".ckpt", ".h5", ".msgpack"}
+_WEIGHT_FILE_EXTENSIONS = {".safetensors", ".bin", ".ckpt", ".h5", ".msgpack", ".gguf"}
 
 _INCOMPLETE_DOWNLOAD_GUIDANCE = (
     "\n"

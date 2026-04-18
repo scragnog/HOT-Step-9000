@@ -138,7 +138,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [inferenceSteps, setInferenceSteps] = usePersistedState('ace-inferenceSteps', 12);
   const [inferMethod, setInferMethod] = usePersistedState<'ode' | 'euler' | 'heun' | 'dpm2m' | 'dpm2m_ada' | 'dpm3m' | 'rk4' | 'rk5' | 'dopri5' | 'dop853' | 'jkass_quality' | 'jkass_fast' | 'stork2' | 'stork4'>('ace-inferMethod', 'ode');
   const [scheduler, setScheduler] = usePersistedState<string>('ace-scheduler', 'linear');
-  const [lmBackend, setLmBackend] = useState<'pt' | 'vllm' | 'custom-vllm'>('pt');
+  const [lmBackend, setLmBackend] = useState<'pt' | 'vllm' | 'custom-vllm' | 'llama-cpp'>('pt');
   const [lmModel, setLmModel] = usePersistedState('ace-lmModel', 'acestep-5Hz-lm-0.6B');
   const [shift, setShift] = usePersistedState('ace-shift', 3.0);
 
@@ -1554,7 +1554,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     }
   }, [token, isLmSwitching]);
 
-  const handleLmBackendChange = useCallback(async (targetBackend: 'pt' | 'vllm' | 'custom-vllm') => {
+  const handleLmBackendChange = useCallback(async (targetBackend: 'pt' | 'vllm' | 'custom-vllm' | 'llama-cpp') => {
     if (targetBackend === lmBackend) return;
     setLmBackend(targetBackend); // Immediate visual feedback
     if (!token || isLmSwitching) return;

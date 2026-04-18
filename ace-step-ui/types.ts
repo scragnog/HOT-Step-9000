@@ -90,7 +90,7 @@ export interface GenerationParams {
   lmTopP: number;
   lmNegativePrompt: string;
   lmRepetitionPenalty?: number;
-  lmBackend?: 'pt' | 'vllm' | 'custom-vllm';
+  lmBackend?: 'pt' | 'vllm' | 'custom-vllm' | 'llama-cpp';
   lmModel?: string;
   lmCodesScale?: number;  // Scale influence of LM-generated audio codes (0.0-1.0, default 1.0)
 

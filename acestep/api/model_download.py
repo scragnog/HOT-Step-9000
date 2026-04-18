@@ -92,7 +92,7 @@ def download_from_modelscope(repo_id: str, local_dir: str, model_name: str) -> s
     return os.path.join(local_dir, model_name)
 
 
-_WEIGHT_EXTENSIONS = {".safetensors", ".bin", ".ckpt", ".h5", ".msgpack"}
+_WEIGHT_EXTENSIONS = {".safetensors", ".bin", ".ckpt", ".h5", ".msgpack", ".gguf"}
 
 
 def _has_weight_files(directory: str) -> bool:
