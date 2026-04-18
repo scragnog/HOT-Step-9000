@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any, Callable, Dict, Optional
 
-from acestep.gpu_config import VRAM_AUTO_OFFLOAD_THRESHOLD_GB, get_gpu_config
+from acestep.gpu_config import VRAM_AUTO_OFFLOAD_THRESHOLD_GB, get_gpu_config, resolve_xl_offload_and_lm
 
 
 def initialize_models_for_request(
@@ -57,6 +57,17 @@ def initialize_models_for_request(
 
     ensure_model_downloaded(target_model, checkpoint_dir)
     ensure_model_downloaded("vae", checkpoint_dir)
+
+    # XL DiT VRAM guard: auto-adjust offload flags and LM selection
+    offload_to_cpu, offload_dit_to_cpu, adjusted_lm = resolve_xl_offload_and_lm(
+        dit_config_path=target_model,
+        lm_model_path=(requested_lm_model_path or os.getenv("ACESTEP_LM_MODEL_PATH", "")).strip() or None,
+        gpu_memory_gb=gpu_config.gpu_memory_gb,
+        offload_to_cpu=offload_to_cpu,
+        offload_dit_to_cpu=offload_dit_to_cpu,
+    )
+    if adjusted_lm and requested_lm_model_path and "4B" in requested_lm_model_path and "4B" not in adjusted_lm:
+        requested_lm_model_path = adjusted_lm
 
     status_msg, ok = handler.initialize_service(
         project_root=project_root,

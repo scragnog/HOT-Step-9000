@@ -9,6 +9,7 @@ from acestep.gpu_config import (
     VRAM_AUTO_OFFLOAD_THRESHOLD_GB,
     get_gpu_config,
     set_global_gpu_config,
+    resolve_xl_offload_and_lm,
 )
 from acestep.api.startup_llm_init import initialize_llm_at_startup
 
@@ -80,6 +81,19 @@ def initialize_models_at_startup(
 
     offload_dit_to_cpu = env_bool("ACESTEP_OFFLOAD_DIT_TO_CPU", False)
     compile_model = env_bool("ACESTEP_COMPILE_MODEL", False)
+
+    # XL DiT VRAM guard: auto-adjust offload flags and LM selection
+    lm_model_path_env = os.getenv("ACESTEP_LM_MODEL_PATH", "").strip() or None
+    offload_to_cpu, offload_dit_to_cpu, lm_model_path_env = resolve_xl_offload_and_lm(
+        dit_config_path=config_path,
+        lm_model_path=lm_model_path_env,
+        gpu_memory_gb=gpu_memory_gb,
+        offload_to_cpu=offload_to_cpu,
+        offload_dit_to_cpu=offload_dit_to_cpu,
+    )
+    # Persist any LM downgrade so startup_llm_init picks it up
+    if lm_model_path_env:
+        os.environ["ACESTEP_LM_MODEL_PATH"] = lm_model_path_env
 
     checkpoint_dir = os.path.join(project_root, "checkpoints")
     os.makedirs(checkpoint_dir, exist_ok=True)
@@ -284,6 +298,7 @@ def initialize_models_at_startup(
         get_model_name=get_model_name,
         ensure_model_downloaded=ensure_model_downloaded,
         env_bool=env_bool,
+        dit_config_path=config_path,
     )
 
     print("[API Server] All models initialized successfully!")

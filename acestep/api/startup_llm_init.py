@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any, Callable
 
-from acestep.gpu_config import get_recommended_lm_model, is_lm_model_supported
+from acestep.gpu_config import get_recommended_lm_model, is_lm_model_supported, resolve_xl_offload_and_lm
 
 
 def initialize_llm_at_startup(
@@ -19,6 +19,7 @@ def initialize_llm_at_startup(
     get_model_name: Callable[[str], str],
     ensure_model_downloaded: Callable[[str, str], str],
     env_bool: Callable[[str, bool], bool],
+    dit_config_path: str = "",
 ) -> None:
     """Initialize LLM model according to GPU config and environment overrides."""
 
@@ -56,6 +57,16 @@ def initialize_llm_at_startup(
             else:
                 lm_model_path = "acestep-5Hz-lm-0.6B"
                 print(f"[API Server] No recommended model for this GPU tier, using smallest: {lm_model_path}")
+
+        # XL DiT VRAM guard: downgrade LM if XL DiT makes it infeasible
+        if dit_config_path:
+            _, _, lm_model_path = resolve_xl_offload_and_lm(
+                dit_config_path=dit_config_path,
+                lm_model_path=lm_model_path,
+                gpu_memory_gb=gpu_config.gpu_memory_gb,
+                offload_to_cpu=offload_to_cpu,
+                offload_dit_to_cpu=False,  # not relevant for LM selection
+            )
 
         lm_backend = os.getenv("ACESTEP_LM_BACKEND", "vllm").strip().lower()
 

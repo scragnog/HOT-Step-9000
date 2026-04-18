@@ -1324,6 +1324,111 @@ def get_recommended_lm_model(gpu_config: GPUConfig) -> Optional[str]:
     return gpu_config.available_lm_models[-1]
 
 
+# ===========================================================================
+# XL DiT + LM VRAM compatibility guard
+# ===========================================================================
+
+# Minimum VRAM to allow XL DiT (9 GB) + 4B LM (8 GB) simultaneously.
+# At 32 GB the combined weight footprint (~19 GB) leaves ~13 GB for
+# activations, KV cache and safety margin — confirmed working by the
+# project maintainer on a 32 GB card.
+XL_PLUS_4B_LM_MIN_VRAM_GB = 32.0
+
+# Below this threshold XL DiT models need CPU offloading even with the
+# smallest LM (or no LM at all).  XL DiT alone is ~9 GB; with VAE (0.33),
+# text encoder (1.2) and CUDA context (0.5) that is already ~11 GB before
+# activations.
+XL_OFFLOAD_THRESHOLD_GB = 24.0
+
+
+def resolve_xl_offload_and_lm(
+    dit_config_path: str,
+    lm_model_path: Optional[str],
+    gpu_memory_gb: float,
+    offload_to_cpu: bool,
+    offload_dit_to_cpu: bool,
+) -> Tuple[bool, bool, Optional[str]]:
+    """Adjust offload flags and LM model selection for XL DiT VRAM constraints.
+
+    When the active DiT model is an XL (4B param) variant, the base model
+    weights are ~9 GB instead of ~4.7 GB.  This dramatically changes the
+    VRAM budget and can cause OOM if the offload and LM selection logic
+    remains configured for the 2B DiT.
+
+    Rules applied:
+    - XL DiT on GPUs < 24 GB → force ``offload_to_cpu`` **and**
+      ``offload_dit_to_cpu`` (sequential loading, one-at-a-time).
+    - XL DiT on 24–31 GB → force ``offload_to_cpu``.
+    - XL DiT + 4B LM on GPUs < 32 GB → downgrade LM to 1.7B.
+    - XL DiT + 4B LM on GPUs ≥ 32 GB → force ``offload_to_cpu``
+      (still tight, sequential loading keeps it safe).
+    - Non-XL DiT → no changes (passthrough).
+
+    Args:
+        dit_config_path: DiT model directory name (e.g. 'acestep-v15-xl-turbo').
+        lm_model_path: Proposed LM model path, or None if LM is disabled.
+        gpu_memory_gb: Total GPU VRAM in GB.
+        offload_to_cpu: Current offload_to_cpu setting.
+        offload_dit_to_cpu: Current offload_dit_to_cpu setting.
+
+    Returns:
+        Tuple of ``(offload_to_cpu, offload_dit_to_cpu, lm_model_path)``
+        with any necessary adjustments applied.
+    """
+    if not is_xl_model(dit_config_path or ""):
+        return offload_to_cpu, offload_dit_to_cpu, lm_model_path
+
+    # --- XL DiT detected ------------------------------------------------
+
+    if gpu_memory_gb > 0 and gpu_memory_gb < XL_OFFLOAD_THRESHOLD_GB:
+        # Very tight VRAM: force both offload flags
+        if not offload_to_cpu:
+            logger.info(
+                f"[XL Guard] Auto-enabling offload_to_cpu "
+                f"(XL DiT on {gpu_memory_gb:.0f}GB GPU)"
+            )
+            offload_to_cpu = True
+        if not offload_dit_to_cpu:
+            logger.info(
+                f"[XL Guard] Auto-enabling offload_dit_to_cpu "
+                f"(XL DiT on {gpu_memory_gb:.0f}GB GPU)"
+            )
+            offload_dit_to_cpu = True
+    elif gpu_memory_gb > 0 and gpu_memory_gb < XL_PLUS_4B_LM_MIN_VRAM_GB:
+        # 24–31 GB: offload needed but DiT can stay on GPU
+        if not offload_to_cpu:
+            logger.info(
+                f"[XL Guard] Auto-enabling offload_to_cpu "
+                f"(XL DiT on {gpu_memory_gb:.0f}GB GPU)"
+            )
+            offload_to_cpu = True
+
+    # --- LM compatibility check ------------------------------------------
+
+    if lm_model_path and "4B" in lm_model_path:
+        if gpu_memory_gb > 0 and gpu_memory_gb < XL_PLUS_4B_LM_MIN_VRAM_GB:
+            # XL DiT (~9 GB) + 4B LM (~8 GB) = ~17 GB weights alone.
+            # With activations and KV cache this exceeds <32 GB GPUs
+            # even with offloading.
+            original = lm_model_path
+            lm_model_path = lm_model_path.replace("4B", "1.7B")
+            logger.warning(
+                f"[XL Guard] Downgrading LM: {original} → {lm_model_path} "
+                f"(XL DiT + 4B LM requires ≥{XL_PLUS_4B_LM_MIN_VRAM_GB:.0f}GB VRAM, "
+                f"GPU has {gpu_memory_gb:.0f}GB)"
+            )
+        elif gpu_memory_gb >= XL_PLUS_4B_LM_MIN_VRAM_GB:
+            # ≥32 GB: allow it but ensure offloading for safety
+            if not offload_to_cpu:
+                logger.info(
+                    f"[XL Guard] Auto-enabling offload_to_cpu "
+                    f"(XL DiT + 4B LM on {gpu_memory_gb:.0f}GB GPU)"
+                )
+                offload_to_cpu = True
+
+    return offload_to_cpu, offload_dit_to_cpu, lm_model_path
+
+
 def print_gpu_config_info(gpu_config: GPUConfig):
     """Print GPU configuration information for debugging."""
     logger.info(f"GPU Configuration:")

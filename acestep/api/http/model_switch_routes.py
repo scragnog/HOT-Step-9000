@@ -7,6 +7,7 @@ from typing import Any, Callable, Dict
 from fastapi import Depends, FastAPI, HTTPException, Request
 
 from acestep.handler import AceStepHandler
+from acestep.gpu_config import get_gpu_config, is_xl_model, resolve_xl_offload_and_lm
 
 
 def register_model_switch_routes(
@@ -199,6 +200,27 @@ def register_model_switch_routes(
                     )
             else:
                 print(f"[LM Switch] Model '{target_model}' found locally, loading...")
+
+            # XL DiT VRAM guard: prevent switching to a 4B LM that would OOM
+            current_dit = getattr(app.state, "_config_path", "") or ""
+            if is_xl_model(current_dit) and "4B" in target_model:
+                gpu_cfg = get_gpu_config()
+                _, _, adjusted_target = resolve_xl_offload_and_lm(
+                    dit_config_path=current_dit,
+                    lm_model_path=target_model,
+                    gpu_memory_gb=gpu_cfg.gpu_memory_gb,
+                    offload_to_cpu=prev_params.get("offload_to_cpu", False),
+                    offload_dit_to_cpu=False,
+                )
+                if adjusted_target and adjusted_target != target_model:
+                    raise HTTPException(
+                        status_code=400,
+                        detail=(
+                            f"Cannot use {target_model} with XL DiT model '{current_dit}' "
+                            f"on {gpu_cfg.gpu_memory_gb:.0f}GB GPU (would OOM). "
+                            f"Recommended: {adjusted_target}"
+                        ),
+                    )
 
             # Build init params — only the 6 kwargs that initialize() accepts
             init_kwargs = {
