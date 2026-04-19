@@ -127,20 +127,13 @@ if "%IS_RESTART%"=="0" (
 echo   Done.
 echo.
 
-REM ---- Step 2: Check UI dependencies ----
+REM ---- Step 2: Sync UI dependencies (always run — fast when up-to-date) ----
 echo [2/5] Checking UI dependencies...
-if not exist "ace-step-ui\node_modules" (
-    echo   Installing frontend dependencies...
-    cd ace-step-ui
-    call npm install
-    cd ..
-)
-if not exist "ace-step-ui\server\node_modules" (
-    echo   Installing server dependencies...
-    cd ace-step-ui\server
-    call npm install
-    cd ..\..
-)
+cd ace-step-ui
+call npm install --loglevel=error
+cd server
+call npm install --loglevel=error
+cd ..\..\
 echo   Done.
 echo.
 
