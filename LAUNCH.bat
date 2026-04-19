@@ -130,9 +130,9 @@ echo.
 REM ---- Step 2: Sync UI dependencies (always run — fast when up-to-date) ----
 echo [2/5] Checking UI dependencies...
 cd ace-step-ui
-call npm install --loglevel=error
+call npm install --loglevel=error --no-audit --no-fund
 cd server
-call npm install --loglevel=error
+call npm install --loglevel=error --no-audit --no-fund
 cd ..\..\
 echo   Done.
 echo.
