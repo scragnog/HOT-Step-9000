@@ -56,6 +56,9 @@ interface LmCotAccordionProps {
     onLmCodesScaleChange?: (val: number) => void;
     /** When true, skip the accordion header — used inside DrawerContainers */
     embedded?: boolean;
+    // LM Offload to CPU
+    lmOffloadToCpu?: boolean;
+    onLmOffloadToCpuToggle?: () => void;
 }
 
 const Toggle: React.FC<{ on: boolean; onClick: () => void; disabled?: boolean }> = ({ on, onClick, disabled }) => (
@@ -90,6 +93,7 @@ export const LmCotAccordion: React.FC<LmCotAccordionProps> = ({
     isFormatCaption, onIsFormatCaptionToggle,
     lmCodesScale, onLmCodesScaleChange,
     embedded,
+    lmOffloadToCpu, onLmOffloadToCpuToggle,
 }) => {
     const { t } = useI18n();
 
@@ -121,6 +125,17 @@ export const LmCotAccordion: React.FC<LmCotAccordionProps> = ({
                         </select>
                         <p className="text-[10px] text-zinc-500">{t('lmBackendHint')}</p>
                     </div>
+
+                    {/* LM Offload to CPU */}
+                    {onLmOffloadToCpuToggle && (
+                        <div className="flex items-center justify-between py-1">
+                            <div>
+                                <span className="text-xs font-medium text-zinc-600 dark:text-zinc-400">Offload LM to CPU</span>
+                                <p className="text-[10px] text-zinc-500">Keep LM weights in system RAM, move to GPU only during inference. Reduces VRAM usage for long tracks.</p>
+                            </div>
+                            <Toggle on={!!lmOffloadToCpu} onClick={onLmOffloadToCpuToggle} />
+                        </div>
+                    )}
 
                     {/* LM Model */}
                     <div className="space-y-1.5">

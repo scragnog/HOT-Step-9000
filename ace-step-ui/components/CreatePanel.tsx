@@ -139,6 +139,7 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
   const [inferMethod, setInferMethod] = usePersistedState<'ode' | 'euler' | 'heun' | 'dpm2m' | 'dpm2m_ada' | 'dpm3m' | 'rk4' | 'rk5' | 'dopri5' | 'dop853' | 'jkass_quality' | 'jkass_fast' | 'stork2' | 'stork4'>('ace-inferMethod', 'ode');
   const [scheduler, setScheduler] = usePersistedState<string>('ace-scheduler', 'linear');
   const [lmBackend, setLmBackend] = useState<'pt' | 'vllm' | 'custom-vllm' | 'llama-cpp'>('pt');
+  const [lmOffloadToCpu, setLmOffloadToCpu] = useState(false);
   const [lmModel, setLmModel] = usePersistedState('ace-lmModel', 'acestep-5Hz-lm-0.6B');
   const [shift, setShift] = usePersistedState('ace-shift', 3.0);
 
@@ -342,8 +343,11 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
     fetch('/api/models/env-config')
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data?.lmBackend === 'vllm' || data?.lmBackend === 'pt' || data?.lmBackend === 'custom-vllm') {
+        if (data?.lmBackend === 'vllm' || data?.lmBackend === 'pt' || data?.lmBackend === 'custom-vllm' || data?.lmBackend === 'llama-cpp') {
           setLmBackend(data.lmBackend);
+        }
+        if (data?.lmOffloadToCpu !== undefined) {
+          setLmOffloadToCpu(!!data.lmOffloadToCpu);
         }
       })
       .catch(() => {}); // Non-critical — keep default
@@ -1348,6 +1352,16 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                   setDitQuantization(q);
                   localStorage.setItem('ace-ditQuantization', q);
                 }
+                // Sync LM backend and offload state from backend
+                const backendLmBackend = statusData?.lm_backend;
+                if (backendLmBackend && isMountedRef.current) {
+                  if (['pt', 'vllm', 'custom-vllm', 'llama-cpp'].includes(backendLmBackend)) {
+                    setLmBackend(backendLmBackend);
+                  }
+                }
+                if (statusData?.lm_offload_to_cpu !== undefined && isMountedRef.current) {
+                  setLmOffloadToCpu(!!statusData.lm_offload_to_cpu);
+                }
               }
             } catch {
               // Non-critical — just use persisted/default value
@@ -1572,6 +1586,24 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
       setIsLmSwitching(false);
     }
   }, [token, isLmSwitching, lmBackend]);
+
+  const handleLmOffloadToCpuToggle = useCallback(async () => {
+    const newValue = !lmOffloadToCpu;
+    setLmOffloadToCpu(newValue); // Immediate visual feedback
+    if (!token || isLmSwitching) return;
+    setIsLmSwitching(true);
+    try {
+      const result = await generateApi.switchLmBackend(lmBackend, token, newValue);
+      if (result.switched) {
+        console.log(`[LM Offload] offload_to_cpu=${newValue}: ${result.message}`);
+      }
+    } catch (err: any) {
+      console.error('LM offload toggle failed:', err.message);
+      setLmOffloadToCpu(!newValue); // Revert on failure
+    } finally {
+      setIsLmSwitching(false);
+    }
+  }, [token, isLmSwitching, lmBackend, lmOffloadToCpu]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -3317,6 +3349,8 @@ export const CreatePanel: React.FC<CreatePanelProps> = ({
                 onIsFormatCaptionToggle={() => setIsFormatCaption(!isFormatCaption)}
                 lmCodesScale={lmCodesScale}
                 onLmCodesScaleChange={setLmCodesScale}
+                lmOffloadToCpu={lmOffloadToCpu}
+                onLmOffloadToCpuToggle={handleLmOffloadToCpuToggle}
               />
             </DrawerContainer>
 

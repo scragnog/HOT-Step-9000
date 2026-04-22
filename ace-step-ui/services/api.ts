@@ -705,11 +705,15 @@ export const generateApi = {
     switched: boolean;
   }> => api('/api/model/lm/switch', { method: 'POST', body: { model }, token }),
 
-  switchLmBackend: (backend: 'pt' | 'vllm' | 'custom-vllm' | 'llama-cpp', token: string): Promise<{
+  switchLmBackend: (backend: 'pt' | 'vllm' | 'custom-vllm' | 'llama-cpp', token: string, offloadToCpu?: boolean): Promise<{
     message: string;
     backend: string;
     switched: boolean;
-  }> => api('/api/models/lm/backend', { method: 'POST', body: { backend }, token }),
+  }> => api('/api/models/lm/backend', {
+    method: 'POST',
+    body: { backend, ...(offloadToCpu !== undefined ? { offload_to_cpu: offloadToCpu } : {}) },
+    token,
+  }),
 };
 
 // Activation Steering (TADA) API
