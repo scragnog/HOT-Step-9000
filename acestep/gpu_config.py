@@ -1347,6 +1347,7 @@ def resolve_xl_offload_and_lm(
     gpu_memory_gb: float,
     offload_to_cpu: bool,
     offload_dit_to_cpu: bool,
+    lm_backend: str = "",
 ) -> Tuple[bool, bool, Optional[str]]:
     """Adjust offload flags and LM model selection for XL DiT VRAM constraints.
 
@@ -1359,7 +1360,9 @@ def resolve_xl_offload_and_lm(
     - XL DiT on GPUs < 24 GB → force ``offload_to_cpu`` **and**
       ``offload_dit_to_cpu`` (sequential loading, one-at-a-time).
     - XL DiT on 24–31 GB → force ``offload_to_cpu``.
-    - XL DiT + 4B LM on GPUs < 32 GB → downgrade LM to 1.7B.
+    - XL DiT + 4B LM on GPUs < 32 GB → downgrade LM to 1.7B
+      **unless** using the ``llama-cpp`` backend (GGUF models offload
+      to system RAM, so the VRAM guard does not apply).
     - XL DiT + 4B LM on GPUs ≥ 32 GB → force ``offload_to_cpu``
       (still tight, sequential loading keeps it safe).
     - Non-XL DiT → no changes (passthrough).
@@ -1370,6 +1373,9 @@ def resolve_xl_offload_and_lm(
         gpu_memory_gb: Total GPU VRAM in GB.
         offload_to_cpu: Current offload_to_cpu setting.
         offload_dit_to_cpu: Current offload_dit_to_cpu setting.
+        lm_backend: Active LM backend (e.g. 'pt', 'vllm', 'llama-cpp').
+            When 'llama-cpp', the 4B LM VRAM guard is skipped because
+            GGUF models offload most layers to system RAM.
 
     Returns:
         Tuple of ``(offload_to_cpu, offload_dit_to_cpu, lm_model_path)``
@@ -1406,16 +1412,26 @@ def resolve_xl_offload_and_lm(
     # --- LM compatibility check ------------------------------------------
 
     if lm_model_path and "4B" in lm_model_path:
-        if gpu_memory_gb > 0 and gpu_memory_gb < XL_PLUS_4B_LM_MIN_VRAM_GB:
+        if (
+            gpu_memory_gb > 0
+            and gpu_memory_gb < XL_PLUS_4B_LM_MIN_VRAM_GB
+            and lm_backend != "llama-cpp"
+        ):
             # XL DiT (~9 GB) + 4B LM (~8 GB) = ~17 GB weights alone.
             # With activations and KV cache this exceeds <32 GB GPUs
-            # even with offloading.
+            # even with offloading.  llama-cpp is exempt because GGUF
+            # models offload most layers to system RAM.
             original = lm_model_path
             lm_model_path = lm_model_path.replace("4B", "1.7B")
             logger.warning(
                 f"[XL Guard] Downgrading LM: {original} → {lm_model_path} "
                 f"(XL DiT + 4B LM requires ≥{XL_PLUS_4B_LM_MIN_VRAM_GB:.0f}GB VRAM, "
                 f"GPU has {gpu_memory_gb:.0f}GB)"
+            )
+        elif gpu_memory_gb > 0 and gpu_memory_gb < XL_PLUS_4B_LM_MIN_VRAM_GB and lm_backend == "llama-cpp":
+            logger.info(
+                f"[XL Guard] Allowing 4B LM with XL DiT on {gpu_memory_gb:.0f}GB GPU "
+                f"(llama-cpp backend offloads to system RAM)"
             )
         elif gpu_memory_gb >= XL_PLUS_4B_LM_MIN_VRAM_GB:
             # ≥32 GB: allow it but ensure offloading for safety

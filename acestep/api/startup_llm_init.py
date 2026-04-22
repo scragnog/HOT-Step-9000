@@ -66,6 +66,7 @@ def initialize_llm_at_startup(
                 gpu_memory_gb=gpu_config.gpu_memory_gb,
                 offload_to_cpu=offload_to_cpu,
                 offload_dit_to_cpu=False,  # not relevant for LM selection
+                lm_backend=os.getenv("ACESTEP_LM_BACKEND", "vllm").strip().lower(),
             )
 
         lm_backend = os.getenv("ACESTEP_LM_BACKEND", "vllm").strip().lower()

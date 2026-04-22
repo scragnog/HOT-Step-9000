@@ -90,6 +90,7 @@ def initialize_models_at_startup(
         gpu_memory_gb=gpu_memory_gb,
         offload_to_cpu=offload_to_cpu,
         offload_dit_to_cpu=offload_dit_to_cpu,
+        lm_backend=os.getenv("ACESTEP_LM_BACKEND", "vllm").strip().lower(),
     )
     # Persist any LM downgrade so startup_llm_init picks it up
     if lm_model_path_env:
