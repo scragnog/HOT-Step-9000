@@ -85,12 +85,25 @@ def register_model_switch_routes(
         current_quantization = dit_params.get("quantization", None)
         compile_model = dit_params.get("compile_model", False)
 
+        current_lm_backend = (
+            (prev_params or {}).get("backend", os.getenv("ACESTEP_LM_BACKEND", "vllm")).strip().lower()
+            if isinstance(prev_params, dict)
+            else os.getenv("ACESTEP_LM_BACKEND", "vllm").strip().lower()
+        )
+        current_lm_offload = (
+            (prev_params or {}).get("offload_to_cpu", False)
+            if isinstance(prev_params, dict)
+            else False
+        )
+
         return wrap_response({
             "active_model": current_model,
             "lm_model": current_lm,
             "no_init": no_init,
             "quantization": current_quantization,
             "compile_model": compile_model,
+            "lm_backend": current_lm_backend,
+            "lm_offload_to_cpu": current_lm_offload,
         })
 
     @app.post("/v1/models/switch")
@@ -205,12 +218,14 @@ def register_model_switch_routes(
             current_dit = getattr(app.state, "_config_path", "") or ""
             if is_xl_model(current_dit) and "4B" in target_model:
                 gpu_cfg = get_gpu_config()
+                current_lm_backend = prev_params.get("backend", os.getenv("ACESTEP_LM_BACKEND", "vllm")).strip().lower()
                 _, _, adjusted_target = resolve_xl_offload_and_lm(
                     dit_config_path=current_dit,
                     lm_model_path=target_model,
                     gpu_memory_gb=gpu_cfg.gpu_memory_gb,
                     offload_to_cpu=prev_params.get("offload_to_cpu", False),
                     offload_dit_to_cpu=False,
+                    lm_backend=current_lm_backend,
                 )
                 if adjusted_target and adjusted_target != target_model:
                     raise HTTPException(
@@ -256,8 +271,9 @@ def register_model_switch_routes(
 
         body = await request.json()
         target_backend = (body.get("backend") or "").strip().lower()
-        if target_backend not in ("pt", "vllm", "custom-vllm"):
-            raise HTTPException(status_code=400, detail="'backend' must be 'pt', 'vllm', or 'custom-vllm'")
+        target_offload = body.get("offload_to_cpu")  # Optional bool — None means no change
+        if target_backend not in ("pt", "vllm", "custom-vllm", "llama-cpp"):
+            raise HTTPException(status_code=400, detail="'backend' must be 'pt', 'vllm', 'custom-vllm', or 'llama-cpp'")
 
         llm = getattr(app.state, "llm_handler", None)
         if llm is None:
@@ -280,7 +296,9 @@ def register_model_switch_routes(
         if not isinstance(prev_params, dict):
             prev_params = {}
         current_backend = prev_params.get("backend", os.getenv("ACESTEP_LM_BACKEND", "vllm")).strip().lower()
-        if current_backend == target_backend:
+        current_offload = prev_params.get("offload_to_cpu", False)
+        offload_changing = target_offload is not None and bool(target_offload) != bool(current_offload)
+        if current_backend == target_backend and not offload_changing:
             return wrap_response({
                 "message": f"LM backend is already '{target_backend}'",
                 "backend": target_backend,
@@ -313,16 +331,21 @@ def register_model_switch_routes(
                 "lm_model_path": lm_model,
                 "backend": target_backend,
                 "device": prev_params.get("device", os.getenv("ACESTEP_LM_DEVICE", os.getenv("ACESTEP_DEVICE", "auto"))),
-                "offload_to_cpu": prev_params.get("offload_to_cpu", False),
+                "offload_to_cpu": bool(target_offload) if target_offload is not None else prev_params.get("offload_to_cpu", False),
                 "dtype": None,
             }
 
-            print(f"[API Server] Switching LM backend: {current_backend} → {target_backend}")
+            change_desc = f"{current_backend} → {target_backend}"
+            if offload_changing:
+                change_desc += f", offload_to_cpu={init_kwargs['offload_to_cpu']}"
+            print(f"[API Server] Switching LM backend: {change_desc}")
             status_msg, ok = llm.initialize(**init_kwargs)
             if ok:
                 app.state._llm_initialized = True
                 app.state._llm_init_error = None
                 os.environ["ACESTEP_LM_BACKEND"] = target_backend
+                if target_offload is not None:
+                    os.environ["ACESTEP_LM_OFFLOAD_TO_CPU"] = str(bool(target_offload)).lower()
                 return wrap_response({
                     "message": f"LM backend switched to {target_backend}",
                     "backend": target_backend,

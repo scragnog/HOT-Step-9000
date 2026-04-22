@@ -65,6 +65,7 @@ def initialize_models_for_request(
         gpu_memory_gb=gpu_config.gpu_memory_gb,
         offload_to_cpu=offload_to_cpu,
         offload_dit_to_cpu=offload_dit_to_cpu,
+        lm_backend=os.getenv("ACESTEP_LM_BACKEND", "vllm").strip().lower(),
     )
     if adjusted_lm and requested_lm_model_path and "4B" in requested_lm_model_path and "4B" not in adjusted_lm:
         requested_lm_model_path = adjusted_lm
@@ -95,7 +96,7 @@ def initialize_models_for_request(
         os.environ["ACESTEP_LM_MODEL_PATH"] = lm_model_path
 
         lm_backend = os.getenv("ACESTEP_LM_BACKEND", "vllm").strip().lower()
-        if lm_backend not in {"vllm", "pt", "mlx", "custom-vllm"}:
+        if lm_backend not in {"vllm", "pt", "mlx", "custom-vllm", "llama-cpp"}:
             lm_backend = "vllm"
         lm_device = os.getenv("ACESTEP_LM_DEVICE", device)
         lm_offload_env = os.getenv("ACESTEP_LM_OFFLOAD_TO_CPU")
