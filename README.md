@@ -10,6 +10,8 @@
 
 </div>
 
+NOTE - Development on this project will slow down from this point on as HOT-Step is being rebuilt to use the superior AceStep.CPP backend. The new project is available here - [Hot-Step CPP](https://github.com/scragnog/HOT-Step-CPP)
+
 ## About
 
 **HOT-Step 9000** is a fully functional, open-source local AI music generation suite.
