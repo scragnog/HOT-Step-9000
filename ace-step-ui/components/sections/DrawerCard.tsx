@@ -1,5 +1,5 @@
-import React from 'react';
-import { ChevronRight } from 'lucide-react';
+import React from "react";
+import { ChevronRight } from "lucide-react";
 
 interface DrawerCardProps {
   /** Emoji or icon */
@@ -35,11 +35,18 @@ export const DrawerCard: React.FC<DrawerCardProps> = ({
   if (hidden) return null;
 
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick?.();
+        }
+      }}
       title={description}
-      className="w-full text-left group bg-zinc-50 dark:bg-zinc-800/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-white/5 rounded-lg px-3 py-2 transition-all duration-150 hover:shadow-sm"
+      className="w-full text-left group bg-zinc-50 dark:bg-zinc-800/50 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-white/5 rounded-lg px-3 py-2 transition-all duration-150 hover:shadow-sm cursor-pointer"
     >
       <div className="flex items-center gap-2.5">
         {/* Icon */}
@@ -59,7 +66,9 @@ export const DrawerCard: React.FC<DrawerCardProps> = ({
 
         {/* Optional right element (e.g. toggle) */}
         {rightElement && (
-          <span className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>{rightElement}</span>
+          <span className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+            {rightElement}
+          </span>
         )}
 
         {/* Chevron */}
@@ -68,6 +77,6 @@ export const DrawerCard: React.FC<DrawerCardProps> = ({
           className="flex-shrink-0 text-zinc-400 dark:text-zinc-500 group-hover:text-indigo-500 dark:group-hover:text-indigo-400 group-hover:translate-x-0.5 transition-all"
         />
       </div>
-    </button>
+    </div>
   );
 };
